@@ -124,11 +124,50 @@ static func card_kind(def: CardDef) -> String:
 	return "Способность"
 
 
-## Символ в центре карты (см. CardView.SHADER: 1..6 стихии, 7 слияние, 8 щит, 9/10 стрелки, 11 обмен, 12 запрет,
-## 13 плюс, 14 перенос, 15 бездна, 16 возрождение, 17 копия, 18 когти, 19 ×2, 20 флаг, 0 эмблема).
+## Тип рамки карты (CardView.Frame): тип читается с одного взгляда — форма окна, металл, накладки.
+static func card_frame(def: CardDef) -> int:
+	if def == null:
+		return CardView.Frame.ELEMENT
+	match CardDB.card_class(def):
+		&"gold":
+			return CardView.Frame.FIELD
+		&"silver":
+			return CardView.Frame.SPECIES_GATE
+		&"bronze":
+			return CardView.Frame.TRAP if CardEffects.is_gate_trap(def) else CardView.Frame.COMMAND
+		&"blue":
+			return CardView.Frame.BOOST
+		&"green":
+			return CardView.Frame.FUSION if CardEffects.is_fusion(def) else CardView.Frame.SPECIES
+	return CardView.Frame.ELEMENT
+
+
+## Ступени силы у медальона (усиления и видовые прибавки): 1 — до +50, 2 — до +150, 3 — больше.
+static func card_tier(def: CardDef) -> int:
+	if def == null or def.kind != CardDef.Kind.ABILITY or not (def.effect_id in [&"boost", &"boost_fix", &"fusion_boost"]):
+		return 0
+	var n: int = int(def.params.get("amount", 0))
+	return 1 if n <= 50 else (2 if n <= 150 else 3)
+
+
+## Знак вида (21..28 в card_face.gdshaderinc) по порядку GameData.SPECIES; -1 — нет такого вида.
+static func species_sigil(sp: StringName) -> int:
+	for i in range(GameData.SPECIES.size()):
+		if StringName(GameData.SPECIES[i]["id"]) == sp:
+			return 21 + i
+	return -1
+
+
+## Символ в центре карты (см. card_face.gdshaderinc, cf_sigil: 1..6 стихии, 7 слияние, 8 щит, 9/10 стрелки, 11 обмен, 12 запрет,
+## 13 плюс, 14 перенос, 15 бездна, 16 возрождение, 17 копия, 18 когти, 19 ×2, 20 флаг, 21..28 виды, 0 эмблема).
 static func card_sigil(def: CardDef) -> int:
 	if CardEffects.is_fusion(def):
 		return 7
+	# ворота вида — знак своего вида; усиление стихии — знак стихии (ступени силы — ромбы у медальона)
+	if def.effect_id == &"species_double" and species_sigil(CardEffects.species_lock(def)) > 0:
+		return species_sigil(CardEffects.species_lock(def))
+	if def.effect_id == &"boost" and CardEffects.species_lock(def) == &"" and CardEffects.lock_attr(def) >= 0:
+		return CardEffects.lock_attr(def) + 1
 	match String(def.effect_id):
 		"negate", "cap_own_base":
 			return 8

@@ -37,7 +37,7 @@ var _built := false
 
 var _title: Label
 var _page: Control
-var _summary: HBoxContainer
+var _summary: HFlowContainer
 var _error: Label
 var _back_btn: Button
 var _next_btn: Button
@@ -101,8 +101,10 @@ func _build() -> void:
 	deck_row.add_child(drow)
 	var dl := VisualUtil.label("Колода:", 16)
 	drow.add_child(dl)
-	_summary = HBoxContainer.new()
-	_summary.add_theme_constant_override("separation", 6)
+	# перенос по строкам: длинные имена карт не раздвигают экран за край окна
+	_summary = HFlowContainer.new()
+	_summary.add_theme_constant_override("h_separation", 6)
+	_summary.add_theme_constant_override("v_separation", 4)
 	_summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	drow.add_child(_summary)
 
