@@ -6,6 +6,9 @@ extends RefCounted
 ## Эффекты, которые «Отпечаток в камне» не повторяет (отмена, тишина, сама копия, перемещения).
 const NO_COPY_EFFECTS: Array[String] = ["negate", "silence", "copy", "ebb", "swap_fighter", "shift_gate"]
 
+## «Потолки»: действуют на силу, набранную до них; карты, сыгранные после, прибавляются сверху (PowerCalc, шаг 9а).
+const CEILING_EFFECTS: Array[String] = ["reset_base", "cap_own_base", "siphon", "strip"]
+
 
 static func is_effect(card: CardDef, effect: StringName) -> bool:
 	return card != null and card.effect_id == effect
@@ -84,7 +87,8 @@ static func copyable(card: CardDef) -> bool:
 	return card != null and not is_fusion(card) and not NO_COPY_EFFECTS.has(String(card.effect_id))
 
 
-## Условие усиления boost (params.cond): ctx — {attack:bool, own_gate:bool, my_base, foe_base, dead_own, alive_own, alive_foe}.
+## Условие усиления boost (params.cond): ctx — {attack:bool, own_gate:bool, my_base, foe_base, foe_beats, dead_own, alive_own,
+## alive_foe}; foe_beats — стихия соперника бьёт твою.
 static func boost_cond_ok(card: CardDef, ctx: Dictionary) -> bool:
 	match String(card.params.get("cond", "")):
 		"":
@@ -97,6 +101,8 @@ static func boost_cond_ok(card: CardDef, ctx: Dictionary) -> bool:
 			return bool(ctx.get("own_gate", false))
 		"weaker":
 			return int(ctx.get("foe_base", 0)) > int(ctx.get("my_base", 0))
+		"underdog":
+			return int(ctx.get("foe_base", 0)) > int(ctx.get("my_base", 0)) or bool(ctx.get("foe_beats", false))
 		"fallen":
 			return int(ctx.get("dead_own", 0)) > 0
 		"last":
@@ -111,6 +117,9 @@ static func ability_delta(card: CardDef, ctx: Dictionary) -> Vector2i:
 	if card == null:
 		return Vector2i.ZERO
 	var amount: int = int(card.params.get("amount", 0))
+	# карты Бури «против ветра» (params.vs_adv): прибавка, если стихия соперника бьёт твою
+	if bool(ctx.get("foe_beats", false)):
+		amount += int(card.params.get("vs_adv", 0))
 	match String(card.effect_id):
 		"boost":
 			return Vector2i(amount, 0) if boost_cond_ok(card, ctx) else Vector2i.ZERO

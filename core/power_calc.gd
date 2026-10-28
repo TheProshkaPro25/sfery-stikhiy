@@ -14,7 +14,8 @@ extends RefCounted
 ## 1. БС. 3. Ворота: «Каменный взгляд» (любые, кроме ворот вида), «Очищающий луч» / «Затмение врат» (ворота соперника)
 ##    отменяют ворота; «Взор с высоты» не даёт воротам усилить соперника.
 ## 5. Преимущество стихии +60 (финальный раунд ×2). 6. Плоские карты и слияния. 6а. «Натиск». 7. Метки на этот бой.
-## 8. «Кольца глубин» (забрать бонусы соперника). 9. «Пучина», «Хитиновый панцирь», «Великий сброс».
+## 8. «Кольца глубин» (сжечь бонусы соперника, доля params.share — себе). 9. «Пучина», «Хитиновый панцирь», «Великий сброс».
+## 9а. Плоские карты, сыгранные после первого из «потолков» 8–9 (CardEffects.CEILING_EFFECTS), — поверх них.
 ## 10. «Гнёт». 11. Фиксированная сила из метки («Драконий напор»). 12. max(0, …). 13. «Зеркало».
 ## 14. Исход: по силе (ничья — защитнику) → «Трон сумрака» → «Предел» → «Обоюдный удар» → «Общая бездна» → «Отлив».
 ## Пустой/неизвестный id карты ворот (замаскированная в виде ИИ) = нейтральные ворота.
@@ -143,9 +144,9 @@ static func compute_seq(state: MatchState, atk_uid: int, def_uid: int, slot: int
 			r.add(sd, "cancelled:" + String(plays[k][1]), 0)
 			continue
 		if CardEffects.is_fusion(cards[k]):
-			fusions[sd].append(cards[k])
+			fusions[sd].append({"c": cards[k], "k": k})
 		else:
-			mains[sd].append({"c": cards[k], "src": cards[k].id})
+			mains[sd].append({"c": cards[k], "src": cards[k].id, "k": k})
 	# «Отпечаток в камне»: повтор действующей карты соперника
 	for k in range(n):
 		if cancelled[k] or not CardEffects.is_effect(cards[k], &"copy"):
@@ -162,9 +163,17 @@ static func compute_seq(state: MatchState, atk_uid: int, def_uid: int, slot: int
 					t = j
 					break
 		if t >= 0:
-			mains[sides[k]].append({"c": cards[t], "src": cards[k].id})
+			mains[sides[k]].append({"c": cards[t], "src": cards[k].id, "k": k})
 			r.copies.append([sides[k], cards[k].id, cards[t].id])
 	_fill_compat(r, plays, cards, cancelled)
+	# «Потолки» (Великий сброс, Хитиновый панцирь, Кольца глубин, Пучина) действуют на силу, набранную до них:
+	# плоские карты, сыгранные после первой такой карты (любой стороной), прибавляются уже после шагов 8–9.
+	var ceil_k: int = n
+	for i in range(2):
+		for m in mains[i]:
+			if CardEffects.CEILING_EFFECTS.has(String((m["c"] as CardDef).effect_id)):
+				ceil_k = mini(ceil_k, int(m["k"]))
+	var late: Array = []  # [сторона, источник, прибавка] карт после потолка
 
 	# 1. Базовая сила
 	var base: Array[int] = [defs[0].base_power, defs[1].base_power]
@@ -212,11 +221,17 @@ static func compute_seq(state: MatchState, atk_uid: int, def_uid: int, slot: int
 	# 6. Плоские модификаторы способностей и слияний
 	for i in range(2):
 		var ctx: Dictionary = {"attack": i == 0, "own_gate": own_side == i, "my_base": base[i], "foe_base": base[1 - i],
+			"foe_beats": Attr.beats(attr[1 - i], attr[i]),
 			"dead_own": state.dead_count(owners[i]), "alive_own": state.alive_count(owners[i]),
 			"alive_foe": state.alive_count(owners[1 - i])}
 		for m in mains[i]:
 			var v: Vector2i = CardEffects.ability_delta(m["c"], ctx)
 			var src: String = "ability:" + String(m["src"])
+			if int(m["k"]) > ceil_k:
+				late.append([i, src, v.x])
+				if v.y != 0:
+					late.append([1 - i, src, v.y])
+				continue
 			if v.x != 0:
 				p[i] += v.x
 				r.add(i, src, v.x)
@@ -226,9 +241,13 @@ static func compute_seq(state: MatchState, atk_uid: int, def_uid: int, slot: int
 			if v == Vector2i.ZERO:
 				r.add(i, src, 0)
 		for f in fusions[i]:
-			var fx: int = int((f as CardDef).params.get("amount", 0))
+			var fc: CardDef = f["c"]
+			var fx: int = int(fc.params.get("amount", 0))
+			if int(f["k"]) > ceil_k:
+				late.append([i, "ability:" + String(fc.id), fx])
+				continue
 			p[i] += fx
-			r.add(i, "ability:" + String(f.id), fx)
+			r.add(i, "ability:" + String(fc.id), fx)
 
 	# 6а. «Натиск»: бонус за серию побед владельца бойца
 	for i in range(2):
@@ -254,10 +273,17 @@ static func compute_seq(state: MatchState, atk_uid: int, def_uid: int, slot: int
 			var extra: int = maxi(0, p[1 - i] - base[1 - i])
 			if extra > 0:
 				var src2: String = "ability:" + String(_src(mains[i], &"siphon"))
+				# params.share — какая доля (%) забранного переходит к тебе (у копии — как у оригинала)
+				var share: int = 100
+				for m in mains[i]:
+					if (m["c"] as CardDef).effect_id == &"siphon":
+						share = int((m["c"] as CardDef).params.get("share", 100))
+						break
+				var gain: int = extra * share / 100
 				p[1 - i] -= extra
-				p[i] += extra
+				p[i] += gain
 				r.add(1 - i, src2, -extra)
-				r.add(i, src2, extra)
+				r.add(i, src2, gain)
 
 	# 9. Потолки силы: «Пучина» (не выше своей БС), «Хитиновый панцирь» (не выше БС владельца), «Великий сброс»
 	for i in range(2):
@@ -275,6 +301,11 @@ static func compute_seq(state: MatchState, atk_uid: int, def_uid: int, slot: int
 					r.add(j, rs, base[j] - p[j])
 					p[j] = base[j]
 			break
+
+	# 9а. Карты, сыгранные после потолка
+	for lt in late:
+		p[int(lt[0])] += int(lt[2])
+		r.add(int(lt[0]), lt[1], int(lt[2]))
 
 	# 10. «Гнёт»: −amount каждому с силой от порога
 	if arena != null and arena.effect_id == &"weight":
