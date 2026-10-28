@@ -1,7 +1,9 @@
 class_name SoundFx
 extends Node
 ## Звук: эффекты, крики существ, музыка, шины громкости. Один экземпляр в корне дерева: SoundFx.i().
-## Файлы: assets/audio/sfx/<имя>.wav, assets/audio/creatures/<имя>_<appear|attack>.wav, assets/audio/music/*.ogg.
+## Файлы: assets/audio/sfx/<имя>.ogg, assets/audio/creatures/<вид>_<стихия>_<appear|attack>.ogg,
+## assets/audio/music/*.ogg. Записанные звуки собирает tools/audio/build_sfx.py (источники и лицензии — CREDITS.md);
+## если .ogg нет, берётся .wav с тем же именем (старые синтезированные файлы tools/audio/gen_sfx.py).
 
 const SFX_DIR := "res://assets/audio/sfx/"
 const CREATURE_DIR := "res://assets/audio/creatures/"
@@ -9,6 +11,17 @@ const MUSIC_BATTLE := "res://assets/audio/music/battle.ogg"
 const POOL := 14
 const MUSIC_DB := -9.0
 const SFX_DB := -2.0
+## Все короткие эффекты (имена файлов без расширения) — для прогрева кэша и стенда tools/audio/play_all.gd.
+const SFX_NAMES: Array[String] = [
+	"ui_hover", "ui_click", "card_select", "card_place", "card_flip", "card_capture", "turn_start",
+	"ball_throw", "ball_bounce_1", "ball_bounce_2", "ball_bounce_3", "ball_roll_loop", "ball_land", "capsule_open",
+	"battle_start", "clash", "power_up", "power_down", "miss", "eliminated", "vanish",
+	"battle_win", "battle_lose", "victory", "defeat", "gate_trap",
+	"ability_play", "ability_cancel", "ability_fusion",
+	"ability_fire", "ability_gale", "ability_light", "ability_stone", "ability_shadow", "ability_tide",
+]
+## Суффиксы стихий по Attr.A (как GameData.ATTR_KEYS): имя способности и файлов криков.
+const ATTR_KEYS: Array[String] = ["fire", "gale", "light", "stone", "shadow", "tide"]
 
 var _cache: Dictionary = {}
 var _pool: Array[AudioStreamPlayer] = []
@@ -50,6 +63,12 @@ func _init() -> void:
 	(Engine.get_main_loop() as SceneTree).node_added.connect(_on_node_added)
 
 
+## Прогрев кэша коротких эффектов: первый звук броска/удара не ждёт загрузки с диска.
+func _ready() -> void:
+	for n in SFX_NAMES:
+		_load(SFX_DIR + n)
+
+
 ## Выход из игры: останавливаем плееры и отпускаем звуки, иначе при закрытии остаются
 ## «resources still in use» / «ObjectDB instances leaked» (воспроизведения ещё держат потоки).
 func _exit_tree() -> void:
@@ -69,14 +88,22 @@ func _ensure_bus(bus_name: String, db: float) -> void:
 	AudioServer.set_bus_volume_db(i, db)
 
 
+## path без расширения: сначала .ogg (записанные), затем .wav (синтезированные).
 func _load(path: String) -> AudioStream:
 	if _cache.has(path):
 		return _cache[path]
 	var s: AudioStream = null
-	if ResourceLoader.exists(path):
-		s = load(path)
+	for ext in [".ogg", ".wav"]:
+		if ResourceLoader.exists(path + ext):
+			s = load(path + ext)
+			break
 	_cache[path] = s
 	return s
+
+
+## Есть ли файл эффекта (для стенда и проверок).
+func has_sfx(sfx_name: String) -> bool:
+	return _load(SFX_DIR + sfx_name) != null
 
 
 func _play_stream(s: AudioStream, db: float, pitch: float) -> void:
@@ -100,7 +127,7 @@ func play(sfx_name: String, db: float = 0.0, jitter: float = 0.04, pitch: float 
 	if now - int(_last_play.get(sfx_name, -1000)) < 40:
 		return
 	_last_play[sfx_name] = now
-	_play_stream(_load(SFX_DIR + sfx_name + ".wav"), db, pitch * (1.0 + randf_range(-jitter, jitter)))
+	_play_stream(_load(SFX_DIR + sfx_name), db, pitch * (1.0 + randf_range(-jitter, jitter)))
 
 
 ## Отложенный эффект (не блокирует вызывающего).
@@ -111,11 +138,28 @@ func play_later(sfx_name: String, delay: float, db: float = 0.0) -> void:
 ## Крик существа: kind = "appear" | "attack".
 func cry(creature_id: StringName, kind: String = "appear", delay: float = 0.0, db: float = -1.0) -> void:
 	var short := String(creature_id).trim_prefix("creature_")
-	var s := _load(CREATURE_DIR + "%s_%s.wav" % [short, kind])
+	var s := _load(CREATURE_DIR + "%s_%s" % [short, kind])
 	if delay <= 0.0:
 		_play_stream(s, db, randf_range(0.97, 1.03))
 	else:
 		(Engine.get_main_loop() as SceneTree).create_timer(delay).timeout.connect(_play_stream.bind(s, db, 1.0))
+
+
+## Способность: звук по стихии карты (params.lock — стихия-замок) или слиянию, иначе общий.
+func ability(card: CardDef, cancelled: bool = false, db: float = 0.0) -> void:
+	play(ability_sfx(card, cancelled), db)
+
+
+static func ability_sfx(card: CardDef, cancelled: bool = false) -> String:
+	if cancelled:
+		return "ability_cancel"
+	if card != null:
+		var lock: int = int(card.params.get("lock", -1))
+		if lock >= 0 and lock < ATTR_KEYS.size():
+			return "ability_" + ATTR_KEYS[lock]
+		if card.params.get("fusion", false):
+			return "ability_fusion"
+	return "ability_play"
 
 
 ## Удар шара о борт/стол; strength - скорость удара (м/с).
@@ -129,13 +173,17 @@ func bounce(strength: float) -> void:
 ## Качение шара: громкость от скорости, 0 - тишина.
 func set_roll(speed: float) -> void:
 	if _roll.stream == null:
-		var s := _load(SFX_DIR + "ball_roll_loop.wav") as AudioStreamWAV
-		if s == null:
+		var src := _load(SFX_DIR + "ball_roll_loop")
+		if src == null:
 			return
-		s = s.duplicate()
-		s.loop_mode = AudioStreamWAV.LOOP_FORWARD
-		s.loop_begin = 0
-		s.loop_end = int(s.get_length() * s.mix_rate)
+		var s: AudioStream = src.duplicate()
+		if s is AudioStreamOggVorbis:
+			(s as AudioStreamOggVorbis).loop = true
+		elif s is AudioStreamWAV:
+			var w := s as AudioStreamWAV
+			w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+			w.loop_begin = 0
+			w.loop_end = int(w.get_length() * w.mix_rate)
 		_roll.stream = s
 	var v := clampf(speed / (7.0 * Arena.WORLD), 0.0, 1.0)
 	if v < 0.03:
@@ -151,7 +199,7 @@ func set_roll(speed: float) -> void:
 # ---------------------------------------------------------------- музыка
 
 func play_music(path: String = MUSIC_BATTLE, fade: float = 1.5) -> void:
-	var s := _load(path)
+	var s := _load(path.get_basename())
 	if s == null:
 		return
 	if s is AudioStreamOggVorbis:

@@ -1,7 +1,9 @@
 """Процедурные звуковые эффекты «Сфер Стихий»: серьёзный боевой стиль (тяжёлые удары, металл, энергия, низ).
 
-Запуск: ~/ai/Hunyuan3D-2/.venv/bin/python tools/audio/gen_sfx.py
-Пишет WAV (44.1 кГц, 16 бит, моно) в assets/audio/sfx/ и assets/audio/creatures/.
+Сейчас в игре записанные звуки (tools/audio/build_sfx.py); отсюда build_sfx.py берёт синтезированные слои
+(boom, heavy_whoosh, element_layer...). Отдельный запуск пишет старые WAV-версии в tools/audio/synth_out/
+(с .gdignore — Godot их не импортирует), для сравнения:
+    ~/ai/Hunyuan3D-2/.venv/bin/python tools/audio/gen_sfx.py
 Всё детерминировано (фиксированные seed), перегенерация даёт те же файлы.
 """
 import os
@@ -11,7 +13,7 @@ import numpy as np
 from scipy.signal import butter, lfilter, sosfilt
 
 SR = 44100
-ROOT = os.path.join(os.path.dirname(__file__), "..", "..", "assets", "audio")
+ROOT = os.path.join(os.path.dirname(__file__), "synth_out")
 rng = np.random.default_rng(7)
 
 
@@ -552,6 +554,9 @@ def creature_sounds():
 
 
 if __name__ == "__main__":
+    os.makedirs(os.path.join(ROOT, "sfx"), exist_ok=True)
+    os.makedirs(os.path.join(ROOT, "creatures"), exist_ok=True)
+    open(os.path.join(ROOT, ".gdignore"), "w").close()
     ui_sounds()
     ball_sounds()
     battle_sounds()
