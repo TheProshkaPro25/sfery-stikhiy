@@ -3,6 +3,7 @@ extends Control
 ## Подготовка: выбрать карту арены из руки, затем слот (сетка 2x3, верхний ряд - дальний).
 
 signal placed(card_id: StringName, slot: int)
+signal placed_throw(card_id: StringName, slot: int)  # «ворота + бросок»: сразу бросить существо на эту карту
 signal skipped
 
 var _panel: PanelContainer
@@ -15,6 +16,7 @@ var _selected: StringName = &""
 var _legal: Array = []
 var _built := false
 var _skip_btn: Button
+var _throw_btn: Button
 
 
 func _ready() -> void:
@@ -28,7 +30,7 @@ func _build() -> void:
 	VisualUtil.full_rect_ignore(self)
 	theme = UiTheme.get_theme()
 	_panel = PanelContainer.new()
-	VisualUtil.place(_panel, 0.5, 1.0, -110.0, -96.0)  # над опущенной рукой способностей
+	VisualUtil.place(_panel, 0.5, 1.0, 0.0, -96.0)  # над опущенной рукой способностей
 	add_child(_panel)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 16)
@@ -58,6 +60,7 @@ func _build() -> void:
 		var b := Button.new()
 		b.text = str(i + 1)
 		b.custom_minimum_size = Vector2(64, 52)
+		b.tooltip_text = "Место %d: %s ряд поля. Карта ляжет рубашкой вверх." % [i + 1, "дальний" if i < 3 else "ближний"]
 		b.pressed.connect(_on_slot_pressed.bind(i))
 		_grid.add_child(b)
 		_slot_buttons.append(b)
@@ -66,11 +69,17 @@ func _build() -> void:
 	_skip_btn.custom_minimum_size = Vector2(0, 40)
 	_skip_btn.pressed.connect(func() -> void: skipped.emit())
 	right.add_child(_skip_btn)
+	_throw_btn = Button.new()
+	_throw_btn.text = "Ворота + бросок"
+	_throw_btn.toggle_mode = true
+	_throw_btn.custom_minimum_size = Vector2(0, 40)
+	_throw_btn.tooltip_text = "Положить карту и сразу бросить на неё существо: два действия за один ход. Следующий шаг — выбрать бойца."
+	right.add_child(_throw_btn)
 	_panel.visible = false
 
 
 ## cards: [{id:StringName, name:String, text:String}]; legal_slots: индексы слотов.
-func begin(cards: Array, legal_slots: Array, can_skip: bool = false) -> void:
+func begin(cards: Array, legal_slots: Array, can_skip: bool = false, can_throw: bool = false) -> void:
 	_build()
 	_selected = &""
 	_legal = legal_slots.duplicate()
@@ -88,8 +97,12 @@ func begin(cards: Array, legal_slots: Array, can_skip: bool = false) -> void:
 		b.pressed.connect(_on_card_pressed.bind(cid))
 		_cards_box.add_child(b)
 		_card_buttons[cid] = b
-	_title.text = "Карта ворот: выберите карту, затем место (кладётся рубашкой вверх)"
+	_title.text = "Карта ворот: выберите карту, затем место (рубашкой вверх)"
+	if can_throw:
+		_title.text += ".\nВключите «Ворота + бросок», чтобы сразу бросить существо на неё"
 	_skip_btn.visible = can_skip
+	_throw_btn.visible = can_throw
+	_throw_btn.button_pressed = false
 	_refresh_slots()
 	_panel.visible = true
 	_panel.call_deferred("reset_size")
@@ -119,4 +132,7 @@ func _on_slot_pressed(slot: int) -> void:
 		return
 	var cid := _selected
 	_selected = &""
-	placed.emit(cid, slot)
+	if _throw_btn.visible and _throw_btn.button_pressed:
+		placed_throw.emit(cid, slot)
+	else:
+		placed.emit(cid, slot)

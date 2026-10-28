@@ -13,6 +13,8 @@ var _attrs: Array[Label] = []
 var _powers: Array[Label] = []
 var _shown: Array[float] = [0.0, 0.0]
 var _vs: Label
+var _target: Array[int] = [0, 0]     # последние заданные силы (для всплывающих +/−)
+var _chain: HBoxContainer            # лента карт боя: «Рывок → Щит → ПАС»
 var _open := false
 var _built := false
 
@@ -55,6 +57,15 @@ func _build() -> void:
 	_vs.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_vs.visible = false
 	add_child(_vs)
+	_chain = HBoxContainer.new()
+	_chain.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chain.add_theme_constant_override("separation", 6)
+	_chain.alignment = BoxContainer.ALIGNMENT_CENTER
+	_chain.anchor_left = 0.0
+	_chain.anchor_right = 1.0
+	_chain.offset_top = BAR_H + 108.0
+	_chain.offset_bottom = BAR_H + 146.0
+	add_child(_chain)
 
 
 func _bar(top: bool) -> ColorRect:
@@ -85,9 +96,11 @@ func _plate_style(c: Color, side: int) -> StyleBoxFlat:
 
 
 ## Открыть подачу боя. Сторона 0 — атакующий (слева), 1 — защитник.
-func open(names: Array, attrs: Array, powers: Array) -> void:
+func open(names: Array, attrs: Array, powers: Array, momentum: Array = [0, 0]) -> void:
 	_build()
 	_open = true
+	_target = [0, 0]
+	set_chain([], [false, false])
 	var vp := get_viewport_rect().size
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(_top, "offset_top", 0.0, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -101,6 +114,8 @@ func open(names: Array, attrs: Array, powers: Array) -> void:
 		p.modulate = Color.WHITE
 		_names[side].text = str(names[side])
 		_attrs[side].text = ("АТАКА · " if side == 0 else "ЗАЩИТА · ") + VisualUtil.attr_name(int(attrs[side])).to_upper()
+		if momentum.size() == 2 and int(momentum[side]) > 0:
+			_attrs[side].text += "  ·  НАТИСК +%d" % int(momentum[side])
 		_attrs[side].add_theme_color_override("font_color", c.lightened(0.35))
 		_shown[side] = 0.0
 		_powers[side].text = "0"
@@ -122,7 +137,7 @@ func open(names: Array, attrs: Array, powers: Array) -> void:
 	set_powers(powers)
 
 
-## Сила бойцов: числа «бегут» к новым значениям.
+## Сила бойцов: числа «бегут» к новым значениям, разница всплывает над плашкой (+120 / −80) с пружиной.
 func set_powers(powers: Array) -> void:
 	if not _open:
 		return
@@ -130,10 +145,61 @@ func set_powers(powers: Array) -> void:
 		var to: float = float(powers[side])
 		var tw := create_tween()
 		tw.tween_method(_set_shown.bind(side), _shown[side], to, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		if to > _shown[side] + 0.5 and _shown[side] > 0.0:
-			_pulse(_powers[side], Color(0.6, 1.0, 0.6))
-		elif to < _shown[side] - 0.5:
-			_pulse(_powers[side], Color(1.0, 0.45, 0.4))
+		var delta: int = int(to) - _target[side]
+		if _target[side] > 0 and delta != 0:
+			_pulse(_powers[side], Color(0.6, 1.0, 0.6) if delta > 0 else Color(1.0, 0.45, 0.4))
+			_float_number(side, delta)
+		_target[side] = int(to)
+
+
+## Всплывающее число изменения силы: выскакивает с пружиной, плывёт вверх и гаснет.
+func _float_number(side: int, delta: int) -> void:
+	var p: PanelContainer = _plates[side]
+	var l := VisualUtil.label(("+%d" if delta > 0 else "−%d") % absi(delta), 54)
+	l.add_theme_color_override("font_color", Color(0.55, 1.0, 0.55) if delta > 0 else Color(1.0, 0.4, 0.35))
+	l.add_theme_constant_override("outline_size", 14)
+	add_child(l)
+	l.size = l.get_minimum_size()
+	l.pivot_offset = l.size * 0.5
+	var x: float = p.position.x + (p.size.x * 0.5 if side == 0 else p.size.x * 0.5) - l.size.x * 0.5
+	var y: float = p.position.y + p.size.y + 4.0
+	l.position = Vector2(x, y)
+	l.scale = Vector2(0.2, 0.2)
+	var tw := l.create_tween()
+	tw.tween_property(l, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(l, "position:y", y + 40.0, 0.9).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(l, "modulate:a", 0.0, 0.35)
+	tw.tween_callback(l.queue_free)
+
+
+## Лента карт боя по порядку (прикреплённые — первыми): plays — [[сторона, card_id], ...], passed — кто спасовал.
+func set_chain(plays: Array, passed: Array) -> void:
+	_build()
+	VisualUtil.clear_children(_chain)
+	for pl in plays:
+		var side: int = int(pl[0])
+		var c: CardDef = CardDB.card(StringName(pl[1]))
+		_chain.add_child(_chip(c.display_name if c != null else str(pl[1]), side))
+	for side in range(2):
+		if side < passed.size() and bool(passed[side]):
+			_chain.add_child(_chip("ПАС", side, true))
+	_chain.visible = _open and _chain.get_child_count() > 0
+
+
+func _chip(text: String, side: int, dim: bool = false) -> Control:
+	var c: Color = Color(0.5, 0.75, 1.0) if side == 0 else Color(1.0, 0.55, 0.5)
+	if dim:
+		c = c.darkened(0.35)
+	var pc := PanelContainer.new()
+	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pc.add_theme_stylebox_override("panel", UiTheme.box(Color(c.r * 0.15, c.g * 0.15, c.b * 0.15, 0.9), c, 2, 6, 5))
+	var l := VisualUtil.label(text, 16)
+	l.add_theme_color_override("font_color", c.lightened(0.4))
+	pc.add_child(l)
+	pc.pivot_offset = Vector2(40, 14)
+	pc.scale = Vector2(0.4, 0.4)
+	pc.create_tween().tween_property(pc, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	return pc
 
 
 func _set_shown(v: float, side: int) -> void:
@@ -164,6 +230,7 @@ func resolve(winner_side: int) -> void:
 	tw.chain().tween_property(w, "scale", Vector2.ONE, 0.25)
 	tw.parallel().tween_property(w, "modulate", Color.WHITE, 0.25)
 	_vs.visible = false
+	_chain.visible = false
 
 
 func close() -> void:
@@ -179,3 +246,4 @@ func close() -> void:
 	tw.tween_property(_plates[0], "position:x", -_plates[0].size.x - 40.0, 0.25)
 	tw.tween_property(_plates[1], "position:x", vp.x + 40.0, 0.25)
 	_vs.visible = false
+	_chain.visible = false

@@ -42,6 +42,10 @@ static func _make() -> Theme:
 	t.set_stylebox("panel", "PanelContainer", panel)
 	t.set_stylebox("panel", "Panel", panel)
 
+	var tip := box(Color(0.05, 0.05, 0.08, 0.96), GOLD_DIM, 2, 8, 8)
+	t.set_stylebox("panel", "TooltipPanel", tip)
+	t.set_color("font_color", "TooltipLabel", TEXT)
+	t.set_font_size("font_size", "TooltipLabel", 15)
 	t.set_color("font_color", "Label", TEXT)
 	t.set_color("font_outline_color", "Label", Color(0, 0, 0, 0.85))
 	t.set_constant("outline_size", "Label", 4)
@@ -116,12 +120,14 @@ static func card_sigil(def: CardDef) -> int:
 			return 8
 		"boost_self", "all_in", "legacy", "home_element", "underdog", "overweight":
 			return 9
-		"weaken_foe", "trap":
+		"weaken_foe", "trap", "backflow":
 			return 10
-		"overflow", "swap_base", "steal_arena":
+		"overflow", "swap_base", "steal_arena", "mirror":
 			return 11
-		"nullify_arena", "void":
+		"nullify_arena", "void", "seal":
 			return 12
+		"throne":
+			return 9
 		"rescue":
 			return 13
 	var a: int = int(def.params.get("attr", -1))
@@ -134,7 +140,7 @@ static func card_sigil(def: CardDef) -> int:
 static func card_badge(def: CardDef) -> String:
 	var n: int = int(def.params.get("amount", 0))
 	match String(def.effect_id):
-		"boost_self", "all_in", "home_element", "steal_advantage", "swap_attr", "rescue", "fusion_chain", "attr_bonus", "bastion", "twilight", "underdog":
+		"boost_self", "all_in", "home_element", "steal_advantage", "swap_attr", "rescue", "fusion_chain", "attr_bonus", "bastion", "twilight", "underdog", "throne":
 			return "+%d" % n
 		"weaken_foe", "trap":
 			return "−%d" % absi(n)
@@ -181,16 +187,16 @@ static func card_elements(def: CardDef) -> Array:
 # ---------------------------------------------------------------- подсказки для новичка
 
 const CLASS_HELP := {
-	&"gold": ["Золотые ворота", "Карта поля боя. Кладётся рубашкой вверх и открывается в бою. Даёт силу G существу по его стихии: своей стихии +100, остальным +30."],
+	&"gold": ["Золотые ворота", "Карта поля боя. Кладётся рубашкой вверх и открывается в бою. Даёт силу G существу своей стихии (остальным — нет)."],
 	&"silver": ["Серебряные ворота", "Карта поля боя с особым бонусом силы: помогает защитнику, слабейшему или нужным стихиям."],
-	&"bronze": ["Бронзовые ворота", "Карта поля боя, меняющая правила боя на ней: например, отменяет или удваивает преимущество стихий."],
+	&"bronze": ["Бронзовые ворота", "Карта поля боя, меняющая правила боя на ней: отменяет или удваивает преимущество стихий. Бывает ловушкой: срабатывает при открытии ворот."],
 	&"red": ["Красная способность", "Зависит от стихии. Стихийную может сыграть только существо этой стихии — она сильнее обычных."],
 	&"blue": ["Синяя способность", "Прибавка или отнятие силы G в бою."],
 	&"green": ["Зелёная способность", "Меняет ситуацию боя: отменяет карты, меняет силы местами, спасает существо."],
 }
-const ABILITY_WHEN := "Играется в бою, пока ворота закрыты: сначала атакующий, потом защитник. Одна карта на бой, каждая — один раз за игру."
+const ABILITY_WHEN := "Играется в бою (обмен по очереди, до 3 карт на бой; «Пас» окончателен), до броска или после приземления — тогда карта прикрепляется к существу. Каждая карта — один раз за игру."
 const FUSION_WHEN := "Слияние: кладётся сразу поверх своей способности в том же бою и усиливает её."
-const GATE_WHEN := "В начале хода можно положить одну карту ворот: ближе к сопернику, рядом с другими картами."
+const GATE_WHEN := "В начале хода можно положить одну карту ворот: ближе к сопернику, рядом с другими картами. Можно сразу бросить на неё существо («Ворота + бросок»)."
 
 
 ## Строки подсказки для карты: [заголовок, тип, цвет типа, описание типа, эффект, когда играть].

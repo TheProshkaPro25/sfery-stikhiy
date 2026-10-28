@@ -77,7 +77,13 @@ func _process(_d: float) -> bool:
 		main.throw_ctl.disable()
 		main._on_throw_committed(imp)
 	elif main.ability_panel._panel.visible:
-		var cid = bot.choose_ability(view, main.ctrl.get_battle_preview(), main.ctrl.legal_abilities(0))
+		var cid: StringName = &""
+		if main.ctrl.get_ability_moment() == &"battle":
+			cid = bot.choose_ability(view, main.ctrl.get_battle_preview(), main.ctrl.legal_abilities(0))
+		elif main.ctrl.get_ability_moment() == &"after_landing":
+			cid = bot.choose_attach(view, main.ctrl.get_landed_uid(), main.ctrl.legal_abilities(0))
+		else:
+			return false  # до броска окно только подсказка
 		if cid == &"": main._on_ability_passed()
 		else: main._on_ability_chosen(cid)
 	return false

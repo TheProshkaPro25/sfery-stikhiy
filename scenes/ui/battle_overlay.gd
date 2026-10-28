@@ -72,6 +72,14 @@ func show_result(r: BattleResult, names: Dictionary = {}) -> Signal:
 		var ll := VisualUtil.label(txt, 16)
 		ll.add_theme_color_override("font_color", Color(0.6, 0.85, 1.0) if side == 0 else Color(1.0, 0.7, 0.6))
 		_vbox.add_child(ll)
+	if r.final_round:
+		var fr := VisualUtil.label("Финальный бой: преимущество стихии ×2", 16)
+		fr.add_theme_color_override("font_color", Color(1.0, 0.5, 0.4))
+		_vbox.add_child(fr)
+	if r.sealed:
+		_vbox.add_child(VisualUtil.label("Печать тишины: способности боя сгорели", 16))
+	if r.mirrored:
+		_vbox.add_child(VisualUtil.label("Зеркало: силы бойцов поменялись местами", 16))
 	if r.lost_ability != &"":
 		_vbox.add_child(VisualUtil.label("Потеряна способность: %s" % _card_name(r.lost_ability), 16))
 
@@ -115,6 +123,8 @@ func _pretty_source(src: String) -> String:
 		return "преимущество атрибута"
 	if src == "floor":
 		return "нижняя граница"
+	if src == "momentum":
+		return "натиск (серия побед)"
 	var parts: PackedStringArray = src.split(":", true, 1)
 	if parts.size() == 2:
 		var n: String = _card_name(StringName(parts[1]))
@@ -125,6 +135,8 @@ func _pretty_source(src: String) -> String:
 				return "способность «%s»" % n
 			"cancelled":
 				return "«%s» отменена" % n
+			"trap":
+				return "ловушка «%s»" % n
 	return src
 
 

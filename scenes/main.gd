@@ -34,6 +34,7 @@ var ability_panel: AbilityPanel
 var battle_overlay: BattleOverlay
 var game_over_ui: GameOverUI
 var team_menu: TeamMenu
+var hover_tips: HoverTips
 
 var balls: Dictionary = {}        # uid -> CreatureBall
 var card_nodes: Dictionary = {}   # slot -> ArenaCardNode
@@ -48,6 +49,9 @@ var _active: int = 0
 var _game_over := false
 var _player_ids: Array[StringName] = []
 var _player_deck: Array = []  # [существа, ворота, способности] из конструктора колоды
+var _gate_pick: Dictionary = {}   # «ворота + бросок»: выбранные карта и слот, ждём выбора существа
+var _pip_idx: Dictionary = {}     # uid -> номер шарика на плашке бойца
+var _stats: Dictionary = {"wins": [0, 0], "abilities": [0, 0], "traps": 0, "battles": []}  # итоги для экрана результата
 
 
 func _ready() -> void:
@@ -196,6 +200,10 @@ func _build_ui() -> void:
 	ui_layer.add_child(game_over_ui)
 	team_menu = TEAM_MENU_SCENE.instantiate() as TeamMenu
 	ui_layer.add_child(team_menu)
+	hover_tips = HoverTips.new()
+	hover_tips.resolver = _tip_at
+	ui_layer.add_child(hover_tips)
+	ui_layer.move_child(hover_tips, ui_layer.get_child_count() - 2)  # под меню, над остальным интерфейсом
 
 
 func _on_deck_chosen(creatures: Array[StringName], arena_ids: Array[StringName], abilities: Array[StringName]) -> void:
@@ -210,7 +218,8 @@ func _build_logic() -> void:
 	var decks: Array[DeckDef] = _build_decks()
 	var seed_value: int = int(rng.randi())
 	ctrl = MatchController.new(decks[0], decks[1], seed_value)
-	ai = AIPlayer.new(AI_PLAYER, seed_value + 1)
+	ctrl.landing_window = true  # окно прикрепления способности после приземления на пустые ворота
+	ai = AIPlayer.new(AI_PLAYER, seed_value + 1, -1.0, TeamMenu.difficulty)
 	_index_creatures()
 
 	ctrl.phase_changed.connect(_on_phase_changed)
@@ -230,13 +239,23 @@ func _build_logic() -> void:
 	ctrl.card_captured.connect(_on_card_captured)
 	ctrl.turn_started.connect(_on_turn_started)
 	ctrl.game_over.connect(_on_game_over)
+	ctrl.ability_attached.connect(_on_ability_attached)
+	ctrl.attach_window.connect(_on_attach_window)
+	ctrl.gate_thrown.connect(_on_gate_thrown)
+	ctrl.gate_trap_triggered.connect(_on_gate_trap)
+	ctrl.momentum_changed.connect(_on_momentum_changed)
+	ctrl.final_round_started.connect(_on_final_round)
 
 	events.drained.connect(_pump)
 	throw_ctl.throw_committed.connect(_on_throw_committed)
 	hud.creature_chosen.connect(_on_creature_chosen)
 	setup_panel.placed.connect(_on_setup_placed)
 	setup_panel.skipped.connect(_on_setup_skipped)
-	ctrl.creature_relocated.connect(func(uid: int, a: int, b: int) -> void: events.push(_anim_relocated.bind(uid, a, b)))
+	setup_panel.placed_throw.connect(_on_setup_placed_throw)
+	hud.creature_cancelled.connect(_on_gate_throw_cancelled)
+	ctrl.creature_relocated.connect(func(uid: int, a: int, b: int) -> void:
+		_log("%s переходит на другие ворота" % _cname(uid))
+		events.push(_anim_relocated.bind(uid, a, b)))
 	ctrl.gates_recycled.connect(func() -> void: events.push(func() -> void:
 		hud.flash("Ворота кончились: выигранные карты вернулись в руки")
 		await _wait(1.2)
@@ -257,6 +276,17 @@ func _build_logic() -> void:
 
 func _start_game() -> void:
 	hud.set_hint("Сферы Стихий")
+	var view: MatchState = ctrl.get_view(HUMAN)
+	var cols: Array = [[], []]
+	for p in range(2):
+		var idx := 0
+		for uid in view.players[p].creature_uids:
+			cols[p].append(VisualUtil.attr_color(_creature_def(uid).attribute))
+			_pip_idx[uid] = idx
+			idx += 1
+	hud.setup_plates(cols[0], cols[1])
+	hud.set_names("Вы", "Соперник · %s" % AIPlayer.difficulty_name(TeamMenu.difficulty))
+	hud.set_captures(0, 0)
 	ctrl.start()
 	_refresh_hand()
 	ability_panel.set_dock_visible(true)
@@ -395,6 +425,110 @@ func _wait(sec: float) -> void:
 	await get_tree().create_timer(sec).timeout
 
 
+# ---------------------------------------------------------------- подсказки для 3D-объектов
+
+## Что под мышью: существо/шар (ближайшее по проекции) или карта ворот. {} — ничего.
+func _tip_at(mp: Vector2) -> Dictionary:
+	if ctrl == null or _game_over or hud._battle or team_menu.visible or cam == null:
+		return {}
+	var view: MatchState = ctrl.get_view(HUMAN)
+	# существа и шар перед броском
+	var best_uid := -1
+	var best_d := 1e9
+	for u in balls.keys():
+		var b: CreatureBall = balls[u]
+		if b == null or not is_instance_valid(b) or not b.visible:
+			continue
+		var base: Vector3 = b.global_position - Vector3(0, CreatureBall.RADIUS, 0)
+		var on_field: bool = view.creature(u).slot >= 0
+		var h: float = b.figure_height() if on_field else CreatureBall.RADIUS * 2.0
+		var top: Vector3 = base + Vector3(0, h, 0)
+		if cam.is_position_behind(base) or cam.is_position_behind(top):
+			continue
+		var p0: Vector2 = cam.unproject_position(base)
+		var p1: Vector2 = cam.unproject_position(top)
+		var rad: float = maxf(24.0, p0.distance_to(p1) * 0.22)
+		var d: float = Geometry2D.get_closest_point_to_segment(mp, p0, p1).distance_to(mp)
+		if d < rad and d / rad < best_d:
+			best_d = d / rad
+			best_uid = u
+	if best_uid >= 0:
+		return {"key": "c%d" % best_uid, "lines": _creature_tip(best_uid, view)}
+	# карты ворот: попадание в проекцию прямоугольника карты
+	for i in range(view.slots.size()):
+		var sl: SlotState = view.slots[i]
+		var c: Vector3 = arena.slot_position(i)
+		var hw: float = Arena.CARD_W * 0.5
+		var hh: float = Arena.CARD_H * 0.5
+		var poly := PackedVector2Array()
+		var ok := true
+		for corner in [Vector3(-hw, 0, -hh), Vector3(hw, 0, -hh), Vector3(hw, 0, hh), Vector3(-hw, 0, hh)]:
+			var wp: Vector3 = c + corner
+			if cam.is_position_behind(wp):
+				ok = false
+				break
+			poly.append(cam.unproject_position(wp))
+		if not ok or not Geometry2D.is_point_in_polygon(mp, poly):
+			continue
+		var lines: Array = _slot_tip(i, sl, view)
+		if not lines.is_empty():
+			return {"key": "s%d:%s" % [i, str(sl.card_id) + str(sl.revealed)], "lines": lines}
+	return {}
+
+
+func _slot_tip(i: int, sl: SlotState, view: MatchState) -> Array:
+	if not sl.has_card:
+		if ctrl.get_phase() == MatchController.Phase.SETUP and ctrl.get_active_player() == HUMAN and ctrl.legal_setup_slots().has(i):
+			return ["Свободное место", "Выкладка ворот", UiTheme.GOLD, "Сюда можно положить карту ворот: рядом с уже лежащими картами.", "Бросок на пустое место — промах.", "", ""]
+		return []
+	var mine: bool = sl.card_owner == HUMAN
+	var occ := ""
+	if sl.occupant_uid >= 0:
+		occ = "На воротах стоит: %s (%s)." % [_cname(sl.occupant_uid), "ваше" if _owner_of(sl.occupant_uid) == HUMAN else "существо соперника"]
+	var def: CardDef = CardDB.card(sl.card_id)
+	if def == null:
+		return ["Закрытые ворота соперника", "Ворота · рубашкой вверх", UiTheme.GOLD_DIM,
+			"Карту видно только в бою, когда ворота открываются. Там может быть бонус силы или ловушка.", "Закрытая карта соперника.", "", occ]
+	var lines: Array = UiTheme.card_help(def)
+	if not sl.revealed:
+		lines[1] = "%s · ваша закрытая карта" % lines[1] if mine else lines[1]
+		lines[5] = "Соперник не видит эту карту до боя. " + str(lines[5]) if mine else lines[5]
+	lines[6] = (str(lines[6]) + "\n" + occ).strip_edges() if occ != "" else lines[6]
+	return lines
+
+
+func _creature_tip(uid: int, view: MatchState) -> Array:
+	var d: CreatureDef = _creature_def(uid)
+	var cs: CreatureState = view.creature(uid)
+	var lines: Array = UiTheme.creature_help(d)
+	var mine: bool = _owner_of(uid) == HUMAN
+	lines[1] = "%s · %s" % [lines[1], "ваше существо" if mine else "существо соперника"]
+	var power: int = d.base_power
+	var extra: Array[String] = ["Базовая сила: %d" % power]
+	if cs.slot >= 0:
+		var sl: SlotState = view.slots[cs.slot]
+		var cd: CardDef = CardDB.card(sl.card_id)
+		extra.append("Стоит на воротах №%d%s" % [cs.slot + 1, (": «%s»" % cd.display_name) if cd != null else " (карта закрыта)"])
+	else:
+		extra.append("Шар: потяни мышь назад и отпусти, чтобы бросить" if mine else "Шар соперника")
+	if not cs.attached.is_empty():
+		var names: Array[String] = []
+		for a in cs.attached:
+			names.append("«%s»" % _card_name(StringName(a[1])))
+		extra.append("Прикреплено: " + ", ".join(names))
+	lines[6] = "\n".join(extra)
+	return lines
+
+
+## Строка в ленту событий — в порядке очереди анимаций.
+func _log(text: String, c: Color = UiTheme.TEXT) -> void:
+	events.push(func() -> void: hud.log_event(text, c))
+
+
+func _say(player: int, you: String, foe: String) -> String:
+	return you if player == HUMAN else foe
+
+
 # ---------------------------------------------------------------- обработчики сигналов контроллера
 # Состояние контроллера уже изменено; здесь только ставим анимации в очередь.
 
@@ -407,6 +541,7 @@ func _on_setup_requested(player: int) -> void:
 
 
 func _on_arena_card_placed(player: int, slot: int) -> void:
+	_log(_say(player, "Вы кладёте карту ворот", "Соперник кладёт карту ворот"))
 	events.push(_anim_card_placed.bind(player, slot))
 
 
@@ -415,21 +550,27 @@ func _on_throw_requested(player: int) -> void:
 
 
 func _on_creature_selected(player: int, uid: int, recalled: bool) -> void:
+	_log("%s: %s" % [_say(player, "Вы бросаете", "Соперник бросает"), _cname(uid)])
 	events.push(_anim_selected.bind(player, uid, recalled))
 
 
 func _on_creature_returned(uid: int, reason: StringName) -> void:
+	if reason == &"miss":
+		_log("Промах: %s" % _cname(uid), Color(1.0, 0.7, 0.6))
 	events.push(_anim_returned.bind(uid, reason))
 
 
 func _on_creature_stood(uid: int, slot: int) -> void:
+	_log("%s встаёт на ворота" % _cname(uid))
 	events.push(_anim_stood.bind(uid, slot))
 
 
 func _on_battle_started(slot: int, attacker_uid: int, defender_uid: int) -> void:
 	var pre: BattleResult = ctrl.get_battle_preview()
 	var pw: Array = [pre.powers[0], pre.powers[1]] if pre != null else []
-	events.push(_anim_battle_started.bind(slot, attacker_uid, defender_uid, pw))
+	var mo: Array = [pre.momentum[0], pre.momentum[1]] if pre != null else [0, 0]
+	_log("Бой: %s против %s" % [_cname(attacker_uid), _cname(defender_uid)], UiTheme.GOLD)
+	events.push(_anim_battle_started.bind(slot, attacker_uid, defender_uid, pw, mo))
 
 
 func _on_card_revealed(slot: int, card_id: StringName) -> void:
@@ -443,6 +584,8 @@ func _on_ability_window(player: int, _options: Array) -> void:
 
 func _on_ability_played(player: int, card_id: StringName) -> void:
 	_refresh_hand()
+	_stats["abilities"][player] += 1
+	_log("%s «%s»" % [_say(player, "Вы играете", "Соперник играет"), _card_name(card_id)], Color(0.75, 0.6, 1.0))
 	var pre: BattleResult = ctrl.get_battle_preview()
 	var pw: Array = [pre.powers[0], pre.powers[1]] if pre != null else []
 	events.push(_anim_ability_msg.bind(player, card_id, false, pw))
@@ -454,20 +597,61 @@ func _on_ability_cancelled(player: int, card_id: StringName) -> void:
 
 func _on_battle_resolved(result: BattleResult) -> void:
 	_refresh_hand()
+	var win_p: int = _owner_of(result.winner_uid)
+	var atk_won: bool = result.winner_uid == result.attacker_uid
+	var wp: int = result.powers[0 if atk_won else 1]
+	var lp: int = result.powers[1 if atk_won else 0]
+	_stats["wins"][win_p] += 1
+	_stats["battles"].append({"turn": ctrl.get_turn(), "winner": _cname(result.winner_uid), "loser": _cname(result.loser_uid),
+		"wp": wp, "lp": lp, "mine": win_p == HUMAN})
+	_log("Побеждает %s (%d : %d)" % [_cname(result.winner_uid), wp, lp], Color(0.6, 1.0, 0.6) if win_p == HUMAN else Color(1.0, 0.6, 0.55))
 	events.push(_anim_battle_resolved.bind(result))
 
 
 func _on_creature_eliminated(uid: int) -> void:
 	events.push(_anim_remove_ball.bind(uid, true))
+	events.push(func() -> void: hud.kill_creature(_owner_of(uid), int(_pip_idx.get(uid, -1))))
 
 
 func _on_card_captured(player: int, slot: int, _card_id: StringName) -> void:
+	_log("%s: ворота захвачены" % _say(player, "Вы", "Соперник"), UiTheme.GOLD)
 	events.push(_anim_captured.bind(player, slot))
 
 
 func _on_turn_started(player: int, turn: int) -> void:
 	_refresh_hand()
 	events.push(_anim_turn.bind(player, turn))
+
+
+func _on_ability_attached(player: int, uid: int, card_id: StringName) -> void:
+	_refresh_hand()
+	_stats["abilities"][player] += 1
+	_log("%s «%s» → %s" % [_say(player, "Вы прикрепляете", "Соперник прикрепляет"), _card_name(card_id), _cname(uid)], Color(0.75, 0.6, 1.0))
+	events.push(_anim_attached.bind(player, uid, card_id))
+
+
+func _on_attach_window(player: int, _uid: int, _options: Array) -> void:
+	events.push(_anim_set_pending.bind({"kind": "attach", "player": player}))
+
+
+func _on_gate_thrown(player: int, slot: int, uid: int) -> void:
+	_log("%s: ворота + бросок" % _say(player, "Вы", "Соперник"), UiTheme.GOLD)
+	events.push(_anim_gate_thrown.bind(player, slot, uid))
+
+
+func _on_gate_trap(slot: int, card_id: StringName, effect: StringName) -> void:
+	_stats["traps"] += 1
+	_log("ЛОВУШКА: %s" % _card_name(card_id), Color(1.0, 0.45, 0.35))
+	events.push(_anim_trap.bind(slot, card_id, effect))
+
+
+func _on_momentum_changed(player: int, value: int) -> void:
+	events.push(_anim_momentum.bind(player, value))
+
+
+func _on_final_round(player: int) -> void:
+	_log("ФИНАЛЬНЫЙ БОЙ", Color(1.0, 0.45, 0.35))
+	events.push(_anim_final_round.bind(player))
 
 
 func _on_game_over(winner: int, reason: StringName) -> void:
@@ -483,6 +667,7 @@ var _battle_uids: Array[int] = []  # [атакующий, защитник] те
 
 func _refresh_status() -> void:
 	hud.set_status(_turn, _active, _alive[0], _alive[1])
+	hud.set_captures(captures[0], captures[1])
 
 
 func _anim_phase(_phase: int, active_player: int) -> void:
@@ -500,6 +685,67 @@ func _anim_turn(player: int, turn: int) -> void:
 
 func _anim_set_pending(p: Dictionary) -> void:
 	_pending = p
+
+
+func _card_name(id: StringName) -> String:
+	var c: CardDef = CardDB.card(id)
+	return c.display_name if c != null else String(id)
+
+
+## Карта прикреплена к существу вне боя: вспышка у шара, карта соперника показывается обоим.
+func _anim_attached(player: int, uid: int, card_id: StringName) -> void:
+	_refresh_hand()
+	SoundFx.i().play("ability_play")
+	ability_panel.show_played(card_id, player != HUMAN)
+	var b: CreatureBall = balls.get(uid)
+	if b != null:
+		b.ability_pulse()
+		var c: Color = VisualUtil.attr_color(_creature_def(uid).attribute).lightened(0.3)
+		VisualUtil.ring_wave(world, b.global_position - Vector3(0, CreatureBall.RADIUS - 0.1, 0), c, Arena.CARD_W * 0.6, 0.6)
+	hud.flash("%s «%s» к %s" % [_say(player, "Вы прикрепляете", "Соперник прикрепляет"), _card_name(card_id), _cname(uid)])
+	await _wait(1.0)
+	hud.clear_flash()
+	if player == HUMAN and ctrl.get_phase() == MatchController.Phase.AWAIT_LANDING and throw_ctl.is_enabled():
+		_show_pre_throw()
+
+
+func _anim_gate_thrown(player: int, _slot: int, uid: int) -> void:
+	SoundFx.i().play("card_select")
+	hud.set_hint("Ворота + бросок: %s летит на новую карту" % _cname(uid))
+	await hud.banner("ВОРОТА + БРОСОК", "%s: карта и бросок за один ход" % _say(player, "Вы", "Соперник"), UiTheme.GOLD, 0.55)
+
+
+func _anim_trap(slot: int, card_id: StringName, effect: StringName) -> void:
+	var sub: String = "Ловушка сработала"
+	match effect:
+		&"seal":
+			sub = "Все способности этого боя сгорают"
+		&"mirror":
+			sub = "Силы бойцов меняются местами"
+		&"backflow":
+			sub = "Преимущество стихии получает тот, кого бьют"
+	SoundFx.i().play("clash", -4.0)
+	SoundFx.i().play_later("power_down", 0.15, -3.0)
+	cam.impact(arena.slot_position(slot) + Vector3(0, Arena.CARD_H * 0.2, 0))
+	cam.shake(0.7, 0.4)
+	hud.screen_flash(Color(1.0, 0.3, 0.2, 0.35))
+	await hud.banner("ЛОВУШКА!  %s" % _card_name(card_id).to_upper(), sub, Color(1.0, 0.35, 0.3), 0.9)
+	cam.battle_wide()
+
+
+func _anim_momentum(player: int, value: int) -> void:
+	hud.set_momentum(player, value)
+	if value > 0:
+		SoundFx.i().play("power_up", -8.0)
+		hud.log_event("%s: натиск +%d к силе" % [_say(player, "Вы", "Соперник"), value * PowerCalc.MOMENTUM_STEP], Color(1.0, 0.7, 0.3))
+
+
+func _anim_final_round(_player: int) -> void:
+	hud.set_final_round(true)
+	SoundFx.i().play("battle_start", 0.0)
+	cam.shake(0.8, 0.5)
+	hud.screen_flash(Color(1.0, 0.5, 0.3, 0.3))
+	await hud.banner("ФИНАЛЬНЫЙ БОЙ", "Остались последние существа: преимущество стихии ×2", Color(1.0, 0.5, 0.25), 1.2)
 
 
 func _anim_card_placed(player: int, slot: int) -> void:
@@ -629,7 +875,7 @@ func _anim_stood(uid: int, slot: int) -> void:
 	await _wait(0.3)
 
 
-func _anim_battle_started(slot: int, attacker_uid: int, defender_uid: int, powers: Array = []) -> void:
+func _anim_battle_started(slot: int, attacker_uid: int, defender_uid: int, powers: Array = [], momentum: Array = [0, 0]) -> void:
 	arena.set_highlight([slot])
 	var atk: CreatureBall = balls.get(attacker_uid)
 	var dfn: CreatureBall = balls.get(defender_uid)
@@ -642,7 +888,7 @@ func _anim_battle_started(slot: int, attacker_uid: int, defender_uid: int, power
 	hud.set_battle_mode(true)
 	_battle_uids = [attacker_uid, defender_uid]
 	if powers.size() == 2:
-		battle_hud.open([_cname(attacker_uid), _cname(defender_uid)], [_creature_def(attacker_uid).attribute, _creature_def(defender_uid).attribute], powers)
+		battle_hud.open([_cname(attacker_uid), _cname(defender_uid)], [_creature_def(attacker_uid).attribute, _creature_def(defender_uid).attribute], powers, momentum)
 	_focus_labels([attacker_uid, defender_uid])
 	# Атакующий и защитник делят карту: по трети длины каждому, треть пустоты между ними.
 	# Камера боя смотрит с +X, поэтому +Z на экране слева: атакующий всегда слева, под плашкой «АТАКА».
@@ -794,12 +1040,16 @@ func _anim_game_over(winner: int, reason: StringName) -> void:
 	ability_panel.hide_panel()
 	SoundFx.i().stop_music(1.0)
 	SoundFx.i().play("victory" if winner == HUMAN else "defeat")
-	game_over_ui.show_result(winner, _reason_text(reason))
+	_stats["alive"] = [_alive[0], _alive[1]]
+	_stats["captures"] = [captures[0], captures[1]]
+	_stats["turns"] = ctrl.get_turn()
+	game_over_ui.show_result(winner, _reason_text(reason), _stats)
 
 
 # ---------------------------------------------------------------- физика / ввод
 
 func _on_throw_committed(impulse: Vector3) -> void:
+	ability_panel.hide_panel()
 	hud.set_hint("Шар катится...")
 	if _active_ball != null:
 		cam.follow(_active_ball)
@@ -847,6 +1097,8 @@ func _pump() -> void:
 			want = MatchController.Phase.AWAIT_LANDING
 		"ability":
 			want = MatchController.Phase.ABILITY_WINDOW
+		"attach":
+			want = MatchController.Phase.AFTER_LANDING
 	if phase != want or (str(p["kind"]) != "launch" and ctrl.get_active_player() != player):
 		push_warning("Пропущен запрос %s: фаза %d, активный игрок %d" % [str(p["kind"]), phase, ctrl.get_active_player()])
 		return
@@ -857,8 +1109,12 @@ func _pump() -> void:
 			_do_throw_select(player)
 		"launch":
 			_do_launch(player)
+			if player == HUMAN:
+				_show_pre_throw()
 		"ability":
 			_do_ability(player)
+		"attach":
+			_do_attach(player)
 
 
 func _do_setup(player: int) -> void:
@@ -870,14 +1126,18 @@ func _do_setup(player: int) -> void:
 		var legal: Array[int] = ctrl.legal_setup_slots()
 		arena.set_highlight(legal)
 		hud.set_hint("Карта ворот на поле? Положите карту или пропустите" if ctrl.can_skip_gate() else "Положите карту ворот на поле")
-		setup_panel.begin(cards, legal, ctrl.can_skip_gate())
-		hud.coach("gate", "Карты ворот — это поле боя. Выбери карту и место (подсвечено). Соперник не видит, что на ней: карта откроется только в бою. Наведи мышь на карту, чтобы узнать, что она даёт.")
+		setup_panel.begin(cards, legal, ctrl.can_skip_gate(), not _throwable_entries().is_empty())
+		hud.coach("gate", "Карта ворот — поле боя: выбери карту и место (подсвечено). Соперник не видит её до боя — там могут быть ловушки. «Ворота + бросок» — положить карту и сразу бросить на неё существо.")
 	else:
 		hud.set_hint("Соперник выбирает карту ворот...")
 		var choice: Dictionary = ai.choose_setup(ctrl.get_view(AI_PLAYER), ctrl.legal_setup_slots(), ctrl.can_skip_gate())
 		var err: int = OK
 		if choice.is_empty():
 			err = ctrl.skip_gate(AI_PLAYER)
+		elif int(choice.get("throw_uid", -1)) >= 0:
+			# «ворота + бросок»: цель броска — только что положенная карта
+			_ai_target_slot = int(choice["slot"])
+			err = ctrl.throw_with_gate(AI_PLAYER, choice["card_id"], int(choice["slot"]), int(choice["throw_uid"]))
 		else:
 			err = ctrl.place_arena_card(AI_PLAYER, choice["card_id"], int(choice["slot"]))
 		if err != OK:
@@ -890,9 +1150,9 @@ func _do_throw_select(player: int) -> void:
 		var entries: Array = []
 		for u in ctrl.legal_creatures(HUMAN):
 			var d: CreatureDef = _creature_def(u)
-			var note := "(отозвать с карты)" if view.creature(u).slot >= 0 else ""
+			var note := "с карты" if view.creature(u).slot >= 0 else ""
 			entries.append({"uid": u, "def": d, "text": "Существо #%d" % u, "note": note})
-		hud.set_hint("Ваш бросок: выберите существо")
+		hud.set_hint("Ваш бросок: выберите шар-существо")
 		hud.show_creatures(entries)
 	else:
 		hud.set_hint("Соперник бросает...")
@@ -937,12 +1197,13 @@ func _do_ability(player: int) -> void:
 	if preview == null:
 		push_error("Окно способностей без предпросмотра боя")
 		return
+	battle_hud.set_chain(preview.plays, preview.passed)
 	if player == HUMAN:
 		var entries: Array = []
 		for cid in ctrl.legal_abilities(HUMAN):
 			var c: CardDef = CardDB.card(cid)
 			entries.append({"id": c.id, "name": c.display_name, "text": c.text})
-		var hdr := "Бой: %s (%d) против %s (%d). Сыграйте способность или пас" % [
+		var hdr := "Бой: %s (%d) против %s (%d). Ваша карта?" % [
 			_cname(preview.attacker_uid), preview.powers[0], _cname(preview.defender_uid), preview.powers[1]]
 		var fusion_only := not entries.is_empty()
 		for e in entries:
@@ -950,9 +1211,14 @@ func _do_ability(player: int) -> void:
 				fusion_only = false
 		if fusion_only:
 			hdr = "Слияние: добавьте карту поверх своей способности (%d против %d) или пас" % [preview.powers[0], preview.powers[1]]
+		var my_side: int = 0 if _owner_of(preview.attacker_uid) == HUMAN else 1
+		var note := "Пас окончателен: больше карт в этом бою вы не сыграете."
+		if preview.passed.size() == 2 and preview.passed[1 - my_side]:
+			note = "Соперник уже спасовал — отвечать будет нечем. " + note
 		hud.set_hint("Слияние?" if fusion_only else "Ваша способность?")
-		hud.coach("ability", "Бой! Ворота ещё закрыты. Можно сыграть одну карту способности снизу (светящиеся доступны) или нажать «Пас». Каждая карта играется один раз за игру — береги сильные.")
-		ability_panel.show_options(entries, hdr)
+		hud.coach("ability", "Бой! Ворота ещё закрыты. Карты играются по очереди, не больше 3 на бой. Светящиеся — доступны. «Пас» окончателен: соперник сможет доиграть, а вы уже нет.")
+		ability_panel.show_options(entries, hdr, {"moment": &"battle", "used": MatchController.MAX_BATTLE_ABILITIES - ctrl.abilities_left(HUMAN),
+			"pass_text": "Пас", "pass_tip": "Закончить обмен картами в этом бою. Назад дороги нет.", "note": note})
 	else:
 		hud.set_hint("Соперник думает...")
 		var cid: StringName = ai.choose_ability(ctrl.get_view(AI_PLAYER), preview, ctrl.legal_abilities(AI_PLAYER))
@@ -965,8 +1231,89 @@ func _do_ability(player: int) -> void:
 			push_error("ИИ: ошибка способности %d" % err)
 
 
+## Окно «после приземления»: прикрепить способность к существу, что встало на пустые ворота, или завершить ход.
+func _do_attach(player: int) -> void:
+	var uid: int = ctrl.get_landed_uid()
+	if player == HUMAN:
+		var entries: Array = []
+		for cid in ctrl.legal_abilities(HUMAN):
+			var c: CardDef = CardDB.card(cid)
+			entries.append({"id": c.id, "name": c.display_name, "text": c.text})
+		hud.set_hint("%s на воротах: прикрепить способность?" % _cname(uid))
+		hud.coach("attach", "Существо встало на пустые ворота. Можно прикрепить карту: она сработает в его следующем бою (видна сопернику). Или завершить ход без неё.")
+		ability_panel.show_options(entries, "Прикрепить способность к «%s»?" % _cname(uid), {"moment": &"after_landing",
+			"used": MatchController.MAX_BATTLE_ABILITIES - ctrl.abilities_left(HUMAN), "pass_text": "Завершить ход",
+			"pass_tip": "Не прикреплять карту — ход переходит сопернику.",
+			"note": "Прикреплённая карта входит в лимит 3 карт на бой."})
+	else:
+		hud.set_hint("Соперник думает...")
+		var cid: StringName = ai.choose_attach(ctrl.get_view(AI_PLAYER), uid, ctrl.legal_abilities(AI_PLAYER))
+		var err: int = OK
+		if cid == &"":
+			err = ctrl.pass_ability(AI_PLAYER)
+		else:
+			err = ctrl.play_ability(AI_PLAYER, cid)
+		if err != OK:
+			push_error("ИИ: ошибка прикрепления %d" % err)
+
+
+## До броска: рука приподнята, играбельные карты светятся; карта прикрепится к выбранному существу.
+func _show_pre_throw() -> void:
+	if _game_over or ctrl.get_phase() != MatchController.Phase.AWAIT_LANDING:
+		return
+	var legal: Array[StringName] = ctrl.legal_abilities(HUMAN)
+	if legal.is_empty():
+		return
+	var entries: Array = []
+	for cid in legal:
+		var c: CardDef = CardDB.card(cid)
+		entries.append({"id": c.id, "name": c.display_name, "text": c.text})
+	var uid: int = ctrl.get_selected_uid()
+	hud.coach("prethrow", "Перед броском можно прикрепить способность к шару: она сработает в его бое. Это необязательно — просто бросай.")
+	ability_panel.show_options(entries, "До броска: прикрепить карту к «%s» (необязательно)" % _cname(uid), {"moment": &"pre_throw",
+		"used": MatchController.MAX_BATTLE_ABILITIES - ctrl.abilities_left(HUMAN), "note": ""})
+
+
+## Существа, которых можно бросить в фазе выкладки (в руке, не на воротах и не в зоне использованных).
+func _throwable_entries() -> Array:
+	var view: MatchState = ctrl.get_view(HUMAN)
+	var entries: Array = []
+	for u in view.players[HUMAN].creature_uids:
+		var cs: CreatureState = view.creature(u)
+		if cs.alive and cs.slot < 0 and not cs.used:
+			entries.append({"uid": u, "def": _creature_def(u), "text": "Существо #%d" % u, "note": ""})
+	return entries
+
+
+func _on_setup_placed_throw(card_id: StringName, slot: int) -> void:
+	var entries: Array = _throwable_entries()
+	if entries.is_empty():
+		_on_setup_placed(card_id, slot)
+		return
+	_gate_pick = {"card": card_id, "slot": slot}
+	setup_panel.hide_panel()
+	arena.set_highlight([slot])
+	hud.set_hint("Ворота + бросок: кого бросить на новую карту?")
+	hud.show_creatures(entries, "Кого бросить на новые ворота?", true)
+
+
+func _on_gate_throw_cancelled() -> void:
+	_gate_pick = {}
+	hud.hide_creatures()
+	_do_setup(HUMAN)
+
+
 func _on_creature_chosen(uid: int) -> void:
 	hud.hide_creatures()
+	if not _gate_pick.is_empty():
+		var pick: Dictionary = _gate_pick
+		_gate_pick = {}
+		arena.set_highlight([])
+		var gerr: int = ctrl.throw_with_gate(HUMAN, pick["card"], int(pick["slot"]), uid)
+		if gerr != OK:
+			hud.set_hint("Не получилось: ворота + бросок")
+			_do_setup(HUMAN)
+		return
 	var err: int = ctrl.select_creature(HUMAN, uid)
 	if err != OK:
 		hud.set_hint("Нельзя выбрать это существо")
@@ -996,11 +1343,19 @@ func _on_setup_placed(card_id: StringName, slot: int) -> void:
 
 
 func _on_ability_chosen(card_id: StringName) -> void:
+	var moment: StringName = ctrl.get_ability_moment()
 	ability_panel.hide_panel()
 	var err: int = ctrl.play_ability(HUMAN, card_id)
 	if err != OK:
 		hud.set_hint("Эту способность сейчас нельзя сыграть")
-		_pending = {"kind": "ability", "player": HUMAN}
+		match moment:
+			&"after_landing":
+				_pending = {"kind": "attach", "player": HUMAN}
+			&"pre_throw":
+				_show_pre_throw()
+				return
+			_:
+				_pending = {"kind": "ability", "player": HUMAN}
 		_pump()
 
 

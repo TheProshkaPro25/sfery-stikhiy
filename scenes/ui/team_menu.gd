@@ -19,6 +19,13 @@ const CLASS_COLORS := {
 
 ## Последняя собранная колода (переживает перезагрузку сцены).
 static var last_deck: Dictionary = {}
+## Сложность ИИ (AIPlayer.Difficulty): выбирается в меню, переживает перезагрузку сцены.
+static var difficulty: int = AIPlayer.Difficulty.NORMAL
+const DIFF_TIPS := [
+	"Новичок: бросает неточно, не прикрепляет карты, плохо читает ловушки.",
+	"Боец: обычная точность, отвечает на способности, иногда блефует воротами.",
+	"Мастер: точный бросок, держит запас силы на ответ, ставит ловушки-приманки.",
+]
 
 var _element: int = 0
 var _team: Array[StringName] = []
@@ -106,6 +113,17 @@ func _build() -> void:
 	_error.add_theme_color_override("font_color", Color(1.0, 0.5, 0.45))
 	_error.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bottom.add_child(_error)
+	var dl2 := VisualUtil.label("Соперник:", 16)
+	bottom.add_child(dl2)
+	var grp := ButtonGroup.new()
+	for d in range(3):
+		var db := _button(AIPlayer.difficulty_name(d), 110)
+		db.toggle_mode = true
+		db.button_group = grp
+		db.button_pressed = d == difficulty
+		db.tooltip_text = DIFF_TIPS[d]
+		db.pressed.connect(func() -> void: difficulty = d)
+		bottom.add_child(db)
 	var rnd := _button("Случайная колода", 190)
 	rnd.pressed.connect(pick_random)
 	bottom.add_child(rnd)

@@ -231,6 +231,7 @@ var _foot: Label
 var _badge: PanelContainer
 var _badge_label: Label
 var _lift_tw: Tween
+var _play_tw: Tween
 var _dimmed := false
 var _card_size := Vector2(150, 210)
 
@@ -451,6 +452,22 @@ func set_dimmed(on: bool) -> void:
 	_mat.set_shader_parameter("dim", 0.75 if on else 0.0)
 	if on:
 		_lift(0.0)
+
+
+## Играбельная карта: мягкая пульсирующая подсветка рамки, пока её можно сыграть.
+func set_playable(on: bool) -> void:
+	if _play_tw != null:
+		_play_tw.kill()
+		_play_tw = null
+	if not on:
+		_mat.set_shader_parameter("selected", 1.0 if button_pressed else 0.0)
+		return
+	if not is_inside_tree():
+		_mat.set_shader_parameter("selected", 0.7)
+		return
+	_play_tw = create_tween().set_loops()
+	_play_tw.tween_method(func(v: float) -> void: _mat.set_shader_parameter("selected", v), 0.35, 1.0, 0.55).set_trans(Tween.TRANS_SINE)
+	_play_tw.tween_method(func(v: float) -> void: _mat.set_shader_parameter("selected", v), 1.0, 0.35, 0.55).set_trans(Tween.TRANS_SINE)
 
 
 func _sync_selected() -> void:
