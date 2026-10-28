@@ -78,8 +78,8 @@ static func label(text: String, size: int = 18) -> Label:
 const PILLAR_SHADER := """
 shader_type spatial;
 render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled;
-uniform vec4 col : source_color = vec4(1.0);
-uniform float fade = 1.0;
+instance uniform vec4 col : source_color = vec4(1.0);
+instance uniform float fade = 1.0;
 void fragment() {
 	float v = UV.y;                        // 0 верх, 1 низ
 	float edge = pow(abs(sin(UV.x * 3.14159)), 1.5);
@@ -88,38 +88,44 @@ void fragment() {
 	ALPHA = clamp(a, 0.0, 1.0);
 }
 """
-static var _pillar_shader: Shader
+static var _pillar_mat: ShaderMaterial
+static var _pillar_meshes: Dictionary = {}
 
 
 ## Столб света (появление существа, открытие карты): вспыхивает, сужается и гаснет за dur секунд.
 static func light_pillar(parent: Node3D, local_pos: Vector3, c: Color, height: float, radius: float, dur: float = 0.6) -> void:
 	if parent == null or not parent.is_inside_tree():
 		return
-	if _pillar_shader == null:
-		_pillar_shader = Shader.new()
-		_pillar_shader.code = PILLAR_SHADER
+	if _pillar_mat == null:
+		var sh := Shader.new()
+		sh.code = PILLAR_SHADER
+		_pillar_mat = ShaderMaterial.new()
+		_pillar_mat.shader = sh
+	# меш единичной высоты (общий), размеры — масштабом узла
+	var key := snappedf(radius / height, 0.01)
+	if not _pillar_meshes.has(key):
+		var cm := CylinderMesh.new()
+		cm.top_radius = key * 0.6
+		cm.bottom_radius = key
+		cm.height = 1.0
+		cm.cap_top = false
+		cm.cap_bottom = false
+		cm.radial_segments = 24
+		_pillar_meshes[key] = cm
 	var mi := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = radius * 0.6
-	cm.bottom_radius = radius
-	cm.height = height
-	cm.cap_top = false
-	cm.cap_bottom = false
-	cm.radial_segments = 24
-	mi.mesh = cm
-	var m := ShaderMaterial.new()
-	m.shader = _pillar_shader
-	m.set_shader_parameter("col", c)
-	mi.material_override = m
+	mi.mesh = _pillar_meshes[key]
+	mi.material_override = _pillar_mat
+	mi.set_instance_shader_parameter("col", c)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.top_level = true
 	parent.add_child(mi)
 	mi.global_position = parent.to_global(local_pos) + Vector3(0, height * 0.5, 0)
-	mi.scale = Vector3(0.3, 1.0, 0.3)
+	var hs := Vector3(height, height, height)
+	mi.scale = hs * Vector3(0.3, 1.0, 0.3)
 	var tw := mi.create_tween()
-	tw.tween_property(mi, "scale", Vector3(1.0, 1.0, 1.0), dur * 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_method(func(v: float) -> void: m.set_shader_parameter("fade", v), 1.0, 0.0, dur * 0.75)
-	tw.parallel().tween_property(mi, "scale", Vector3(0.15, 1.15, 0.15), dur * 0.75)
+	tw.tween_property(mi, "scale", hs, dur * 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_method(func(v: float) -> void: mi.set_instance_shader_parameter("fade", v), 1.0, 0.0, dur * 0.75)
+	tw.parallel().tween_property(mi, "scale", hs * Vector3(0.15, 1.15, 0.15), dur * 0.75)
 	tw.tween_callback(mi.queue_free)
 
 
@@ -187,42 +193,43 @@ static func soft_dot() -> GradientTexture2D:
 const RING_SHADER := """
 shader_type spatial;
 render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled;
-uniform vec4 col : source_color = vec4(1.0);
-uniform float fade = 1.0;
+instance uniform vec4 col : source_color = vec4(1.0);
+instance uniform float fade = 1.0;
 void fragment() {
 	float edge = sin(UV.y * 3.14159);
 	ALBEDO = col.rgb * 2.5;
 	ALPHA = clamp(edge * fade, 0.0, 1.0);
 }
 """
-static var _ring_shader: Shader
+static var _ring_mat: ShaderMaterial
+static var _torus: TorusMesh
 
 
 ## Кольцевая ударная волна по земле: расширяется до radius и гаснет.
 static func ring_wave(parent: Node3D, world_pos: Vector3, c: Color, radius: float, dur: float = 0.6) -> void:
 	if parent == null or not parent.is_inside_tree():
 		return
-	if _ring_shader == null:
-		_ring_shader = Shader.new()
-		_ring_shader.code = RING_SHADER
+	if _ring_mat == null:
+		var sh := Shader.new()
+		sh.code = RING_SHADER
+		_ring_mat = ShaderMaterial.new()
+		_ring_mat.shader = sh
+		_torus = TorusMesh.new()
+		_torus.inner_radius = 0.86
+		_torus.outer_radius = 1.0
+		_torus.rings = 48
+		_torus.ring_segments = 8
 	var mi := MeshInstance3D.new()
-	var tm := TorusMesh.new()
-	tm.inner_radius = 0.86
-	tm.outer_radius = 1.0
-	tm.rings = 48
-	tm.ring_segments = 8
-	mi.mesh = tm
-	var m := ShaderMaterial.new()
-	m.shader = _ring_shader
-	m.set_shader_parameter("col", c)
-	mi.material_override = m
+	mi.mesh = _torus
+	mi.material_override = _ring_mat
+	mi.set_instance_shader_parameter("col", c)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(mi)
 	mi.global_position = world_pos
 	mi.scale = Vector3(0.1, 0.05, 0.1) * radius
 	var tw := mi.create_tween().set_parallel(true)
 	tw.tween_property(mi, "scale", Vector3(1.0, 0.15, 1.0) * radius, dur).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_method(func(v: float) -> void: m.set_shader_parameter("fade", v), 1.0, 0.0, dur)
+	tw.tween_method(func(v: float) -> void: mi.set_instance_shader_parameter("fade", v), 1.0, 0.0, dur)
 	tw.chain().tween_callback(mi.queue_free)
 
 

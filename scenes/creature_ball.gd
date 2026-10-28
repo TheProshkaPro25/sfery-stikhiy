@@ -1,6 +1,9 @@
 class_name CreatureBall
 extends RigidBody3D
 ## Шар-существо. До раскрытия виден шар, после open_up() - фигурка (капсула + рог).
+## Оболочка — сложенный механизм (BallShell): лакированные пластины-лепестки со швами, эмблема стихии на полюсах,
+## светящаяся сердцевина, кольцо цвета владельца на экваторе. Видимый шар крупнее физического (VIS_SCALE):
+## физика и точность бросков прежние, а шар читается с камеры погони. Эффекты — BallFx / BallTrail.
 
 signal settled(ball: CreatureBall, world_pos: Vector3)
 
@@ -9,6 +12,10 @@ const SLOW_SPEED := 0.15
 const SLOW_ANG := 1.0
 const SLOW_TIME := 0.15
 const TIMEOUT := 9.0
+## Видимый радиус оболочки = RADIUS × VIS_SCALE (низ оболочки стоит на полу, как у физического шара).
+const VIS_SCALE := 2.2
+## Цвет кольца владельца: игрок (бросает от +Z), соперник.
+const OWNER_GLOW := [Color(0.35, 0.62, 1.0), Color(1.0, 0.32, 0.28)]
 
 var uid: int = -1
 var def: CreatureDef = null
@@ -17,14 +24,16 @@ var slot: int = -1
 var _built := false
 var _shape: CollisionShape3D
 var _visual: Node3D
-var _ball_mesh: MeshInstance3D
+var _ball_mesh: MeshInstance3D  ## закрытая оболочка одним мешем
+var _shell: Node3D              ## оболочка (масштаб VIS_SCALE, центр над физическим шаром)
+var _core: MeshInstance3D
 var _figure: Node3D
 var _anim: CreatureAnim
 var _label: Label3D
 var _open := false
 var _prev_vel := Vector3.ZERO
 var _label_allowed := true
-var _halves: Array[MeshInstance3D] = []
+var _halves: Array[MeshInstance3D] = []  ## части оболочки для раскрытия (лепестки, крышки, пояс)
 var _open_tween: Tween
 var _launched := false
 var _done := false
@@ -38,8 +47,14 @@ var _air_t := -1.0
 var _air_dur := 0.0
 var _air_h := 0.0
 var _label_near_hidden := false
-var _sparks: CPUParticles3D
-var _streak: CPUParticles3D
+var _sparks: CPUParticles3D   ## частицы стихии от контакта с полом
+var _streak: CPUParticles3D   ## светящийся след по полу
+var _trail: CPUParticles3D    ## частицы стихии в полёте
+var _ribbon: BallTrail        ## лента следа
+var _el := -1
+var _home := Vector3.ZERO     ## откуда бросали (туда сфера улетает при возврате)
+var _home_set := false
+var _drive := false           ## визуал ведёт анимация (возврат к владельцу), а не дуга
 
 
 func _init() -> void:
@@ -84,12 +99,21 @@ func _ensure_built() -> void:
 	_visual = Node3D.new()
 	add_child(_visual)
 
+	_shell = Node3D.new()
+	_shell.scale = Vector3.ONE * _shell_r()
+	_shell.position = Vector3(0, _shell_r() - RADIUS, 0)
+	_visual.add_child(_shell)
+
 	_ball_mesh = MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = RADIUS
-	sm.height = RADIUS * 2.0
-	_ball_mesh.mesh = sm
-	_visual.add_child(_ball_mesh)
+	_ball_mesh.mesh = BallShell.closed_mesh()
+	_ball_mesh.material_override = BallShell.shell_material()
+	_shell.add_child(_ball_mesh)
+
+	_core = MeshInstance3D.new()
+	_core.mesh = BallShell.core_mesh()
+	_core.material_override = BallShell.core_material()
+	_core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_shell.add_child(_core)
 
 	_figure = Node3D.new()
 	_figure.visible = false
@@ -107,16 +131,23 @@ func _ensure_built() -> void:
 	_visual.add_child(_label)
 
 
+static func _shell_r() -> float:
+	return RADIUS * VIS_SCALE
+
+
 func setup(d: CreatureDef, u: int) -> void:
 	_ensure_built()
 	def = d
 	uid = u
-	var c := VisualUtil.NEUTRAL_COLOR
 	var txt := "?"
+	_el = -1
 	if d != null:
-		c = d.color
+		_el = d.attribute
 		txt = "%s\n%s %d" % [d.display_name, VisualUtil.attr_name(d.attribute), d.base_power]
-	_ball_mesh.material_override = VisualUtil.make_material(c, 0.35, 0.25)
+	_shell_param("element", maxi(_el, 0))
+	_shell_param("owner_col", OWNER_GLOW[0] if not _home_set else _owner_color())
+	_core.set_instance_shader_parameter("col", _ecol())
+	_set_glow(0.0)
 	VisualUtil.clear_children(_figure)
 	var model := CreatureModels.build(d)
 	if model != null:
@@ -129,6 +160,48 @@ func setup(d: CreatureDef, u: int) -> void:
 	else:
 		_anim = null
 	_label.text = txt
+
+
+## Яркий цвет стихии (оболочка, сердцевина, частицы).
+func _ecol() -> Color:
+	return BallFx.elem_color(_el) if _el >= 0 else Color(0.9, 0.9, 0.9)
+
+
+func _owner_color() -> Color:
+	return OWNER_GLOW[0] if _home.z >= 0.0 else OWNER_GLOW[1]
+
+
+## Параметр оболочки — на закрытый меш и все части (общий материал, значения — на экземпляр).
+func _shell_param(n: StringName, v: Variant) -> void:
+	_ball_mesh.set_instance_shader_parameter(n, v)
+	for h in _halves:
+		h.set_instance_shader_parameter(n, v)
+
+
+## Яркость сердцевины и швов (0 — обычная пульсация, 2–3 — вспышка).
+func _set_glow(v: float) -> void:
+	_shell_param("glow", v)
+	_core.set_instance_shader_parameter("glow", v)
+
+
+func _set_dim(v: float) -> void:
+	_shell_param("dim", v)
+	_core.set_instance_shader_parameter("dim", v)
+
+
+func _set_crack(v: float) -> void:
+	_shell_param("crack", v)
+
+
+## Мир, куда кладутся одноразовые эффекты (переживают сам шар).
+func _fx_parent() -> Node:
+	var p := get_parent()
+	return p if p != null else self
+
+
+## Центр видимой оболочки в мире.
+func _shell_center() -> Vector3:
+	return _shell.global_position if _shell.is_inside_tree() else global_position
 
 
 ## Разрешить/спрятать подпись (на крупных планах видны только подписи участников).
@@ -149,39 +222,19 @@ func set_label_shift(px: float) -> void:
 	_label.offset = Vector2(px, 0.0)
 
 
-var _trail: CPUParticles3D
-
-
-## След летящего шара цвета стихии.
+## След летящего шара: лента цвета стихии и частицы стихии; при первом броске — ещё и наземные эффекты.
 func _start_trail() -> void:
+	var el := maxi(_el, 0)
 	if _trail == null:
-		_trail = CPUParticles3D.new()
-		_trail.amount = 40
-		_trail.lifetime = 0.45
-		_trail.local_coords = false
-		_trail.gravity = Vector3.ZERO
-		_trail.initial_velocity_min = 0.0
-		_trail.initial_velocity_max = 0.2
-		_trail.scale_amount_min = 0.6
-		_trail.scale_amount_max = 1.0
-		var c: Color = VisualUtil.attr_color(def.attribute) if def != null else Color.WHITE
-		var grad := Gradient.new()
-		grad.set_color(0, Color(1, 1, 1, 0.9))
-		grad.add_point(0.3, Color(c.r, c.g, c.b, 0.8))
-		grad.set_color(grad.get_point_count() - 1, Color(c.r, c.g, c.b, 0.0))
-		_trail.color_ramp = grad
-		var q := QuadMesh.new()
-		q.size = Vector2(RADIUS * 1.6, RADIUS * 1.6)
-		var m := StandardMaterial3D.new()
-		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		m.vertex_color_use_as_albedo = true
-		m.albedo_texture = VisualUtil.soft_dot()
-		q.material = m
-		_trail.mesh = q
+		_trail = BallFx.particles(el, "trail", _shell_r())
 		_visual.add_child(_trail)
+		_ribbon = BallTrail.new()
+		_ribbon.target = _shell
+		_ribbon.color = _ecol()
+		_ribbon.width = _shell_r() * 1.5
+		add_child(_ribbon)
 	_trail.emitting = true
+	_ribbon.emitting = true
 	if _sparks == null:
 		_build_ground_fx()
 
@@ -213,67 +266,58 @@ static func arc_total(dur: float) -> float:
 	return dur * (1.0 + 0.38 + 0.18)
 
 
-## Искры из-под катящегося шара и светящийся след по полю (частицы в мировых координатах).
+## Частицы стихии из-под катящегося шара и светящийся след по полю (частицы в мировых координатах).
 func _build_ground_fx() -> void:
-	var c: Color = VisualUtil.attr_color(def.attribute) if def != null else Color.WHITE
-	_sparks = CPUParticles3D.new()
+	var c := _ecol()
+	_sparks = BallFx.particles(maxi(_el, 0), "roll", _shell_r())
 	_sparks.top_level = true
-	_sparks.local_coords = false
-	_sparks.emitting = false
-	_sparks.amount = 48
-	_sparks.lifetime = 0.45
-	_sparks.direction = Vector3.UP
-	_sparks.spread = 55.0
-	_sparks.initial_velocity_min = 2.5
-	_sparks.initial_velocity_max = 7.0
-	_sparks.gravity = Vector3(0, -22.0, 0)
-	_sparks.scale_amount_min = 0.4
-	_sparks.scale_amount_max = 1.0
-	var sg := Gradient.new()
-	sg.set_color(0, Color(1.0, 0.95, 0.8, 1.0))
-	sg.add_point(0.4, Color(c.r, c.g, c.b, 0.9).lightened(0.3))
-	sg.set_color(sg.get_point_count() - 1, Color(c.r, c.g, c.b, 0.0))
-	_sparks.color_ramp = sg
-	var q := QuadMesh.new()
-	q.size = Vector2(0.12, 0.12)
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	m.vertex_color_use_as_albedo = true
-	m.albedo_color = Color(2.5, 2.5, 2.5)
-	m.albedo_texture = VisualUtil.soft_dot()
-	q.material = m
-	_sparks.mesh = q
 	add_child(_sparks)
 
 	_streak = CPUParticles3D.new()
 	_streak.top_level = true
 	_streak.local_coords = false
 	_streak.emitting = false
-	_streak.amount = 120
-	_streak.lifetime = 1.6
+	_streak.amount = maxi(24, int(90 * BallFx.level_k()))
+	_streak.lifetime = 1.4
 	_streak.gravity = Vector3.ZERO
 	_streak.initial_velocity_min = 0.0
 	_streak.initial_velocity_max = 0.0
 	_streak.scale_amount_min = 1.0
 	_streak.scale_amount_max = 1.0
-	var tg := Gradient.new()
-	tg.set_color(0, Color(c.r, c.g, c.b, 0.9).lightened(0.4))
-	tg.add_point(0.25, Color(c.r, c.g, c.b, 0.55))
-	tg.set_color(tg.get_point_count() - 1, Color(c.r, c.g, c.b, 0.0))
-	_streak.color_ramp = tg
-	var pl := PlaneMesh.new()  # лежит на полу
-	pl.size = Vector2(RADIUS * 2.2, RADIUS * 2.2)
-	var pmat := StandardMaterial3D.new()
-	pmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	pmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	pmat.vertex_color_use_as_albedo = true
-	pmat.albedo_texture = VisualUtil.soft_dot()
-	pmat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	pl.material = pmat
-	_streak.mesh = pl
+	_streak.color_ramp = _streak_ramp(c)
+	_streak.mesh = _streak_mesh()
 	add_child(_streak)
+
+
+static var _streak_meshes: Dictionary = {}
+
+
+## След по полу: плоский мягкий круг (общий меш на все шары).
+static func _streak_mesh() -> PlaneMesh:
+	if not _streak_meshes.has("mesh"):
+		var pl := PlaneMesh.new()  # лежит на полу
+		pl.size = Vector2(RADIUS * 3.2, RADIUS * 3.2)
+		var pmat := StandardMaterial3D.new()
+		pmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		pmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		pmat.vertex_color_use_as_albedo = true
+		pmat.albedo_texture = VisualUtil.soft_dot()
+		pmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		pmat.disable_receive_shadows = true
+		pl.material = pmat
+		_streak_meshes["mesh"] = pl
+	return _streak_meshes["mesh"]
+
+
+static func _streak_ramp(c: Color) -> Gradient:
+	var key := c.to_html()
+	if not _streak_meshes.has(key):
+		var tg := Gradient.new()
+		tg.set_color(0, Color(c.r, c.g, c.b, 0.75).lightened(0.4))
+		tg.add_point(0.25, Color(c.r, c.g, c.b, 0.4))
+		tg.set_color(tg.get_point_count() - 1, Color(c.r, c.g, c.b, 0.0))
+		_streak_meshes[key] = tg
+	return _streak_meshes[key]
 
 
 ## Рост существа в раскрытом виде (м), для кадрирования камерой.
@@ -306,13 +350,42 @@ func launch(impulse: Vector3) -> void:
 	_done = false
 	_t = 0.0
 	_slow = 0.0
+	_throw_fx(impulse)
+
+
+## Бросок: вспышка, кольцо ускорения поперёк полёта, сердцевина вспыхивает и успокаивается.
+func _throw_fx(impulse: Vector3) -> void:
+	if not is_inside_tree():
+		return
+	var c := _ecol()
+	var w := _fx_parent()
+	var p := _shell_center()
+	BallFx.flash(w, p, c, _shell_r() * 7.0, 0.3)
+	var dir := Vector3(impulse.x, impulse.length() * 0.25, impulse.z)
+	BallFx.speed_ring(w, p + dir.normalized() * _shell_r() * 1.5, dir, c, _shell_r() * 3.0, 0.32)
+	get_tree().create_timer(0.07).timeout.connect(func() -> void:
+		if is_inside_tree():
+			BallFx.speed_ring(w, _shell_center(), dir, c.lightened(0.4), _shell_r() * 2.0, 0.25))
+	var tw := create_tween()
+	tw.tween_method(_set_glow, 2.2, 0.0, 0.6).set_ease(Tween.EASE_OUT)
+
+
+## Касание пола после дуги: ударная волна пыли по полу и разлёт частиц стихии.
+func _touchdown_fx() -> void:
+	if not is_inside_tree():
+		return
+	var w := _fx_parent()
+	var fp := Vector3(global_position.x, 0.06, global_position.z)
+	VisualUtil.ring_wave(w as Node3D, fp, _ecol(), _shell_r() * 4.5, 0.45)
+	BallFx.one_shot(w, fp + Vector3(0, _shell_r() * 0.3, 0), maxi(_el, 0), "burst", _shell_r() * 0.8)
 
 
 func open_up() -> Signal:
 	return open_animated()
 
 
-## Анимация раскрытия капсулой: половинки разлетаются, дым цвета стихии, фигурка вырастает.
+## Раскрытие: сердцевина вспыхивает, лепестки откидываются наружу, крышка с эмблемой взлетает и кружится,
+## знак стихии вспыхивает на карте, столб света и вихрь частиц стихии; существо вырастает из света.
 func open_animated() -> Signal:
 	if _open:
 		var t0 := create_tween()
@@ -320,25 +393,31 @@ func open_animated() -> Signal:
 		return t0.finished
 	_open = true
 	_kill_open_tween()
-	var pc: Color = VisualUtil.attr_color(def.attribute) if def != null else Color.WHITE
-	VisualUtil.light_pillar(self, Vector3(0, -RADIUS, 0), pc.lightened(0.3), Arena.CARD_H * 2.0, Arena.CARD_W * 0.22, 0.9)
+	_drive = false
+	var pc := _ecol()
+	var el := maxi(_el, 0)
+	VisualUtil.light_pillar(self, Vector3(0, -RADIUS, 0), pc, Arena.CARD_H * 2.0, Arena.CARD_W * 0.16, 0.9)
+	if is_inside_tree():
+		var w := _fx_parent()
+		var fp := Vector3(global_position.x, 0.07, global_position.z)
+		BallFx.sigil_flash(w, fp, el, Arena.CARD_W * 0.85, 1.2)
+		BallFx.flash(w, _shell_center(), pc, _shell_r() * 4.5, 0.35)
+		BallFx.light_flash(w, fp + Vector3(0, Arena.CARD_W * 0.35, 0), pc, 1.5, Arena.CARD_W * 1.4, 0.5)
+		BallFx.one_shot(w, fp, el, "open", Arena.CARD_W * 0.24)
 	_ball_mesh.visible = false
+	_shell.visible = true
 	_figure.visible = true
 	_figure.scale = Vector3(0.01, 0.01, 0.01)
 	_label.visible = false
 	_make_halves()
-	_spawn_smoke()
+	_pose_halves(0.0)
 	var tw := create_tween()
 	_open_tween = tw
 	tw.set_parallel(true)
-	var top: MeshInstance3D = _halves[0]
-	var bot: MeshInstance3D = _halves[1]
-	tw.tween_property(top, "position", Vector3(0.0, 0.5, 0.0), 0.3).set_ease(Tween.EASE_OUT)
-	tw.tween_property(top, "rotation", Vector3(-1.2, 0.0, 0.0), 0.3)
-	tw.tween_property(bot, "position", Vector3(0.0, -0.4, 0.0), 0.3).set_ease(Tween.EASE_OUT)
-	tw.tween_property(bot, "rotation", Vector3(PI + 1.2, 0.0, 0.0), 0.3)
-	tw.tween_property(top, "scale", Vector3(0.01, 0.01, 0.01), 0.25).set_delay(0.3)
-	tw.tween_property(bot, "scale", Vector3(0.01, 0.01, 0.01), 0.25).set_delay(0.3)
+	tw.tween_method(_set_glow, 3.0, 0.4, 0.55)
+	tw.tween_method(_pose_halves, 0.0, 1.0, 0.42).set_delay(0.06).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(_shell_burst).set_delay(0.5)
+	tw.tween_property(_shell, "scale", Vector3.ONE * 0.001, 0.22).set_delay(0.5).set_ease(Tween.EASE_IN)
 	tw.tween_property(_figure, "scale", Vector3.ONE, 0.4).set_delay(0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.chain().tween_callback(_finish_open)
 	if _anim != null:
@@ -347,9 +426,18 @@ func open_animated() -> Signal:
 	return tw.finished
 
 
+## Пластины рассыпаются искрами стихии.
+func _shell_burst() -> void:
+	if is_inside_tree():
+		BallFx.one_shot(_fx_parent(), _shell_center(), maxi(_el, 0), "burst", _shell_r())
+
+
 func _finish_open() -> void:
 	for h in _halves:
 		h.visible = false
+	_shell.visible = false
+	_shell.scale = Vector3.ONE * _shell_r()
+	_set_glow(0.0)
 	_label.visible = _open and _label_allowed
 
 
@@ -359,67 +447,37 @@ func _kill_open_tween() -> void:
 	_open_tween = null
 
 
+## Части оболочки (общие меши BallShell), создаются у шара один раз — при первом раскрытии.
 func _make_halves() -> void:
 	if _halves.is_empty():
-		for i in 2:
+		for part in BallShell.parts():
 			var m := MeshInstance3D.new()
-			var sm := SphereMesh.new()
-			sm.radius = RADIUS
-			sm.height = RADIUS * 2.0
-			sm.is_hemisphere = true
-			m.mesh = sm
-			m.material_override = _ball_mesh.material_override
-			_visual.add_child(m)
+			m.mesh = part["mesh"]
+			m.material_override = BallShell.shell_material()
+			m.set_meta("part", part)
+			_shell.add_child(m)
 			_halves.append(m)
-	for i in 2:
-		var h: MeshInstance3D = _halves[i]
-		h.material_override = _ball_mesh.material_override
+		_shell_param("element", maxi(_el, 0))
+		_shell_param("owner_col", _owner_color() if _home_set else OWNER_GLOW[0])
+	for h in _halves:
 		h.visible = true
-		h.position = Vector3.ZERO
 		h.scale = Vector3.ONE
-		h.rotation = Vector3(0.0 if i == 0 else PI, 0.0, 0.0)
+	_ball_mesh.visible = false
 
 
-func _spawn_smoke() -> void:
-	var p := CPUParticles3D.new()
-	p.one_shot = true
-	p.emitting = false
-	p.amount = 18
-	p.lifetime = 0.7
-	p.explosiveness = 0.95
-	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	p.emission_sphere_radius = 0.2
-	p.direction = Vector3.UP
-	p.spread = 80.0
-	p.initial_velocity_min = 0.6
-	p.initial_velocity_max = 1.4
-	p.gravity = Vector3(0.0, 0.3, 0.0)
-	p.scale_amount_min = 0.6
-	p.scale_amount_max = 1.2
-	var curve := Curve.new()
-	curve.add_point(Vector2(0.0, 0.3))
-	curve.add_point(Vector2(1.0, 1.8))
-	p.scale_amount_curve = curve
-	var c: Color = def.color if def != null else VisualUtil.NEUTRAL_COLOR
-	var grad := Gradient.new()
-	grad.set_color(0, Color(c.r, c.g, c.b, 0.8))
-	grad.set_color(1, Color(c.r, c.g, c.b, 0.0))
-	p.color_ramp = grad
-	var sm := SphereMesh.new()
-	sm.radius = 0.15
-	sm.height = 0.3
-	sm.radial_segments = 8
-	sm.rings = 4
-	var mat := StandardMaterial3D.new()
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.vertex_color_use_as_albedo = true
-	mat.albedo_color = Color(1, 1, 1, 1)
-	sm.material = mat
-	p.mesh = sm
-	_visual.add_child(p)
-	p.emitting = true
-	p.finished.connect(p.queue_free)
+## Поза раскрытия всех частей: 0 — закрыт, 1 — раскрыт.
+func _pose_halves(t: float) -> void:
+	for h in _halves:
+		h.transform = BallShell.part_transform(h.get_meta("part"), t)
+
+
+## Шар снова цельный (закрытый меш вместо частей).
+func _show_closed() -> void:
+	for h in _halves:
+		h.visible = false
+	_ball_mesh.visible = true
+	_shell.visible = true
+	_shell.scale = Vector3.ONE * _shell_r()
 
 
 func close_up() -> void:
@@ -432,8 +490,13 @@ func close_up() -> void:
 	if _anim != null:
 		_anim.idle_on = false
 		_anim.reset()
-	for h in _halves:
-		h.visible = false
+	_show_closed()
+	_set_glow(0.0)
+	_set_dim(0.0)
+	_set_crack(0.0)
+	_visual.scale = Vector3.ONE
+	if is_inside_tree():
+		BallFx.flash(_fx_parent(), _shell_center(), _ecol(), _shell_r() * 4.0, 0.25)
 
 
 ## Фиксирует тело в точке (без вращения); используется и для удержания шара перед броском.
@@ -441,12 +504,18 @@ func close_up() -> void:
 func freeze_at(pos: Vector3) -> void:
 	if _anim != null:
 		_anim.reset()
+	if not _home_set:
+		# первая фиксация — точка броска владельца: туда шар вернётся, по ней же цвет кольца владельца
+		_home = pos
+		_home_set = true
+		_shell_param("owner_col", _owner_color())
 	_label.offset = Vector2.ZERO
 	collision_layer = 0
 	collision_mask = 0
 	_launched = false
 	_has_pending = false
 	_air_t = -1.0
+	_drive = false
 	_visual.position = Vector3.ZERO
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
@@ -462,7 +531,6 @@ func unfreeze() -> void:
 	freeze = false
 
 
-## Плавно скрывает визуал и отключает коллизию; возвращает сигнал окончания.
 ## Рывок к цели и обратно (удар в бою). Возвращает сигнал окончания.
 func lunge(target: Vector3) -> Signal:
 	var d := target - global_position
@@ -506,13 +574,19 @@ func _process(delta: float) -> void:
 		_air_t += delta
 		if prev < _air_dur and _air_t >= _air_dur:
 			SoundFx.i().bounce(6.0)  # касание пола после дуги
+			_touchdown_fx()
 		var y := arc_height(_air_t, _air_dur, _air_h)
 		if _air_t > arc_total(_air_dur) or not _launched:
 			_air_t = -1.0
 			y = 0.0
 		_visual.global_position = global_position + Vector3(0.0, y, 0.0)
-	elif _visual.position != Vector3.ZERO:
+		if _trail != null:
+			_trail.emitting = _launched and y > 0.3
+	elif not _drive and _visual.position != Vector3.ZERO:
 		_visual.position = Vector3.ZERO
+	# оболочка крупнее физического шара: её низ стоит на полу (центр поднят по мировой вертикали)
+	if _shell.visible:
+		_shell.global_position = _visual.global_position + Vector3(0.0, _shell.scale.x - RADIUS, 0.0)
 	# подпись прячется, когда камера почти вплотную к ней (облёт сверху), иначе закрывает кадр
 	if _label.visible or _label_near_hidden:
 		var cam := get_viewport().get_camera_3d()
@@ -528,13 +602,119 @@ func _process(delta: float) -> void:
 		_anim.idle_on = _open and _figure.visible and (_open_tween == null or not _open_tween.is_running())
 
 
-func vanish() -> Signal:
+## Уход с поля. Раскрытое существо втягивается в свет, пластины захлопываются; затем шар улетает
+## к владельцу (knockout = false) или трескается и гаснет (knockout = true — нокаут, выбывание).
+func vanish(knockout: bool = false) -> Signal:
 	_launched = false
 	_shape.disabled = true
 	freeze = true
+	_kill_open_tween()
+	_stop_fx()
+	_label.visible = false
 	var tw := create_tween()
-	tw.tween_property(_visual, "scale", Vector3(0.01, 0.01, 0.01), 0.35)
+	_open_tween = tw
+	var pc := _ecol()
+	if _open and _figure.visible:
+		_open = false
+		# существо втягивается в свет
+		VisualUtil.light_pillar(self, Vector3(0, -RADIUS, 0), pc.lightened(0.4), figure_height() * 1.3, Arena.CARD_W * 0.14, 0.6)
+		_make_halves()
+		_pose_halves(1.0)
+		_shell.visible = true
+		_shell.scale = Vector3.ONE * 0.001
+		_set_glow(2.5)
+		tw.set_parallel(true)
+		tw.tween_property(_figure, "scale", Vector3(0.01, 0.01, 0.01), 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		tw.tween_property(_shell, "scale", Vector3.ONE * _shell_r(), 0.22).set_delay(0.08).set_ease(Tween.EASE_OUT)
+		# пластины захлопываются
+		tw.tween_method(_pose_halves, 1.0, 0.0, 0.22).set_delay(0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		tw.tween_method(_set_glow, 2.5, 0.6, 0.4).set_delay(0.1)
+		tw.set_parallel(false)
+		tw.tween_callback(_snapped_shut)
+	if knockout:
+		_knockout_steps(tw)
+	else:
+		_fly_home_steps(tw)
 	return tw.finished
+
+
+## Пластины сомкнулись: цельный шар, вспышка и кольцо.
+func _snapped_shut() -> void:
+	_figure.visible = false
+	_show_closed()
+	if is_inside_tree():
+		var w := _fx_parent()
+		BallFx.flash(w, _shell_center(), _ecol(), _shell_r() * 5.0, 0.25)
+		VisualUtil.ring_wave(w as Node3D, Vector3(global_position.x, 0.06, global_position.z), _ecol(), _shell_r() * 3.5, 0.35)
+
+
+## Возврат: шар подпрыгивает и по дуге улетает к точке броска владельца, уменьшаясь и оставляя след.
+func _fly_home_steps(tw: Tween) -> void:
+	tw.tween_callback(func() -> void:
+		_drive = true
+		_show_closed()
+		if _ribbon == null:
+			_start_trail()
+			_stop_fx()
+		_ribbon.emitting = true
+		if is_inside_tree():
+			BallFx.speed_ring(_fx_parent(), _shell_center(), Vector3.UP, _ecol(), _shell_r() * 2.5, 0.3))
+	var from := global_position
+	var to := _home + Vector3(0, 1.5, 0) if _home_set else from + Vector3(0, 12.0, 0)
+	var h := clampf(from.distance_to(to) * 0.25, 2.0, 9.0)
+	tw.tween_method(func(t: float) -> void:
+		if is_inside_tree():
+			_visual.global_position = from.lerp(to, t) + Vector3(0, sin(t * PI) * h, 0)
+		_shell.scale = Vector3.ONE * _shell_r() * lerpf(1.0, 0.35, t * t)
+		_set_glow(t * 1.5), 0.0, 1.0, 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_callback(func() -> void:
+		if _ribbon != null:
+			_ribbon.emitting = false
+		if is_inside_tree():
+			BallFx.flash(_fx_parent(), _shell_center(), _ecol(), _shell_r() * 3.0, 0.2)
+		_shell.visible = false)
+	tw.tween_interval(0.05)
+
+
+## Нокаут: по оболочке бегут трещины, сердцевина мигает и гаснет, шар разлетается осколками.
+func _knockout_steps(tw: Tween) -> void:
+	tw.tween_callback(func() -> void:
+		_drive = true
+		_show_closed()
+		_set_glow(1.5))
+	var base := Vector3.ZERO
+	tw.tween_method(func(t: float) -> void:
+		_set_crack(t)
+		_set_glow(1.5 * (1.0 - t) + (0.8 if fmod(t * 9.0, 1.0) < 0.5 else 0.0))
+		_visual.position = base + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * 0.05 * t, 0.0, 1.0, 0.45)
+	tw.tween_method(_set_dim, 0.0, 1.0, 0.25)
+	tw.tween_callback(func() -> void:
+		if is_inside_tree():
+			var w := _fx_parent()
+			var p := _shell_center()
+			BallFx.one_shot(w, p, BallFx.STONE, "burst", _shell_r() * 1.2)
+			BallFx.one_shot(w, p, maxi(_el, 0), "burst", _shell_r())
+			BallFx.flash(w, p, Color(1.0, 0.95, 0.9), _shell_r() * 5.0, 0.2)
+		# пластины разлетаются
+		_make_halves())
+	tw.tween_method(func(t: float) -> void:
+		_pose_halves(t * 0.6)
+		for h in _halves:
+			h.position += (h.get_meta("part")["hinge"] as Vector3) * t * 0.08
+			h.scale = Vector3.ONE * (1.0 - t)
+		_set_dim(1.0), 0.0, 1.0, 0.3).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func() -> void: _shell.visible = false)
+
+
+func _stop_fx() -> void:
+	SoundFx.i().set_roll(0.0)
+	if _trail != null:
+		_trail.emitting = false
+	if _ribbon != null:
+		_ribbon.emitting = false
+	if _sparks != null:
+		_sparks.emitting = false
+		_streak.emitting = false
 
 
 func _physics_process(delta: float) -> void:
@@ -557,10 +737,12 @@ func _physics_process(delta: float) -> void:
 		var contact := global_position + Vector3(0.0, -RADIUS + 0.04, 0.0)
 		_sparks.global_position = contact
 		_streak.global_position = Vector3(contact.x, 0.03, contact.z)
-		_sparks.emitting = on_ground and hs > 5.0
+		_sparks.emitting = on_ground and hs > 3.0
 		_streak.emitting = on_ground and hs > 1.2
 		if hs > 0.1:
 			_sparks.direction = Vector3(-v.x / hs, 1.2, -v.z / hs)
+		if _ribbon != null:
+			_ribbon.emitting = hs > 4.0 or not on_ground
 
 	if global_position.y < -1.0:
 		_finish()
@@ -574,12 +756,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _finish() -> void:
-	SoundFx.i().set_roll(0.0)
-	if _trail != null:
-		_trail.emitting = false
-	if _sparks != null:
-		_sparks.emitting = false
-		_streak.emitting = false
+	_stop_fx()
 	_done = true
 	_launched = false
 	if global_position.y >= -1.0:
