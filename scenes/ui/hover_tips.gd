@@ -13,6 +13,7 @@ var _key := ""
 var _wait := 0.0
 var _lost := 0.0
 var _panel: Control = null
+var _avoid := Rect2()      # экранный прямоугольник объекта: панель не должна его закрывать
 
 
 func _init() -> void:
@@ -35,6 +36,7 @@ func _process(delta: float) -> void:
 			_move(mp)
 		return
 	_lost = 0.0
+	_avoid = hit.get("rect", Rect2())
 	var k: String = str(hit["key"])
 	if k != _key:
 		_clear()
@@ -60,14 +62,31 @@ func _clear() -> void:
 		_panel = null
 
 
-## Панель рядом с курсором: правее и ниже, внутри экрана и выше полосы руки карт.
+## Панель рядом с объектом, но не поверх него: справа, слева, сверху или снизу от его прямоугольника
+## (внутри экрана и выше полосы руки карт); если места нет нигде — рядом с курсором.
 func _move(mp: Vector2) -> void:
 	var vs: Vector2 = get_viewport_rect().size
 	var sz: Vector2 = _panel.get_combined_minimum_size()
+	var maxy: float = vs.y - HAND_ZONE - sz.y
 	var pos := mp + Vector2(20.0, 22.0)
-	if pos.x + sz.x > vs.x - 8.0:
-		pos.x = mp.x - sz.x - 20.0
-	pos.y = minf(pos.y, vs.y - HAND_ZONE - sz.y)
-	pos.y = maxf(pos.y, 8.0)
+	if _avoid.size != Vector2.ZERO:
+		var r: Rect2 = _avoid.grow(10.0)
+		var ys: float = clampf(mp.y - sz.y * 0.5, 8.0, maxy)
+		var cands: Array[Vector2] = [
+			Vector2(r.end.x, ys), Vector2(r.position.x - sz.x, ys),
+			Vector2(clampf(mp.x - sz.x * 0.5, 8.0, vs.x - sz.x - 8.0), r.position.y - sz.y),
+			Vector2(clampf(mp.x - sz.x * 0.5, 8.0, vs.x - sz.x - 8.0), r.end.y)]
+		var found := false
+		for c in cands:
+			if c.x >= 8.0 and c.y >= 8.0 and c.x + sz.x <= vs.x - 8.0 and c.y <= maxy and not Rect2(c, sz).intersects(_avoid):
+				pos = c
+				found = true
+				break
+		if not found:
+			pos = mp + Vector2(20.0, 22.0)
+	else:
+		if pos.x + sz.x > vs.x - 8.0:
+			pos.x = mp.x - sz.x - 20.0
+	pos.y = clampf(pos.y, 8.0, maxf(8.0, maxy))
 	pos.x = maxf(pos.x, 8.0)
 	_panel.position = pos

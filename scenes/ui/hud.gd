@@ -92,8 +92,10 @@ func _build() -> void:
 	VisualUtil.place(_log_box, 0.0, 0.0, 16.0, 108.0)
 	add_child(_log_box)
 
-	_flash = VisualUtil.label("", 34)
+	_flash = VisualUtil.label("", 28)
 	_flash.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_flash.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART  # не заходит на ленту событий слева и плашки по углам
+	_flash.custom_minimum_size = Vector2(maxf(420.0, get_viewport_rect().size.x * 0.46), 0)
 	_flash.add_theme_color_override("font_color", UiTheme.GOLD)
 	_flash.add_theme_color_override("font_outline_color", Color.BLACK)
 	_flash.add_theme_constant_override("outline_size", 10)

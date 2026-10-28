@@ -455,6 +455,7 @@ func _tip_at(mp: Vector2) -> Dictionary:
 	# существа и шар перед броском
 	var best_uid := -1
 	var best_d := 1e9
+	var best_rect := Rect2()
 	for u in balls.keys():
 		var b: CreatureBall = balls[u]
 		if b == null or not is_instance_valid(b) or not b.visible:
@@ -472,8 +473,9 @@ func _tip_at(mp: Vector2) -> Dictionary:
 		if d < rad and d / rad < best_d:
 			best_d = d / rad
 			best_uid = u
+			best_rect = Rect2(p0, Vector2.ZERO).expand(p1).grow(rad)
 	if best_uid >= 0:
-		return {"key": "c%d" % best_uid, "lines": _creature_tip(best_uid, view)}
+		return {"key": "c%d" % best_uid, "lines": _creature_tip(best_uid, view), "rect": best_rect}
 	# карты ворот: попадание в проекцию прямоугольника карты
 	for i in range(view.slots.size()):
 		var sl: SlotState = view.slots[i]
@@ -492,7 +494,10 @@ func _tip_at(mp: Vector2) -> Dictionary:
 			continue
 		var lines: Array = _slot_tip(i, sl, view)
 		if not lines.is_empty():
-			return {"key": "s%d:%s" % [i, str(sl.card_id) + str(sl.revealed)], "lines": lines}
+			var sr := Rect2(poly[0], Vector2.ZERO)
+			for q in poly:
+				sr = sr.expand(q)
+			return {"key": "s%d:%s" % [i, str(sl.card_id) + str(sl.revealed)], "lines": lines, "rect": sr}
 	return {}
 
 
@@ -731,7 +736,7 @@ func _anim_attached(player: int, uid: int, card_id: StringName) -> void:
 		b.ability_pulse()
 		var c: Color = VisualUtil.attr_color(_creature_def(uid).attribute).lightened(0.3)
 		VisualUtil.ring_wave(world, b.global_position - Vector3(0, CreatureBall.RADIUS - 0.1, 0), c, Arena.CARD_W * 0.6, 0.6)
-	hud.flash("%s «%s» к %s" % [_say(player, "Вы прикрепляете", "Соперник прикрепляет"), _card_name(card_id), _cname(uid)])
+	hud.flash("%s «%s»" % [_say(player, "Вы прикрепляете", "Соперник прикрепляет"), _card_name(card_id)])
 	await _wait(1.0)
 	hud.clear_flash()
 	if player == HUMAN and ctrl.get_phase() == MatchController.Phase.AWAIT_LANDING and throw_ctl.is_enabled():

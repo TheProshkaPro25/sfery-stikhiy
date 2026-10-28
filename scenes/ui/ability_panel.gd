@@ -206,7 +206,7 @@ func show_played(card_id: StringName, by_opponent: bool) -> void:
 	cv.position = Vector2(vp.x * 0.5 - _card.x * 0.5, -_card.y)
 	cv.scale = Vector2(0.8, 0.8)
 	var tw := cv.create_tween()
-	tw.tween_property(cv, "position:y", vp.y * 0.16, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(cv, "position:y", vp.y * 0.32, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(cv, "scale", Vector2(1.25, 1.25), 0.35)
 	tw.tween_interval(0.9)
 	tw.tween_property(cv, "modulate:a", 0.0, 0.35)

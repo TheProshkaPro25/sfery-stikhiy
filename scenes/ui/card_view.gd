@@ -311,8 +311,8 @@ func setup(title: String, kind: String, text: String, foot: String, base: Color,
 	_title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.32))
 	_title.add_theme_constant_override("outline_size", maxi(3, int(w * 0.035)))
 	_title.position = Vector2(w * 0.065, w * 0.03)
-	_title.size = Vector2(w * (0.9 if compact else 0.6), w * 0.1)
-	_fit(_title, int(w * 0.115), 8, _title.size.x, 0.0)
+	_title.size = Vector2(w * (0.9 if compact else 0.66), w * 0.1)
+	_fit(_title, int(w * 0.13), 9, _title.size.x, 0.0)
 
 	_kind.text = kind.to_upper()
 	_kind.visible = not compact
