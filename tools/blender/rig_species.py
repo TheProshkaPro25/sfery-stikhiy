@@ -587,14 +587,36 @@ def clips_serpent():
     return c
 
 
-CLIPS = {"dragnar": clips_generic, "klykar": clips_quadruped,
-         # у Грифалона крылья сложены вдоль тела — большой взмах проводит их сквозь грудь
-         "grifalon": lambda: scaled(clips_generic(), {"wing": 0.35}),
-         # Колоссар тяжёлый: корпус почти не гнётся, работают руки
-         "kolossar": lambda: scaled(clips_generic(), {"chest": 0.6, "neck": 0.5, "head": 0.6, "arm": 1.2}),
-         # Ратник бьёт мечом в левой руке, плащ отлетает назад
-         "ratnik": lambda: clips_generic(strike="L"), "gorgul": clips_generic, "rogozhuk": clips_beetle,
-         "levian": clips_serpent}
+def accent(clips, pose, clip="stance", frames=(14, 22, 27)):
+    """Свой характер вида: добавить позу на пиковых ключах клипа (по умолчанию — раскрытие в stance)."""
+    clips[clip] = [(fr, add(p, pose) if fr in frames else p) for fr, p in clips[clip]]
+    return clips
+
+
+def clips_kolossar():
+    """Колоссар тяжёлый: корпус почти не гнётся; в стойке — руки согнуты вверх, кулаки у плеч (показ силы)."""
+    c = scaled(clips_generic(), {"chest": 0.6, "neck": 0.5, "head": 0.6, "arm": 0.85, "forearm": 0.8})
+    return accent(c, mirror({"arm.L": (-10, 30, 0), "forearm.L": (-70, 0, 0), "chest": (-4, 0, 0)}))
+
+
+def clips_ratnik():
+    """Ратник бьёт мечом в левой руке, плащ отлетает назад; в стойке вскидывает меч над головой."""
+    c = clips_generic(strike="L")
+    return accent(c, {"arm.L": (-95, 10, 0), "forearm.L": (-25, 0, 0), "cape1": (-10, 0, 0), "cape2": (-8, 0, 0)})
+
+
+CLIPS = {"dragnar": lambda: accent(clips_generic(), {"tail2": (-8, 0, 0), "tail3": (-10, 0, 0)}),
+         # Клыкарь: в стойке пригибает голову и задирает хвост — рык перед прыжком
+         "klykar": lambda: accent(clips_quadruped(), {"neck": (22, 0, 0), "head": (14, 0, 0), "tail1": (-16, 0, 0),
+                                                      "tail2": (-12, 0, 0)}),
+         # у Грифалона крылья сложены вдоль тела — разведение не больше половины, в стойке шея вперёд-вверх
+         "grifalon": lambda: accent(scaled(clips_generic(), {"wing": 0.5}), {"neck": (-6, 0, 0), "head": (-6, 0, 0)}),
+         "kolossar": clips_kolossar, "ratnik": clips_ratnik,
+         "gorgul": lambda: accent(clips_generic(), mirror({"arm.L": (0, 12, 0), "forearm.L": (-20, 0, 0)})),
+         # Рогожук в стойке задирает рог
+         "rogozhuk": lambda: accent(clips_beetle(), {"head": (-14, 0, 0), "horn": (-6, 0, 0)}),
+         # Левиан в стойке встаёт выше на кольце
+         "levian": lambda: accent(clips_serpent(), {"neck1": (-8, 0, 0), "neck2": (-6, 0, 0)})}
 
 
 def make_actions(rig, species):

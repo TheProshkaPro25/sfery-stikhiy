@@ -6,6 +6,8 @@ extends Node3D
 ## Итоговая поза = простой (idle) + эффект (fx_*), который двигают твины.
 
 const FLYERS := ["bird", "flying_eye", "dragon"]
+## Темп скелетных клипов по стихии (Attr.A): Буря резкая, Камень тяжёлый, Тень плавная.
+const TEMPO := [1.08, 1.18, 1.0, 0.85, 0.93, 0.97]
 
 var fx_pos := Vector3.ZERO      ## смещение, м (в осях существа)
 var fx_scale := 1.0             ## импульс масштаба
@@ -46,6 +48,7 @@ func set_model(model: Node3D, d: CreatureDef) -> void:
 	_collect(model)
 	if _player != null and _player.has_animation("idle"):
 		_player.playback_default_blend_time = 0.3  # клип → idle по очереди тоже со сведением
+		_player.speed_scale = TEMPO[d.attribute] if d != null and d.attribute >= 0 and d.attribute < TEMPO.size() else 1.0
 		_player.get_animation("idle").loop_mode = Animation.LOOP_LINEAR
 		_player.play("idle")
 		_player.seek(randf() * _player.get_animation("idle").length)  # не синхронно с соседями
