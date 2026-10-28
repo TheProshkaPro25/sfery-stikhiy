@@ -19,7 +19,39 @@ const HD_DIR := "res://assets/creatures_hd/%s.glb"
 const HD_YAW_DEG := 0.0
 
 
+## Загруженные модели матча (ключ "hd:<id>" или архетип). Держим только существ текущего матча:
+## preload_match() в начале, clear() при перезапуске/выходе — иначе видеопамять росла с каждым матчем.
 static var _scenes: Dictionary = {}
+
+
+static func _key_path(d: CreatureDef) -> Array:
+	var key := String(d.id).trim_prefix("creature_")
+	var hd_path := HD_DIR % key
+	if ResourceLoader.exists(hd_path):
+		return ["hd:" + key, hd_path]
+	return [archetype_of(d), DIR % archetype_of(d)]
+
+
+## Загрузка моделей существ матча (6 штук) при старте матча: к первому раскрытию они уже в памяти,
+## без рывка кадра посреди хода. Синхронно: фоновая загрузка (load_threaded_request) текстур через
+## потоки передачи RenderingDevice держала ~+600 МБ ОЗУ процесса; с VRAM-сжатыми текстурами 6 моделей
+## грузятся за доли секунды.
+static func preload_match(defs: Array) -> void:
+	for d in defs:
+		if d != null:
+			var kp := _key_path(d)
+			_scene(kp[0], kp[1])
+
+
+## Отпустить модели (перезапуск матча, выход): ресурсы освобождаются, когда исчезнут последние экземпляры.
+static func clear() -> void:
+	_scenes.clear()
+
+
+static func _scene(res_key: String, path: String) -> PackedScene:
+	if not _scenes.has(res_key):
+		_scenes[res_key] = load(path) as PackedScene
+	return _scenes[res_key]
 
 
 static func archetype_of(d: CreatureDef) -> String:
@@ -30,13 +62,9 @@ static func archetype_of(d: CreatureDef) -> String:
 static func build(d: CreatureDef) -> Node3D:
 	if d == null:
 		return null
-	var key := String(d.id).trim_prefix("creature_")
-	var hd_path := HD_DIR % key
-	var hd: bool = ResourceLoader.exists(hd_path)
-	var res_key: String = ("hd:" + key) if hd else archetype_of(d)
-	if not _scenes.has(res_key):
-		_scenes[res_key] = load(hd_path if hd else DIR % res_key) as PackedScene
-	var ps: PackedScene = _scenes[res_key]
+	var kp := _key_path(d)
+	var hd: bool = String(kp[0]).begins_with("hd:")
+	var ps: PackedScene = _scene(kp[0], kp[1])
 	if ps == null:
 		return null
 	var root := Node3D.new()

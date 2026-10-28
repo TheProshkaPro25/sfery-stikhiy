@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://igsomoffmley"
-path="res://.godot/imported/rogozhuk_light_Image_1.png-b233ea679fa16b9e356e621fa7d55f2c.ctex"
+path.s3tc="res://.godot/imported/rogozhuk_light_Image_1.png-b233ea679fa16b9e356e621fa7d55f2c.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "b609fd2cc69354db7d612692bbfe40b0"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/rogozhuk_light_Image_1.png"
-dest_files=["res://.godot/imported/rogozhuk_light_Image_1.png-b233ea679fa16b9e356e621fa7d55f2c.ctex"]
+dest_files=["res://.godot/imported/rogozhuk_light_Image_1.png-b233ea679fa16b9e356e621fa7d55f2c.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

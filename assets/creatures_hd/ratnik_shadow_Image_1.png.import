@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cc1pnmhkvp6nt"
-path="res://.godot/imported/ratnik_shadow_Image_1.png-115d077c9d1d503256dd806929edc8fd.ctex"
+path.s3tc="res://.godot/imported/ratnik_shadow_Image_1.png-115d077c9d1d503256dd806929edc8fd.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "8f86f6a19de2f29b6a17725b7a9d26e7"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/ratnik_shadow_Image_1.png"
-dest_files=["res://.godot/imported/ratnik_shadow_Image_1.png-115d077c9d1d503256dd806929edc8fd.ctex"]
+dest_files=["res://.godot/imported/ratnik_shadow_Image_1.png-115d077c9d1d503256dd806929edc8fd.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

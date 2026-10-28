@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cvo0v6dhisuwy"
-path="res://.godot/imported/kolossar_stone_Image_1.png-ef351ffb44a13dc8ec461e9733e36198.ctex"
+path.s3tc="res://.godot/imported/kolossar_stone_Image_1.png-ef351ffb44a13dc8ec461e9733e36198.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "fe36681ad49151a5ba9cc7c753803ebc"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/kolossar_stone_Image_1.png"
-dest_files=["res://.godot/imported/kolossar_stone_Image_1.png-ef351ffb44a13dc8ec461e9733e36198.ctex"]
+dest_files=["res://.godot/imported/kolossar_stone_Image_1.png-ef351ffb44a13dc8ec461e9733e36198.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

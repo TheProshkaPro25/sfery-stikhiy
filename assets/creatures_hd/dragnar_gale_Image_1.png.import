@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://chh67ru77mp08"
-path="res://.godot/imported/dragnar_gale_Image_1.png-b8c0d781d5419ef98e0ca0903bb18cfe.ctex"
+path.s3tc="res://.godot/imported/dragnar_gale_Image_1.png-b8c0d781d5419ef98e0ca0903bb18cfe.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "f6326da114ec196e15e28641cfa30f5f"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/dragnar_gale_Image_1.png"
-dest_files=["res://.godot/imported/dragnar_gale_Image_1.png-b8c0d781d5419ef98e0ca0903bb18cfe.ctex"]
+dest_files=["res://.godot/imported/dragnar_gale_Image_1.png-b8c0d781d5419ef98e0ca0903bb18cfe.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

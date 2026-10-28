@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://ddwqurrxstnfo"
-path="res://.godot/imported/ratnik_gale_Image_1.png-a2f80c3fbaaeef278bc79a568e4d82e8.ctex"
+path.s3tc="res://.godot/imported/ratnik_gale_Image_1.png-a2f80c3fbaaeef278bc79a568e4d82e8.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "02babffb42ca94a592d81a5ebfa1158e"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/ratnik_gale_Image_1.png"
-dest_files=["res://.godot/imported/ratnik_gale_Image_1.png-a2f80c3fbaaeef278bc79a568e4d82e8.ctex"]
+dest_files=["res://.godot/imported/ratnik_gale_Image_1.png-a2f80c3fbaaeef278bc79a568e4d82e8.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

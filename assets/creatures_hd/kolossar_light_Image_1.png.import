@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dhhwe4bu31j37"
-path="res://.godot/imported/kolossar_light_Image_1.png-1c4fb3f9a451c888ca5f7729048cae57.ctex"
+path.s3tc="res://.godot/imported/kolossar_light_Image_1.png-1c4fb3f9a451c888ca5f7729048cae57.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "b1e3f1217c53d97037675e9bd9202633"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/kolossar_light_Image_1.png"
-dest_files=["res://.godot/imported/kolossar_light_Image_1.png-1c4fb3f9a451c888ca5f7729048cae57.ctex"]
+dest_files=["res://.godot/imported/kolossar_light_Image_1.png-1c4fb3f9a451c888ca5f7729048cae57.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

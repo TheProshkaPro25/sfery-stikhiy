@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bsgb0v2gl8hx5"
-path="res://.godot/imported/dragnar_fire_Image_1.png-addb2579d674deca64f740e2fdb89de7.ctex"
+path.s3tc="res://.godot/imported/dragnar_fire_Image_1.png-addb2579d674deca64f740e2fdb89de7.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "6ef9efd64a431244e6658f39c6a08647"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/dragnar_fire_Image_1.png"
-dest_files=["res://.godot/imported/dragnar_fire_Image_1.png-addb2579d674deca64f740e2fdb89de7.ctex"]
+dest_files=["res://.godot/imported/dragnar_fire_Image_1.png-addb2579d674deca64f740e2fdb89de7.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

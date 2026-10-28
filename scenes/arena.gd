@@ -29,6 +29,10 @@ var _decor: Node3D
 ## Парящие осколки: [узел, базовая высота, фаза, скорость вращения].
 var _floaters: Array = []
 
+var _motes: GPUParticles3D
+var _crystal_lights: Array[OmniLight3D] = []
+var _floaters_on := true
+
 var markers: Array[Marker3D] = []
 var _highlights: Array[MeshInstance3D] = []
 var _built := false
@@ -38,8 +42,20 @@ func _ready() -> void:
 	_build()
 
 
+## Уровень графики (GraphicsSettings): число искр, подсветка кристаллов, движение парящих осколков.
+func apply_quality() -> void:
+	_build()
+	var n: int = int(GraphicsSettings.param("motes"))
+	if _motes != null and _motes.amount != n:
+		_motes.amount = n
+	for l in _crystal_lights:
+		l.visible = bool(GraphicsSettings.param("lights"))
+	_floaters_on = bool(GraphicsSettings.param("floaters"))
+	set_process(_floaters_on and not _floaters.is_empty())
+
+
 func _process(_delta: float) -> void:
-	if _floaters.is_empty():
+	if _floaters.is_empty() or not _floaters_on:
 		return
 	var t := Time.get_ticks_msec() * 0.001
 	for f in _floaters:
@@ -262,18 +278,22 @@ void fragment() {
 	base *= 1.0 - seam * 0.6;
 	// трещины-жилы в дальнем камне
 	float vein = aline(vnoise(p * 0.12) - 0.5, 0.012) * (1.0 - near) * detail;
-	// круг призыва (как раньше: кольца, руны, гексаграмма)
-	float circ = ring(r, 2.3, 0.03) + ring(r, 3.5, 0.045) + ring(r, 3.75, 0.02) + ring(r, 5.6, 0.035) + ring(r, 5.85, 0.015);
-	float runes = step(0.55, fract(ang * 24.0 / 6.28318)) * step(3.55, r) * step(r, 3.7);
-	runes += step(0.7, fract(ang * 48.0 / 6.28318 + 0.5)) * step(5.63, r) * step(r, 5.8) * 0.8;
-	float hexa = 0.0;
-	for (int i = 0; i < 6; i++) {
-		float a0 = float(i) * 1.0472 + 0.5236;
-		float a2 = a0 + 2.0944;
-		hexa += line_seg(p, vec2(cos(a0), sin(a0)) * 5.6, vec2(cos(a2), sin(a2)) * 5.6, 0.03);
+	// круг призыва (как раньше: кольца, руны, гексаграмма) — считается только внутри круга (r < 6.3):
+	// снаружи всё это нули, а пол занимает большую часть кадра
+	float g = 0.0;
+	if (r < 6.3) {
+		float circ = ring(r, 2.3, 0.03) + ring(r, 3.5, 0.045) + ring(r, 3.75, 0.02) + ring(r, 5.6, 0.035) + ring(r, 5.85, 0.015);
+		float runes = step(0.55, fract(ang * 24.0 / 6.28318)) * step(3.55, r) * step(r, 3.7);
+		runes += step(0.7, fract(ang * 48.0 / 6.28318 + 0.5)) * step(5.63, r) * step(r, 5.8) * 0.8;
+		float hexa = 0.0;
+		for (int i = 0; i < 6; i++) {
+			float a0 = float(i) * 1.0472 + 0.5236;
+			float a2 = a0 + 2.0944;
+			hexa += line_seg(p, vec2(cos(a0), sin(a0)) * 5.6, vec2(cos(a2), sin(a2)) * 5.6, 0.03);
+		}
+		float spokes = aline(sin(ang * 6.0) * r, 0.006) * step(2.3, r) * step(r, 3.5);
+		g = clamp(circ + runes + hexa * 0.7 + spokes * 0.6, 0.0, 1.0);
 	}
-	float spokes = aline(sin(ang * 6.0) * r, 0.006) * step(2.3, r) * step(r, 3.5);
-	float g = clamp(circ + runes + hexa * 0.7 + spokes * 0.6, 0.0, 1.0);
 	// линии силы: 24 луча от центра и кольца каждые 6 единиц за пределами круга
 	float sector = ang * 24.0 / 6.28318;
 	float sid = floor(sector + 0.5);
@@ -377,6 +397,35 @@ func _mi(mesh: Mesh, mat: Material, pos: Vector3, parent: Node = null) -> MeshIn
 	return mi
 
 
+## Неподвижный декор (руины, горы) копится по парам «меш + материал» и рисуется одним MultiMesh
+## на пару: вместо ~120 отдельных MeshInstance3D — 4 вызова отрисовки.
+var _static_sets: Dictionary = {}
+
+
+func _static(mesh: Mesh, mat: Material, pos: Vector3, scl: Vector3, rot: Vector3) -> void:
+	var key := [mesh, mat]
+	if not _static_sets.has(key):
+		_static_sets[key] = []
+	_static_sets[key].append(Transform3D(Basis.from_euler(rot) * Basis.from_scale(scl), pos))
+
+
+func _flush_static() -> void:
+	for key in _static_sets.keys():
+		var xs: Array = _static_sets[key]
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = key[0]
+		mm.instance_count = xs.size()
+		for i in range(xs.size()):
+			mm.set_instance_transform(i, xs[i])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.material_override = key[1]
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_decor.add_child(mmi)
+	_static_sets.clear()
+
+
 func _crystal(pos: Vector3, c: Color, height: float, tilt_seed: int, light: bool = true) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = tilt_seed
@@ -408,6 +457,7 @@ func _crystal(pos: Vector3, c: Color, height: float, tilt_seed: int, light: bool
 	l.omni_range = 4.5 * WORLD
 	l.position = Vector3(0, height * 0.6, 0)
 	root.add_child(l)
+	_crystal_lights.append(l)
 
 
 ## Медленно поднимающиеся искры над полем: пространство боя «живёт».
@@ -449,6 +499,7 @@ func _build_motes() -> void:
 	p.draw_pass_1 = q
 	p.position = Vector3(0, 0.5, 0)
 	add_child(p)
+	_motes = p
 
 
 ## Дальние ориентиры (в мировых единицах): кольцо кристаллов стихий вокруг ворот, руины,
@@ -492,26 +543,21 @@ func _build_decor() -> void:
 		for c in range(rng.randi_range(3, 5)):
 			var off := Vector3(rng.randf_range(-14, 14), 0, rng.randf_range(-14, 14))
 			var h: float = rng.randf_range(6.0, 26.0) * (1.0 if c > 0 else 1.4)
-			var mi := _mi(col_mesh, stone, gc + off + Vector3(0, h * 0.5 - 0.5, 0))
-			mi.scale = Vector3(s, h, s)
-			mi.rotation = Vector3(rng.randf_range(-0.12, 0.12), rng.randf() * TAU, rng.randf_range(-0.12, 0.12))
+			_static(col_mesh, stone, gc + off + Vector3(0, h * 0.5 - 0.5, 0), Vector3(s, h, s),
+				Vector3(rng.randf_range(-0.12, 0.12), rng.randf() * TAU, rng.randf_range(-0.12, 0.12)))
 		# перекладина-арка на двух колоннах
 		if g % 2 == 0:
 			var span: float = rng.randf_range(14.0, 20.0)
 			var yaw: float = rng.randf() * TAU
 			var axis := Vector3(cos(yaw), 0, sin(yaw))
 			for side in [-1.0, 1.0]:
-				var pm := _mi(col_mesh, stone, gc + axis * span * 0.5 * side + Vector3(0, 11.0, 0))
-				pm.scale = Vector3(s, 23.0, s)
-			var top := _mi(block, dark, gc + Vector3(0, 23.5, 0))
-			top.scale = Vector3(span + s * 3.0, 3.0, s * 2.4)
-			top.rotation.y = -yaw
-			top.rotation.z = rng.randf_range(-0.08, 0.08)
+				_static(col_mesh, stone, gc + axis * span * 0.5 * side + Vector3(0, 11.0, 0), Vector3(s, 23.0, s), Vector3.ZERO)
+			_static(block, dark, gc + Vector3(0, 23.5, 0), Vector3(span + s * 3.0, 3.0, s * 2.4), Vector3(0.0, -yaw, rng.randf_range(-0.08, 0.08)))
 		# обвалившиеся блоки
 		for b in range(4):
-			var bm := _mi(block, dark, gc + Vector3(rng.randf_range(-18, 18), 1.0, rng.randf_range(-18, 18)))
-			bm.scale = Vector3(rng.randf_range(3, 8), rng.randf_range(2, 4), rng.randf_range(3, 7))
-			bm.rotation = Vector3(rng.randf_range(-0.3, 0.3), rng.randf() * TAU, rng.randf_range(-0.3, 0.3))
+			var bp := gc + Vector3(rng.randf_range(-18, 18), 1.0, rng.randf_range(-18, 18))
+			var bs := Vector3(rng.randf_range(3, 8), rng.randf_range(2, 4), rng.randf_range(3, 7))
+			_static(block, dark, bp, bs, Vector3(rng.randf_range(-0.3, 0.3), rng.randf() * TAU, rng.randf_range(-0.3, 0.3)))
 
 	# Парящие острова (скала-перевёрнутый конус с кристаллом сверху) и осколки
 	var cone := CylinderMesh.new()
@@ -599,6 +645,6 @@ func _build_decor() -> void:
 		var a: float = TAU * k / 22.0 + rng.randf_range(-0.1, 0.1)
 		var r: float = rng.randf_range(850.0, 1300.0)
 		var mh: float = rng.randf_range(90.0, 260.0)
-		var mi := _mi(mount, mmat, Vector3(cos(a) * r, mh * 0.5 - 10.0, sin(a) * r))
-		mi.scale = Vector3(rng.randf_range(140.0, 260.0), mh, rng.randf_range(120.0, 220.0))
-		mi.rotation.y = rng.randf() * TAU
+		var ms := Vector3(rng.randf_range(140.0, 260.0), mh, rng.randf_range(120.0, 220.0))
+		_static(mount, mmat, Vector3(cos(a) * r, mh * 0.5 - 10.0, sin(a) * r), ms, Vector3(0.0, rng.randf() * TAU, 0.0))
+	_flush_static()

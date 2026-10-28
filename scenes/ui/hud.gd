@@ -378,7 +378,7 @@ func coach(key: String, text: String) -> void:
 			pn.queue_free())
 	vb.add_child(b)
 	add_child(_coach)
-	get_tree().create_timer(9.0 if _battle else 14.0).timeout.connect(func() -> void:
+	get_tree().create_timer(6.0 if _battle else 7.0).timeout.connect(func() -> void:
 		var pn: Object = wr.get_ref()
 		if pn != null:
 			pn.queue_free())

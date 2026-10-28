@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://boskeghavrgdt"
-path="res://.godot/imported/levian_gale_Image_1.png-1468ed7702409fcc7c502a1690e72de7.ctex"
+path.s3tc="res://.godot/imported/levian_gale_Image_1.png-1468ed7702409fcc7c502a1690e72de7.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "333de722cde535f85d8a610d8f98a113"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/levian_gale_Image_1.png"
-dest_files=["res://.godot/imported/levian_gale_Image_1.png-1468ed7702409fcc7c502a1690e72de7.ctex"]
+dest_files=["res://.godot/imported/levian_gale_Image_1.png-1468ed7702409fcc7c502a1690e72de7.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

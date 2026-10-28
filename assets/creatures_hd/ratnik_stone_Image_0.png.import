@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://8ltm3yyhopeu"
-path="res://.godot/imported/ratnik_stone_Image_0.png-180db416ee2c43d635a094f1b958636b.ctex"
+path.bptc="res://.godot/imported/ratnik_stone_Image_0.png-180db416ee2c43d635a094f1b958636b.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "357053586ad8753809d37468a6ec1098"
@@ -14,12 +15,12 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/ratnik_stone_Image_0.png"
-dest_files=["res://.godot/imported/ratnik_stone_Image_0.png-180db416ee2c43d635a094f1b958636b.ctex"]
+dest_files=["res://.godot/imported/ratnik_stone_Image_0.png-180db416ee2c43d635a094f1b958636b.bptc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

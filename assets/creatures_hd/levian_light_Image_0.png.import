@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://baus1aq6s06hv"
-path="res://.godot/imported/levian_light_Image_0.png-0b4515884381a3e0ca30fd711f053115.ctex"
+path.bptc="res://.godot/imported/levian_light_Image_0.png-0b4515884381a3e0ca30fd711f053115.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "06d0942dbd9183daec83ba327489cb2d"
@@ -14,12 +15,12 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/levian_light_Image_0.png"
-dest_files=["res://.godot/imported/levian_light_Image_0.png-0b4515884381a3e0ca30fd711f053115.ctex"]
+dest_files=["res://.godot/imported/levian_light_Image_0.png-0b4515884381a3e0ca30fd711f053115.bptc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

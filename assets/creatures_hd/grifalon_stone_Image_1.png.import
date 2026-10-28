@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dfr2x6jmnfqxp"
-path="res://.godot/imported/grifalon_stone_Image_1.png-e53ebd074df576ce4cb992db8c83c37e.ctex"
+path.s3tc="res://.godot/imported/grifalon_stone_Image_1.png-e53ebd074df576ce4cb992db8c83c37e.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "a2012d9cf21f036e482d412e73d64931"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/grifalon_stone_Image_1.png"
-dest_files=["res://.godot/imported/grifalon_stone_Image_1.png-e53ebd074df576ce4cb992db8c83c37e.ctex"]
+dest_files=["res://.godot/imported/grifalon_stone_Image_1.png-e53ebd074df576ce4cb992db8c83c37e.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

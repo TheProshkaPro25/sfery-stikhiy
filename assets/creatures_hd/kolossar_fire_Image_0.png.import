@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bf5helr3jc3rw"
-path="res://.godot/imported/kolossar_fire_Image_0.png-15de46d44d9fe15f74568c22afe51109.ctex"
+path.bptc="res://.godot/imported/kolossar_fire_Image_0.png-15de46d44d9fe15f74568c22afe51109.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "d5c9636c87e1bf1c6eaf0de21aad2873"
@@ -14,12 +15,12 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/kolossar_fire_Image_0.png"
-dest_files=["res://.godot/imported/kolossar_fire_Image_0.png-15de46d44d9fe15f74568c22afe51109.ctex"]
+dest_files=["res://.godot/imported/kolossar_fire_Image_0.png-15de46d44d9fe15f74568c22afe51109.bptc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

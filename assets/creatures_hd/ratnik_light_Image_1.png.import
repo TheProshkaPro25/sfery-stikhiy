@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dlbb47y8kjgst"
-path="res://.godot/imported/ratnik_light_Image_1.png-4a1ccbe99c61f852f77ac2799d4b1ad8.ctex"
+path.s3tc="res://.godot/imported/ratnik_light_Image_1.png-4a1ccbe99c61f852f77ac2799d4b1ad8.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "8731d3ab03e295709578036ca17c3a21"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/ratnik_light_Image_1.png"
-dest_files=["res://.godot/imported/ratnik_light_Image_1.png-4a1ccbe99c61f852f77ac2799d4b1ad8.ctex"]
+dest_files=["res://.godot/imported/ratnik_light_Image_1.png-4a1ccbe99c61f852f77ac2799d4b1ad8.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

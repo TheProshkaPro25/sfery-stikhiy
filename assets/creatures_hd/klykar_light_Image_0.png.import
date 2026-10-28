@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bnlonnkog2agw"
-path="res://.godot/imported/klykar_light_Image_0.png-7c040f8b75bcdfc1aa68836cfe4c0a95.ctex"
+path.bptc="res://.godot/imported/klykar_light_Image_0.png-7c040f8b75bcdfc1aa68836cfe4c0a95.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "668fbd7eeb85649ca533a07ebae9a2ea"
@@ -14,12 +15,12 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/klykar_light_Image_0.png"
-dest_files=["res://.godot/imported/klykar_light_Image_0.png-7c040f8b75bcdfc1aa68836cfe4c0a95.ctex"]
+dest_files=["res://.godot/imported/klykar_light_Image_0.png-7c040f8b75bcdfc1aa68836cfe4c0a95.bptc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

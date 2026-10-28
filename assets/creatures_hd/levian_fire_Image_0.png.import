@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cab6p0uqst84s"
-path="res://.godot/imported/levian_fire_Image_0.png-c89714a033ac9b0de90891f228dc764c.ctex"
+path.bptc="res://.godot/imported/levian_fire_Image_0.png-c89714a033ac9b0de90891f228dc764c.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "446b9e1f7389db8e802085aba0fcb12d"
@@ -14,12 +15,12 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/levian_fire_Image_0.png"
-dest_files=["res://.godot/imported/levian_fire_Image_0.png-c89714a033ac9b0de90891f228dc764c.ctex"]
+dest_files=["res://.godot/imported/levian_fire_Image_0.png-c89714a033ac9b0de90891f228dc764c.bptc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

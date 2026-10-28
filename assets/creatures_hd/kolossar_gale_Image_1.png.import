@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dgnytlk7pbjpe"
-path="res://.godot/imported/kolossar_gale_Image_1.png-b1dee524a26bc910158fe3d7b4122546.ctex"
+path.s3tc="res://.godot/imported/kolossar_gale_Image_1.png-b1dee524a26bc910158fe3d7b4122546.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "de851efe92fc9627c6f8528a1e771636"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/kolossar_gale_Image_1.png"
-dest_files=["res://.godot/imported/kolossar_gale_Image_1.png-b1dee524a26bc910158fe3d7b4122546.ctex"]
+dest_files=["res://.godot/imported/kolossar_gale_Image_1.png-b1dee524a26bc910158fe3d7b4122546.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

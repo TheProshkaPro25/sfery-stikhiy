@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://073dbpst1ci3"
-path="res://.godot/imported/dragnar_light_Image_1.png-b986682eba8fb0aae04d67fcd644c9b1.ctex"
+path.s3tc="res://.godot/imported/dragnar_light_Image_1.png-b986682eba8fb0aae04d67fcd644c9b1.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "677750d3c0998cec9af0f54eaaf80ca6"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/dragnar_light_Image_1.png"
-dest_files=["res://.godot/imported/dragnar_light_Image_1.png-b986682eba8fb0aae04d67fcd644c9b1.ctex"]
+dest_files=["res://.godot/imported/dragnar_light_Image_1.png-b986682eba8fb0aae04d67fcd644c9b1.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

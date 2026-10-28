@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://d1g5786i5fwo5"
-path="res://.godot/imported/gorgul_fire_Image_2.png-622e425e2e7f45a9b8563bcbe42aec6b.ctex"
+path.s3tc="res://.godot/imported/gorgul_fire_Image_2.png-622e425e2e7f45a9b8563bcbe42aec6b.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "dcc1429fe47bf22869a460c57d69a606"
@@ -14,17 +15,17 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/gorgul_fire_Image_2.png"
-dest_files=["res://.godot/imported/gorgul_fire_Image_2.png-622e425e2e7f45a9b8563bcbe42aec6b.ctex"]
+dest_files=["res://.godot/imported/gorgul_fire_Image_2.png-622e425e2e7f45a9b8563bcbe42aec6b.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=1
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1

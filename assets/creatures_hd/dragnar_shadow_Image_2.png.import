@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c3t2la5q7l812"
-path="res://.godot/imported/dragnar_shadow_Image_2.png-64ab474b9c73abc7032f2ae50d3cb2b7.ctex"
+path.s3tc="res://.godot/imported/dragnar_shadow_Image_2.png-64ab474b9c73abc7032f2ae50d3cb2b7.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "d6f61b55e3811dcbb20608176e04f437"
@@ -14,17 +15,17 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/dragnar_shadow_Image_2.png"
-dest_files=["res://.godot/imported/dragnar_shadow_Image_2.png-64ab474b9c73abc7032f2ae50d3cb2b7.ctex"]
+dest_files=["res://.godot/imported/dragnar_shadow_Image_2.png-64ab474b9c73abc7032f2ae50d3cb2b7.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=1
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1

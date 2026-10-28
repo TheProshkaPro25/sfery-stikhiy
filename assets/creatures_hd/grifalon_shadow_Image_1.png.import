@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://du44jtwd5bt6c"
-path="res://.godot/imported/grifalon_shadow_Image_1.png-207b7c2d89ae274fff3dae31f2cb92b6.ctex"
+path.s3tc="res://.godot/imported/grifalon_shadow_Image_1.png-207b7c2d89ae274fff3dae31f2cb92b6.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "0b44ebbe57e40c3e190c22384a5decf0"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/grifalon_shadow_Image_1.png"
-dest_files=["res://.godot/imported/grifalon_shadow_Image_1.png-207b7c2d89ae274fff3dae31f2cb92b6.ctex"]
+dest_files=["res://.godot/imported/grifalon_shadow_Image_1.png-207b7c2d89ae274fff3dae31f2cb92b6.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c6dlvfptus6we"
-path="res://.godot/imported/dragnar_stone_Image_1.png-3abead28326b48c4e23a38c77bfd5f52.ctex"
+path.s3tc="res://.godot/imported/dragnar_stone_Image_1.png-3abead28326b48c4e23a38c77bfd5f52.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "4bdd63dd4aba3cbd8410d5f8bd110fba"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/dragnar_stone_Image_1.png"
-dest_files=["res://.godot/imported/dragnar_stone_Image_1.png-3abead28326b48c4e23a38c77bfd5f52.ctex"]
+dest_files=["res://.godot/imported/dragnar_stone_Image_1.png-3abead28326b48c4e23a38c77bfd5f52.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

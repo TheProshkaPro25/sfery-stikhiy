@@ -35,6 +35,8 @@ var battle_overlay: BattleOverlay
 var game_over_ui: GameOverUI
 var team_menu: TeamMenu
 var hover_tips: HoverTips
+var _env: Environment
+var _sun: DirectionalLight3D
 
 var balls: Dictionary = {}        # uid -> CreatureBall
 var card_nodes: Dictionary = {}   # slot -> ArenaCardNode
@@ -54,6 +56,11 @@ var _pip_idx: Dictionary = {}     # uid -> номер шарика на плаш
 var _stats: Dictionary = {"wins": [0, 0], "abilities": [0, 0], "traps": 0, "battles": []}  # итоги для экрана результата
 
 
+## Перезапуск («ещё раз») и выход: отпускаем модели этого матча (видеопамять не копится от матча к матчу).
+func _exit_tree() -> void:
+	CreatureModels.clear()
+
+
 func _ready() -> void:
 	SoundFx.i()
 	rng.randomize()
@@ -64,6 +71,7 @@ func _ready() -> void:
 
 # ---------------------------------------------------------------- построение
 
+## Небо статично (без TIME): иначе Godot пересчитывает кубическую карту отражений каждый кадр.
 const SKY_SHADER := """
 shader_type sky;
 float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
@@ -75,7 +83,7 @@ float noise(vec3 p) {
 float fbm(vec3 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; } return v; }
 void sky() {
 	vec3 d = EYEDIR;
-	float n = fbm(d * 2.2 + vec3(0.0, TIME * 0.01, 0.0));
+	float n = fbm(d * 2.2);
 	float n2 = fbm(d * 4.5 + vec3(5.0));
 	vec3 deep = vec3(0.012, 0.012, 0.03);
 	vec3 neb1 = vec3(0.28, 0.08, 0.38);
@@ -84,7 +92,7 @@ void sky() {
 	float band = exp(-abs(d.y - 0.05) * 7.0);
 	col += vec3(0.25, 0.12, 0.3) * band * 0.35 * n;
 	float st = step(0.9975, hash(floor(d * 420.0)));
-	col += vec3(0.9, 0.9, 1.0) * st * (0.5 + 0.5 * sin(TIME * 2.0 + hash(floor(d * 420.0)) * 30.0));
+	col += vec3(0.9, 0.9, 1.0) * st * (0.5 + 0.5 * sin(hash(floor(d * 420.0)) * 30.0));
 	col *= smoothstep(-0.35, 0.05, d.y) * 0.85 + 0.15;
 	COLOR = col;
 }
@@ -106,6 +114,8 @@ func _build_world() -> void:
 	sky_mat.shader.code = SKY_SHADER
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
+	# без TIME в шейдере небо (и карта отражений) считается один раз, а не каждый кадр (режим REALTIME)
+	sky.process_mode = Sky.PROCESS_MODE_QUALITY
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
@@ -149,9 +159,10 @@ func _build_world() -> void:
 	sun.shadow_blur = 1.0
 	sun.shadow_normal_bias = 1.5
 	sun.shadow_opacity = 0.6  # тень от крыльев на теле не чернит модель целиком
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
-	sun.directional_shadow_max_distance = 22.0 * Arena.WORLD
+	# каскады и дальность теней, SSAO, сглаживание — по уровню графики (GraphicsSettings, apply_graphics)
 	world.add_child(sun)
+	_env = env
+	_sun = sun
 
 	var fill := DirectionalLight3D.new()
 	fill.rotation_degrees = Vector3(-35.0, 150.0, 0.0)
@@ -166,11 +177,19 @@ func _build_world() -> void:
 
 	arena = ARENA_SCENE.instantiate() as Arena
 	world.add_child(arena)
+	apply_graphics()
 
 	events = EventPlayer.new()
 	add_child(events)
 	throw_ctl = ThrowController.new()
 	add_child(throw_ctl)
+
+
+## Применить уровень графики (при старте и после смены в меню команды).
+func apply_graphics() -> void:
+	GraphicsSettings.apply_world(get_viewport(), _env, _sun)
+	if arena != null:
+		arena.apply_quality()
 
 
 func _build_ui() -> void:
@@ -221,6 +240,7 @@ func _build_logic() -> void:
 	ctrl.landing_window = true  # окно прикрепления способности после приземления на пустые ворота
 	ai = AIPlayer.new(AI_PLAYER, seed_value + 1, -1.0, TeamMenu.difficulty)
 	_index_creatures()
+	CreatureModels.preload_match(_defs.values())  # 6 моделей матча — в фоне, до первого раскрытия
 
 	ctrl.phase_changed.connect(_on_phase_changed)
 	ctrl.setup_requested.connect(_on_setup_requested)

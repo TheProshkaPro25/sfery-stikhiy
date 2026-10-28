@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://syqeuti3a87u"
-path="res://.godot/imported/klykar_gale_Image_0.png-b8bc6c633451a501e30d50bfb905a139.ctex"
+path.bptc="res://.godot/imported/klykar_gale_Image_0.png-b8bc6c633451a501e30d50bfb905a139.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "bcbe4a208e30cbd964d3cc14bb98ff3c"
@@ -14,12 +15,12 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/klykar_gale_Image_0.png"
-dest_files=["res://.godot/imported/klykar_gale_Image_0.png-b8bc6c633451a501e30d50bfb905a139.ctex"]
+dest_files=["res://.godot/imported/klykar_gale_Image_0.png-b8bc6c633451a501e30d50bfb905a139.bptc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://1l2m8itrb36e"
-path="res://.godot/imported/rogozhuk_tide_Image_1.png-6e51c354b7af97992acf5dac1886a19d.ctex"
+path.s3tc="res://.godot/imported/rogozhuk_tide_Image_1.png-6e51c354b7af97992acf5dac1886a19d.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "097ce5ddd27dd56461ba48e1cebd1e38"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/rogozhuk_tide_Image_1.png"
-dest_files=["res://.godot/imported/rogozhuk_tide_Image_1.png-6e51c354b7af97992acf5dac1886a19d.ctex"]
+dest_files=["res://.godot/imported/rogozhuk_tide_Image_1.png-6e51c354b7af97992acf5dac1886a19d.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

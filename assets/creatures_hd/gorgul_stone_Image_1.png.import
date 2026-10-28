@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cbhi2slbelkwh"
-path="res://.godot/imported/gorgul_stone_Image_1.png-ff18b8efb65123afa114fc3b412d7296.ctex"
+path.s3tc="res://.godot/imported/gorgul_stone_Image_1.png-ff18b8efb65123afa114fc3b412d7296.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "ed3ba6770ba69d7f3badf404d3873a76"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/gorgul_stone_Image_1.png"
-dest_files=["res://.godot/imported/gorgul_stone_Image_1.png-ff18b8efb65123afa114fc3b412d7296.ctex"]
+dest_files=["res://.godot/imported/gorgul_stone_Image_1.png-ff18b8efb65123afa114fc3b412d7296.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

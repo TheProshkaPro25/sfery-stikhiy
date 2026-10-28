@@ -124,6 +124,16 @@ func _build() -> void:
 		db.tooltip_text = DIFF_TIPS[d]
 		db.pressed.connect(func() -> void: difficulty = d)
 		bottom.add_child(db)
+	# уровень графики: Низкие → Средние → Высокие, сохраняется в user://settings.cfg и применяется сразу
+	var gfx := _button("Графика: " + GraphicsSettings.level_name(), 170)
+	gfx.tooltip_text = "Низкие — без SSAO, тени проще, меньше искр.\nСредние — почти как Высокие, легче для GTX 1060.\nВысокие — 4 каскада теней, SSAO, сглаживание MSAA 2×."
+	gfx.pressed.connect(func() -> void:
+		GraphicsSettings.set_level((GraphicsSettings.current() + 1) % 3)
+		gfx.text = "Графика: " + GraphicsSettings.level_name()
+		var m := get_tree().current_scene
+		if m != null and m.has_method("apply_graphics"):
+			m.apply_graphics())
+	bottom.add_child(gfx)
 	var rnd := _button("Случайная колода", 190)
 	rnd.pressed.connect(pick_random)
 	bottom.add_child(rnd)

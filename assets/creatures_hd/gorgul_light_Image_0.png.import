@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://blj5j12wao20x"
-path="res://.godot/imported/gorgul_light_Image_0.png-1edc765ac7505293142ac5b9ef21b7f9.ctex"
+path.bptc="res://.godot/imported/gorgul_light_Image_0.png-1edc765ac7505293142ac5b9ef21b7f9.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "8242ae3db55a7b883429ef78f06fe2c7"
@@ -14,12 +15,12 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/gorgul_light_Image_0.png"
-dest_files=["res://.godot/imported/gorgul_light_Image_0.png-1edc765ac7505293142ac5b9ef21b7f9.ctex"]
+dest_files=["res://.godot/imported/gorgul_light_Image_0.png-1edc765ac7505293142ac5b9ef21b7f9.bptc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

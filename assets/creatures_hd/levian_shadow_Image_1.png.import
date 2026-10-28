@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://ddl24nu0akwi3"
-path="res://.godot/imported/levian_shadow_Image_1.png-3f820849f1f0a820ab421cb953af05fd.ctex"
+path.s3tc="res://.godot/imported/levian_shadow_Image_1.png-3f820849f1f0a820ab421cb953af05fd.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "ea5613512881ff6e0bcf7bda6bb7ebfe"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/levian_shadow_Image_1.png"
-dest_files=["res://.godot/imported/levian_shadow_Image_1.png-3f820849f1f0a820ab421cb953af05fd.ctex"]
+dest_files=["res://.godot/imported/levian_shadow_Image_1.png-3f820849f1f0a820ab421cb953af05fd.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

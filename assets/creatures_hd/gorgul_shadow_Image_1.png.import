@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://begh28u1766l1"
-path="res://.godot/imported/gorgul_shadow_Image_1.png-f10038d6b52e5c82964e23c8a2bf690c.ctex"
+path.s3tc="res://.godot/imported/gorgul_shadow_Image_1.png-f10038d6b52e5c82964e23c8a2bf690c.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "5c3b5f009e6af77ba4ba5123404f908c"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/gorgul_shadow_Image_1.png"
-dest_files=["res://.godot/imported/gorgul_shadow_Image_1.png-f10038d6b52e5c82964e23c8a2bf690c.ctex"]
+dest_files=["res://.godot/imported/gorgul_shadow_Image_1.png-f10038d6b52e5c82964e23c8a2bf690c.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

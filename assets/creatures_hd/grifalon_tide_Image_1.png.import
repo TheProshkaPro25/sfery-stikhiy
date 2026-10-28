@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bayy31l1jl5gw"
-path="res://.godot/imported/grifalon_tide_Image_1.png-529a42224b8161ff429bae23b332f13f.ctex"
+path.s3tc="res://.godot/imported/grifalon_tide_Image_1.png-529a42224b8161ff429bae23b332f13f.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "69a915d72ad51fc256e9dee58eb182f8"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/grifalon_tide_Image_1.png"
-dest_files=["res://.godot/imported/grifalon_tide_Image_1.png-529a42224b8161ff429bae23b332f13f.ctex"]
+dest_files=["res://.godot/imported/grifalon_tide_Image_1.png-529a42224b8161ff429bae23b332f13f.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dkskcgr43xlkp"
-path="res://.godot/imported/ratnik_fire_Image_0.png-361faaf6dc93e485a3de9878fee58caf.ctex"
+path.bptc="res://.godot/imported/ratnik_fire_Image_0.png-361faaf6dc93e485a3de9878fee58caf.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "5ffa7253574f6d196c692ffd3ee1876b"
@@ -14,12 +15,12 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/ratnik_fire_Image_0.png"
-dest_files=["res://.godot/imported/ratnik_fire_Image_0.png-361faaf6dc93e485a3de9878fee58caf.ctex"]
+dest_files=["res://.godot/imported/ratnik_fire_Image_0.png-361faaf6dc93e485a3de9878fee58caf.bptc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

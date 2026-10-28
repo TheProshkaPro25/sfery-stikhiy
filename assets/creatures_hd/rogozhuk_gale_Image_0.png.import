@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c0pdyp58nuu3o"
-path="res://.godot/imported/rogozhuk_gale_Image_0.png-fc737d39726996621d2af91b7c089172.ctex"
+path.bptc="res://.godot/imported/rogozhuk_gale_Image_0.png-fc737d39726996621d2af91b7c089172.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "d8c08a57098d6eb73f2070f22a1ceb7e"
@@ -14,12 +15,12 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/rogozhuk_gale_Image_0.png"
-dest_files=["res://.godot/imported/rogozhuk_gale_Image_0.png-fc737d39726996621d2af91b7c089172.ctex"]
+dest_files=["res://.godot/imported/rogozhuk_gale_Image_0.png-fc737d39726996621d2af91b7c089172.bptc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

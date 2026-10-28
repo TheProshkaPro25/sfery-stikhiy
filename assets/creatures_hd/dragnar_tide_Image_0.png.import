@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cd624a8jsmplm"
-path="res://.godot/imported/dragnar_tide_Image_0.png-434a4b16ba5fa738e107871032c65b2a.ctex"
+path.bptc="res://.godot/imported/dragnar_tide_Image_0.png-434a4b16ba5fa738e107871032c65b2a.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "43d85b5ef2d7af1bd4f3562159a79eb1"
@@ -14,12 +15,12 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/dragnar_tide_Image_0.png"
-dest_files=["res://.godot/imported/dragnar_tide_Image_0.png-434a4b16ba5fa738e107871032c65b2a.ctex"]
+dest_files=["res://.godot/imported/dragnar_tide_Image_0.png-434a4b16ba5fa738e107871032c65b2a.bptc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

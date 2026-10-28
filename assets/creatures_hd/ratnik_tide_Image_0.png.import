@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cdak5je3vay1k"
-path="res://.godot/imported/ratnik_tide_Image_0.png-0c50819e2b75d8ae9b796f0be66b63dc.ctex"
+path.bptc="res://.godot/imported/ratnik_tide_Image_0.png-0c50819e2b75d8ae9b796f0be66b63dc.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "9ba18582859039d3c35ded6b2ce83986"
@@ -14,12 +15,12 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/ratnik_tide_Image_0.png"
-dest_files=["res://.godot/imported/ratnik_tide_Image_0.png-0c50819e2b75d8ae9b796f0be66b63dc.ctex"]
+dest_files=["res://.godot/imported/ratnik_tide_Image_0.png-0c50819e2b75d8ae9b796f0be66b63dc.bptc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

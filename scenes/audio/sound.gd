@@ -50,6 +50,15 @@ func _init() -> void:
 	(Engine.get_main_loop() as SceneTree).node_added.connect(_on_node_added)
 
 
+## Выход из игры: останавливаем плееры и отпускаем звуки, иначе при закрытии остаются
+## «resources still in use» / «ObjectDB instances leaked» (воспроизведения ещё держат потоки).
+func _exit_tree() -> void:
+	for p in _pool + [_roll, _music]:
+		p.stop()
+		p.stream = null
+	_cache.clear()
+
+
 func _ensure_bus(bus_name: String, db: float) -> void:
 	if AudioServer.get_bus_index(bus_name) >= 0:
 		return
@@ -72,6 +81,10 @@ func _load(path: String) -> AudioStream:
 
 func _play_stream(s: AudioStream, db: float, pitch: float) -> void:
 	if s == null:
+		return
+	if not is_inside_tree():
+		# экземпляр только что создан и ещё не добавлен в корень (add_child отложен) — играем на следующем кадре
+		_play_stream.call_deferred(s, db, pitch)
 		return
 	var p := _pool[_next]
 	_next = (_next + 1) % POOL
@@ -129,7 +142,7 @@ func set_roll(speed: float) -> void:
 		if _roll.playing:
 			_roll.stop()
 		return
-	if not _roll.playing:
+	if not _roll.playing and is_inside_tree():
 		_roll.play()
 	_roll.volume_db = linear_to_db(v) - 8.0
 	_roll.pitch_scale = 0.8 + 0.5 * v
@@ -147,7 +160,10 @@ func play_music(path: String = MUSIC_BATTLE, fade: float = 1.5) -> void:
 		return
 	_music.stream = s
 	_music.volume_db = -40.0
-	_music.play()
+	if is_inside_tree():
+		_music.play()
+	else:
+		_music.play.call_deferred()
 	_fade_music(0.0 if not music_muted else -80.0, fade)
 
 

@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cf20krqiih7k4"
-path="res://.godot/imported/grifalon_fire_Image_1.png-0affe58c6bed92d592ad2953b4c432fd.ctex"
+path.s3tc="res://.godot/imported/grifalon_fire_Image_1.png-0affe58c6bed92d592ad2953b4c432fd.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "ef4f4d6f349e627f34c603679ee28c65"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/creatures_hd/grifalon_fire_Image_1.png"
-dest_files=["res://.godot/imported/grifalon_fire_Image_1.png-0affe58c6bed92d592ad2953b4c432fd.ctex"]
+dest_files=["res://.godot/imported/grifalon_fire_Image_1.png-0affe58c6bed92d592ad2953b4c432fd.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
