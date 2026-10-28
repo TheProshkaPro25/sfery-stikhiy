@@ -6,9 +6,12 @@ extends RefCounted
 
 ## Размер: длина/ширина фигуры = треть длины карты (в бою два существа + треть пустоты между ними), высота не больше MAX_HEIGHT.
 const FOOTPRINT := Arena.CARD_H / 3.0
-## По кадрам аниме: существо 0.6–0.7 длины карты.
-const MAX_HEIGHT := Arena.CARD_H * 0.7
-const MIN_HEIGHT := Arena.CARD_H * 0.6
+## Великаны над воротами: существо 0.85–1.0 длины карты (шар рядом с ним — горошина).
+const MAX_HEIGHT := Arena.CARD_H * 1.0
+const MIN_HEIGHT := Arena.CARD_H * 0.85
+## Предел длины вдоль карты (в третях карты) и ширины (в ширинах карты): в бою двое не пересекаются.
+const MAX_LEN := 1.75
+const MAX_WIDTH := 1.3
 const DIR := "res://assets/creatures/%s.glb"
 ## Модели существ (Pixal3D, со своей текстурой): assets/creatures_hd/<вид>_<стихия>.glb (= id без creature_).
 const HD_DIR := "res://assets/creatures_hd/%s.glb"
@@ -51,14 +54,15 @@ static func build(d: CreatureDef) -> Node3D:
 		var sy: float = maxf(box.size.y, 0.01)
 		var sz: float = maxf(box.size.z, 0.01)
 		# длина вдоль карты (модели смотрят вдоль Z) = треть карты; но не ниже MIN_HEIGHT,
-		# не длиннее 1.35 трети, не шире карты и не выше MAX_HEIGHT
+		# не длиннее MAX_LEN трети, не шире MAX_WIDTH карты и не выше MAX_HEIGHT
 		k = maxf(FOOTPRINT / sz, MIN_HEIGHT / sy)
-		k = minf(k, minf(FOOTPRINT * 1.6 / sz, minf(Arena.CARD_W * 1.1 / sx, MAX_HEIGHT / sy)))
+		k = minf(k, minf(FOOTPRINT * MAX_LEN / sz, minf(Arena.CARD_W * MAX_WIDTH / sx, MAX_HEIGHT / sy)))
 	model.scale = Vector3.ONE * k
 	# основание на y=0, центр по XZ
 	model.position = Vector3(-(box.position.x + box.size.x * 0.5) * k, -box.position.y * k, -(box.position.z + box.size.z * 0.5) * k)
 	root.add_child(model)
 	root.set_meta("height", box.size.y * k)
+	root.set_meta("extent", maxf(box.size.x, box.size.z) * k)  # наибольший размер по полу (для камеры)
 	if hd:
 		_fix_hd_materials(model, VisualUtil.attr_color(d.attribute))
 	else:
@@ -99,7 +103,7 @@ static func _fix_hd_materials(node: Node, rim_col: Color) -> void:
 			if m.metallic_texture != null:
 				# TRELLIS.2: полный PBR (metallic/roughness/AO/normal) — карты сохраняем, металл приглушаем,
 				# иначе без отражений окружения модели темнеют.
-				m.metallic = 0.3
+				m.metallic = 0.1
 				m.metallic_specular = 0.4
 				m.roughness = 1.0
 			else:

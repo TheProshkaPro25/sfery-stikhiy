@@ -16,6 +16,7 @@ var idle_on := false            ## включает «живой простой�
 
 var _base := Vector3.ZERO
 var _height := 1.5
+var _extent := 1.5
 var _flyer := false
 var _phase := 0.0
 var _blend := 0.0
@@ -37,6 +38,7 @@ func _ready() -> void:
 func set_model(model: Node3D, d: CreatureDef) -> void:
 	add_child(model)
 	_height = float(model.get_meta("height", 1.5))
+	_extent = float(model.get_meta("extent", _height))
 	_flyer = d != null and FLYERS.has(CreatureModels.archetype_of(d))
 	_color = VisualUtil.attr_color(d.attribute) if d != null else Color.WHITE
 	_meshes.clear()
@@ -47,6 +49,16 @@ func set_model(model: Node3D, d: CreatureDef) -> void:
 		_player.play("idle")
 		_player.seek(randf() * _player.get_animation("idle").length)  # не синхронно с соседями
 	reset()
+
+
+## Рост модели (м) без эффектов.
+func get_height() -> float:
+	return _height
+
+
+## Наибольший размер модели по полу (длина или размах), м.
+func get_extent() -> float:
+	return _extent
 
 
 func _collect(n: Node) -> void:

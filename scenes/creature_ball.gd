@@ -32,6 +32,14 @@ var _t := 0.0
 var _slow := 0.0
 var _pending_impulse := Vector3.ZERO
 var _has_pending := false
+## Визуальная дуга полёта: физика катит шар по полу (точность бросков не меняется),
+## а видимый шар летит над ним по параболе и подскакивает при касании.
+var _air_t := -1.0
+var _air_dur := 0.0
+var _air_h := 0.0
+var _label_near_hidden := false
+var _sparks: CPUParticles3D
+var _streak: CPUParticles3D
 
 
 func _init() -> void:
@@ -40,6 +48,12 @@ func _init() -> void:
 
 func _ready() -> void:
 	_ensure_built()
+	add_to_group(&"creature_balls")
+
+
+## Существо раскрыто и видно (камера облетает такие фигуры, а не проходит сквозь них).
+func is_figure_shown() -> bool:
+	return _open and visible and _figure.visible and is_inside_tree()
 
 
 func _ensure_built() -> void:
@@ -166,12 +180,122 @@ func _start_trail() -> void:
 		m.albedo_texture = VisualUtil.soft_dot()
 		q.material = m
 		_trail.mesh = q
-		add_child(_trail)
+		_visual.add_child(_trail)
 	_trail.emitting = true
+	if _sparks == null:
+		_build_ground_fx()
+
+
+## Длительность и высота видимой дуги для скорости броска v (м/с): дальний бросок летит выше и дольше.
+static func arc_for_speed(v: float) -> Vector2:
+	return Vector2(clampf(v / 42.0, 0.3, 1.15), clampf(v * 0.13, 0.8, 7.5))
+
+
+## Высота видимого шара над физическим через t секунд после броска: большая дуга и два подскока.
+static func arc_height(t: float, dur: float, h: float) -> float:
+	if t < 0.0:
+		return 0.0
+	if t < dur:
+		var s := t / dur
+		return 4.0 * h * s * (1.0 - s)
+	var hops := [[0.38, 0.2], [0.18, 0.05]]
+	var t0 := dur
+	for hop in hops:
+		var d: float = dur * float(hop[0])
+		if t < t0 + d:
+			var s2 := (t - t0) / d
+			return 4.0 * h * float(hop[1]) * s2 * (1.0 - s2)
+		t0 += d
+	return 0.0
+
+
+static func arc_total(dur: float) -> float:
+	return dur * (1.0 + 0.38 + 0.18)
+
+
+## Искры из-под катящегося шара и светящийся след по полю (частицы в мировых координатах).
+func _build_ground_fx() -> void:
+	var c: Color = VisualUtil.attr_color(def.attribute) if def != null else Color.WHITE
+	_sparks = CPUParticles3D.new()
+	_sparks.top_level = true
+	_sparks.local_coords = false
+	_sparks.emitting = false
+	_sparks.amount = 48
+	_sparks.lifetime = 0.45
+	_sparks.direction = Vector3.UP
+	_sparks.spread = 55.0
+	_sparks.initial_velocity_min = 2.5
+	_sparks.initial_velocity_max = 7.0
+	_sparks.gravity = Vector3(0, -22.0, 0)
+	_sparks.scale_amount_min = 0.4
+	_sparks.scale_amount_max = 1.0
+	var sg := Gradient.new()
+	sg.set_color(0, Color(1.0, 0.95, 0.8, 1.0))
+	sg.add_point(0.4, Color(c.r, c.g, c.b, 0.9).lightened(0.3))
+	sg.set_color(sg.get_point_count() - 1, Color(c.r, c.g, c.b, 0.0))
+	_sparks.color_ramp = sg
+	var q := QuadMesh.new()
+	q.size = Vector2(0.12, 0.12)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.vertex_color_use_as_albedo = true
+	m.albedo_color = Color(2.5, 2.5, 2.5)
+	m.albedo_texture = VisualUtil.soft_dot()
+	q.material = m
+	_sparks.mesh = q
+	add_child(_sparks)
+
+	_streak = CPUParticles3D.new()
+	_streak.top_level = true
+	_streak.local_coords = false
+	_streak.emitting = false
+	_streak.amount = 120
+	_streak.lifetime = 1.6
+	_streak.gravity = Vector3.ZERO
+	_streak.initial_velocity_min = 0.0
+	_streak.initial_velocity_max = 0.0
+	_streak.scale_amount_min = 1.0
+	_streak.scale_amount_max = 1.0
+	var tg := Gradient.new()
+	tg.set_color(0, Color(c.r, c.g, c.b, 0.9).lightened(0.4))
+	tg.add_point(0.25, Color(c.r, c.g, c.b, 0.55))
+	tg.set_color(tg.get_point_count() - 1, Color(c.r, c.g, c.b, 0.0))
+	_streak.color_ramp = tg
+	var pl := PlaneMesh.new()  # лежит на полу
+	pl.size = Vector2(RADIUS * 2.2, RADIUS * 2.2)
+	var pmat := StandardMaterial3D.new()
+	pmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	pmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	pmat.vertex_color_use_as_albedo = true
+	pmat.albedo_texture = VisualUtil.soft_dot()
+	pmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	pl.material = pmat
+	_streak.mesh = pl
+	add_child(_streak)
+
+
+## Рост существа в раскрытом виде (м), для кадрирования камерой.
+func figure_height() -> float:
+	if _anim != null:
+		return _anim.get_height()
+	return Arena.CARD_H * 0.8
+
+
+## Масштаб кадра для камеры: наибольшее из роста и размера по полу (длинные и широкие существа).
+func figure_size() -> float:
+	if _anim != null:
+		return maxf(_anim.get_height(), _anim.get_extent())
+	return Arena.CARD_H * 0.8
 
 
 func launch(impulse: Vector3) -> void:
 	_start_trail()
+	var arc := arc_for_speed(impulse.length())
+	_air_dur = arc.x
+	_air_h = arc.y
+	_air_t = 0.0
 	collision_layer = 1
 	collision_mask = 1
 	freeze = false
@@ -322,6 +446,8 @@ func freeze_at(pos: Vector3) -> void:
 	collision_mask = 0
 	_launched = false
 	_has_pending = false
+	_air_t = -1.0
+	_visual.position = Vector3.ZERO
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
 	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
@@ -374,7 +500,29 @@ func ability_pulse() -> void:
 		_anim.ability_pulse()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _air_t >= 0.0:
+		var prev := _air_t
+		_air_t += delta
+		if prev < _air_dur and _air_t >= _air_dur:
+			SoundFx.i().bounce(6.0)  # касание пола после дуги
+		var y := arc_height(_air_t, _air_dur, _air_h)
+		if _air_t > arc_total(_air_dur) or not _launched:
+			_air_t = -1.0
+			y = 0.0
+		_visual.global_position = global_position + Vector3(0.0, y, 0.0)
+	elif _visual.position != Vector3.ZERO:
+		_visual.position = Vector3.ZERO
+	# подпись прячется, когда камера почти вплотную к ней (облёт сверху), иначе закрывает кадр
+	if _label.visible or _label_near_hidden:
+		var cam := get_viewport().get_camera_3d()
+		var near: bool = cam != null and cam.global_position.distance_to(_label.global_position) < figure_height() * 0.9
+		if near and _label.visible:
+			_label.visible = false
+			_label_near_hidden = true
+		elif not near and _label_near_hidden:
+			_label_near_hidden = false
+			_label.visible = _open and _label_allowed and (_open_tween == null or not _open_tween.is_running())
 	# «живой простой» включается, когда существо раскрыто и вырастание закончено
 	if _anim != null:
 		_anim.idle_on = _open and _figure.visible and (_open_tween == null or not _open_tween.is_running())
@@ -402,7 +550,18 @@ func _physics_process(delta: float) -> void:
 	if jolt > 1.5 and _t > 0.05:
 		SoundFx.i().bounce(jolt)
 	_prev_vel = v
-	SoundFx.i().set_roll(Vector2(v.x, v.z).length() if absf(v.y) < 1.0 else 0.0)
+	var on_ground := arc_height(_air_t, _air_dur, _air_h) < 0.05
+	var hs := Vector2(v.x, v.z).length()
+	SoundFx.i().set_roll(hs if absf(v.y) < 1.0 and on_ground else 0.0)
+	if _sparks != null:
+		var contact := global_position + Vector3(0.0, -RADIUS + 0.04, 0.0)
+		_sparks.global_position = contact
+		_streak.global_position = Vector3(contact.x, 0.03, contact.z)
+		_sparks.emitting = on_ground and hs > 5.0
+		_streak.emitting = on_ground and hs > 1.2
+		if hs > 0.1:
+			_sparks.direction = Vector3(-v.x / hs, 1.2, -v.z / hs)
+
 	if global_position.y < -1.0:
 		_finish()
 		return
@@ -418,6 +577,9 @@ func _finish() -> void:
 	SoundFx.i().set_roll(0.0)
 	if _trail != null:
 		_trail.emitting = false
+	if _sparks != null:
+		_sparks.emitting = false
+		_streak.emitting = false
 	_done = true
 	_launched = false
 	if global_position.y >= -1.0:

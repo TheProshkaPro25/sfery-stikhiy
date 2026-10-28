@@ -87,6 +87,10 @@ void sky() {
 """
 
 
+## Экспозиция кадра (подобрана по контактным листам: средняя яркость ~0.25–0.35 без пересвета).
+const LIGHT_EXPOSURE := 1.0
+
+
 func _build_world() -> void:
 	world = Node3D.new()
 	world.name = "World"
@@ -101,26 +105,31 @@ func _build_world() -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 1.1
+	env.background_energy_multiplier = 1.5
+	# Ясный аниме-свет: заполняющий ambient — ровный холодно-лиловый цвет (тёмное небо почти не светит)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.52, 0.52, 0.64)
+	env.ambient_light_energy = 0.75
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.0
+	env.tonemap_exposure = LIGHT_EXPOSURE
 	env.tonemap_white = 6.0
 	env.glow_enabled = true
 	env.glow_intensity = 0.8
-	env.glow_bloom = 0.08
-	env.glow_hdr_threshold = 0.9
+	env.glow_bloom = 0.0  # без общего «молочного» ореола на ярком кадре
+	env.glow_hdr_threshold = 1.1
 	env.glow_strength = 1.1
 	env.ssao_enabled = true
 	env.ssao_radius = 1.5  # большой радиус чернил впадины на моделях
 	env.ssao_intensity = 1.0
+	# туман к горизонту: поле без краёв, дальние ориентиры тонут в дымке цвета неба
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.30, 0.30, 0.34)
-	env.fog_density = 0.008 / Arena.WORLD
-	env.fog_sky_affect = 0.4
+	env.fog_light_color = Color(0.15, 0.13, 0.25)
+	env.fog_density = 0.0025
+	env.fog_aerial_perspective = 0.3
+	env.fog_sky_affect = 0.25
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 0.9
+	env.adjustment_saturation = 1.0
 	env.adjustment_contrast = 1.12
 	var we := WorldEnvironment.new()
 	we.environment = env
@@ -128,8 +137,8 @@ func _build_world() -> void:
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-52.0, -30.0, 0.0)
-	sun.light_color = Color(1.0, 0.82, 0.62)
-	sun.light_energy = 1.7
+	sun.light_color = Color(1.0, 0.9, 0.76)
+	sun.light_energy = 2.6
 	sun.shadow_enabled = true
 	# Чёткие тени под размер поля: мягкий PCSS (1.5°) на огромной арене давал шумные кляксы.
 	sun.light_angular_distance = 0.4
@@ -143,13 +152,12 @@ func _build_world() -> void:
 	var fill := DirectionalLight3D.new()
 	fill.rotation_degrees = Vector3(-35.0, 150.0, 0.0)
 	fill.light_color = Color(0.45, 0.6, 1.0)
-	fill.light_energy = 0.55
+	fill.light_energy = 0.9
 	world.add_child(fill)
 
 	cam = CameraRig.new()
-	cam.position = CameraRig.OVERVIEW_POS
 	world.add_child(cam)
-	cam.look_at(CameraRig.OVERVIEW_LOOK, Vector3.UP)
+	cam.snap_overview()
 	cam.current = true
 
 	arena = ARENA_SCENE.instantiate() as Arena
@@ -600,9 +608,13 @@ func _anim_stood(uid: int, slot: int) -> void:
 		return
 	b.slot = slot
 	hud.set_hint("%s встаёт на карту" % _cname(uid))
+	# короткий наезд после приземления (его начал _on_ball_settled), потом кат на облёт
+	if cam.mode == CameraRig.Mode.STATIC and not cam.is_overview():
+		await _wait(0.4)
+	var facing := Vector3(0.0, 0.0, -1.0 if _owner_of(uid) == HUMAN else 1.0)
 	b.freeze_at(arena.slot_position(slot) + Vector3(0.0, BALL_Y + 0.02, 0.0))
-	b.face_toward(b.global_position + Vector3(0.0, 0.0, -1.0 if _owner_of(uid) == HUMAN else 1.0))
-	cam.zoom_slot(arena.slot_position(slot))
+	b.face_toward(b.global_position + facing)
+	var orbit_t: float = cam.reveal_orbit(arena.slot_position(slot), b.figure_height(), facing, b.figure_size())
 	_focus_labels([uid])
 	SoundFx.i().play("ball_land", -3.0)
 	VisualUtil.ring_wave(world, arena.slot_position(slot) + Vector3(0, 0.08, 0), VisualUtil.attr_color(_creature_def(uid).attribute), Arena.CARD_W * 0.7, 0.55)
@@ -611,7 +623,10 @@ func _anim_stood(uid: int, slot: int) -> void:
 	b.open_animated()
 	b.roar(0.65)
 	get_tree().create_timer(0.8).timeout.connect(func() -> void: cam.shake(0.3, 0.2))
-	await _wait(0.85)
+	await _wait(orbit_t)
+	# кат на общий план
+	cam.snap_overview()
+	await _wait(0.3)
 
 
 func _anim_battle_started(slot: int, attacker_uid: int, defender_uid: int, powers: Array = []) -> void:
@@ -619,7 +634,11 @@ func _anim_battle_started(slot: int, attacker_uid: int, defender_uid: int, power
 	var atk: CreatureBall = balls.get(attacker_uid)
 	var dfn: CreatureBall = balls.get(defender_uid)
 	var base := arena.slot_position(slot)
-	cam.battle_view(base)
+	# короткий наезд после приземления атакующего, затем кат на общий план боя
+	if cam.mode == CameraRig.Mode.STATIC and not cam.is_overview():
+		await _wait(0.4)
+	var h: float = maxf(atk.figure_height() if atk != null else 0.0, dfn.figure_height() if dfn != null else 0.0)
+	cam.battle_view(base, h)
 	hud.set_battle_mode(true)
 	_battle_uids = [attacker_uid, defender_uid]
 	if powers.size() == 2:
@@ -641,14 +660,24 @@ func _anim_battle_started(slot: int, attacker_uid: int, defender_uid: int, power
 		dfn.open_animated()
 	hud.set_hint("Бой: %s против %s" % [_cname(attacker_uid), _cname(defender_uid)])
 	SoundFx.i().play("battle_start")
-	_cry(attacker_uid, "attack", 0.45)
-	_cry(defender_uid, "attack", 0.9, -4.0)
+	# общий план лицом к лицу → кат на крупный план каждого при рёве → снова общий план
+	_cry(attacker_uid, "attack", 0.85)
+	_cry(defender_uid, "attack", 1.65, -4.0)
 	if atk != null:
-		atk.roar(0.45)
+		atk.roar(0.85)
 	if dfn != null:
-		dfn.roar(0.9)
-	get_tree().create_timer(0.55).timeout.connect(func() -> void: cam.shake(0.3, 0.2))
-	await _wait(1.1)
+		dfn.roar(1.65)
+	get_tree().create_timer(0.95).timeout.connect(func() -> void: cam.shake(0.3, 0.2))
+	get_tree().create_timer(1.75).timeout.connect(func() -> void: cam.shake(0.25, 0.2))
+	await _wait(0.7)
+	if atk != null and is_instance_valid(atk):
+		cam.close_up(atk.global_position - Vector3(0, CreatureBall.RADIUS, 0), -Vector3(0, 0, dz), atk.figure_height(), atk.figure_size())
+	await _wait(0.8)
+	if dfn != null and is_instance_valid(dfn):
+		cam.close_up(dfn.global_position - Vector3(0, CreatureBall.RADIUS, 0), Vector3(0, 0, dz), dfn.figure_height(), dfn.figure_size())
+	await _wait(0.8)
+	cam.battle_wide(true)
+	await _wait(0.35)
 
 
 func _anim_card_revealed(slot: int, card_id: StringName) -> void:
@@ -667,6 +696,7 @@ func _anim_ability_msg(player: int, card_id: StringName, cancelled: bool, powers
 	SoundFx.i().play("ability_cancel" if cancelled else "ability_play")
 	if not cancelled:
 		ability_panel.show_played(card_id, player != HUMAN)
+		_anim_ability_cam(player)
 		_ability_fx(player, c)
 	if cancelled:
 		hud.flash("%s «%s» отменена" % ["Ваша карта" if player == HUMAN else "Карта соперника", cname])
@@ -674,6 +704,22 @@ func _anim_ability_msg(player: int, card_id: StringName, cancelled: bool, powers
 		hud.flash(("Вы играете «%s»" if player == HUMAN else "Соперник играет «%s»") % cname)
 	await _wait(1.1)
 	hud.clear_flash()
+	if not cancelled and _battle_uids.size() == 2:
+		cam.battle_wide()
+
+
+## Кат на автора способности с рывком камеры.
+func _anim_ability_cam(player: int) -> void:
+	if _battle_uids.size() != 2:
+		return
+	var mine: int = _battle_uids[0] if _owner_of(_battle_uids[0]) == player else _battle_uids[1]
+	var foe: int = _battle_uids[1] if mine == _battle_uids[0] else _battle_uids[0]
+	var mb: CreatureBall = balls.get(mine)
+	var fb: CreatureBall = balls.get(foe)
+	if mb == null:
+		return
+	var facing: Vector3 = (fb.global_position - mb.global_position) if fb != null else Vector3(0, 0, 1)
+	cam.ability_jerk(mb.global_position - Vector3(0, CreatureBall.RADIUS, 0), facing, mb.figure_height(), mb.figure_size())
 
 
 func _anim_battle_resolved(result: BattleResult) -> void:
@@ -684,7 +730,10 @@ func _anim_battle_resolved(result: BattleResult) -> void:
 	var wb: CreatureBall = balls.get(result.winner_uid)
 	var lb: CreatureBall = balls.get(result.loser_uid)
 	_cry(result.winner_uid, "attack", 0.0)
+	var wh: float = wb.figure_height() if wb != null else 10.0
 	if wb != null and lb != null:
+		# удар: быстрый наезд в точку столкновения
+		cam.impact((wb.global_position + lb.global_position) * 0.5 + Vector3(0, wh * 0.45, 0))
 		lb.counter_lunge(wb.global_position)
 		await wb.lunge(lb.global_position)
 		lb.take_hit(VisualUtil.attr_color(_creature_def(result.winner_uid).attribute).lightened(0.2))
@@ -697,10 +746,16 @@ func _anim_battle_resolved(result: BattleResult) -> void:
 	hud.screen_flash(Color(1, 1, 1, 0.55))
 	battle_hud.resolve(0 if result.winner_uid == result.attacker_uid else 1)
 	SoundFx.i().play_later("battle_win" if _owner_of(result.winner_uid) == HUMAN else "battle_lose", 0.35, -2.0)
-	await _wait(1.1)
+	await _wait(0.5)
+	# победитель: медленный облёт
+	if wb != null and is_instance_valid(wb):
+		var orbit_t: float = cam.winner_orbit(wb.global_position - Vector3(0, CreatureBall.RADIUS, 0), wh, wb.figure_size())
+		await _wait(minf(orbit_t, 1.7))
+	else:
+		await _wait(0.6)
 	battle_hud.close()
 	hud.set_battle_mode(false)
-	cam.overview()
+	cam.snap_overview()  # кат на общий план после боя
 	_focus_labels([])
 	await battle_overlay.show_result(result, _names_for(result))
 
@@ -856,18 +911,22 @@ func _do_launch(player: int) -> void:
 		return
 	_active_ball = b
 	if player == HUMAN:
-		cam.snap_overview()
+		cam.aim_view(b.global_position, 1.0)
 		_focus_labels([])
 		hud.set_hint("Потяните мышь назад от шара и отпустите (ПКМ - отмена)")
 		hud.coach("throw", "Бросок как из рогатки: зажми левую кнопку, потяни мышь назад от шара и отпусти. Чем дальше тянешь, тем сильнее бросок. Цель — попасть на карту ворот.")
 		throw_ctl.enable(b)
 	else:
-		cam.overview()
+		# кат за спину соперника, пауза-замах, затем рывок камеры вслед за шаром
+		cam.throw_view(b.global_position, -1.0)
 		_focus_labels([])
 		var to := Vector3(0.0, 0.0, 6.0)
 		if _ai_target_slot >= 0:
 			to = arena.slot_position(_ai_target_slot)
 		var imp := ThrowController.impulse_for_target(b.global_position, to, ai.get_aim_error(), rng)
+		await get_tree().create_timer(0.55).timeout
+		if _game_over or not is_instance_valid(b) or _active_ball != b:
+			return
 		SoundFx.i().play("ball_throw", -3.0)
 		b.launch(imp)
 		cam.follow(b)
