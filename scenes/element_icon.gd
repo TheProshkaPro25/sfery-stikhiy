@@ -11,14 +11,14 @@ static var _cache: Dictionary = {}
 
 
 static func badge(el: int) -> Texture2D:
-	return _get(el, true)
+	return _tex(el, true)
 
 
 static func glyph(el: int) -> Texture2D:
-	return _get(el, false)
+	return _tex(el, false)
 
 
-static func _get(el: int, with_disc: bool) -> Texture2D:
+static func _tex(el: int, with_disc: bool) -> Texture2D:
 	el = clampi(el, 0, 5)
 	var key := el * 2 + (1 if with_disc else 0)
 	if not _cache.has(key):

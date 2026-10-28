@@ -217,9 +217,11 @@ func _fade_ghost(i: int) -> void:
 		sm.set_shader_parameter("hover", hv)
 		g.visible = on
 		return
+	var vis0: Variant = sm.get_shader_parameter("vis")  # null, пока параметр ни разу не задан
+	var hov0: Variant = sm.get_shader_parameter("hover")
 	var tw := create_tween().set_parallel(true)
-	tw.tween_method(_ghost_vis.bind(g), float(sm.get_shader_parameter("vis")), 1.0 if on else 0.0, 0.25 if on else 0.35)
-	tw.tween_method(func(v: float) -> void: sm.set_shader_parameter("hover", v), float(sm.get_shader_parameter("hover")), hv, 0.15)
+	tw.tween_method(_ghost_vis.bind(g), float(vis0) if vis0 != null else 0.0, 1.0 if on else 0.0, 0.25 if on else 0.35)
+	tw.tween_method(func(v: float) -> void: sm.set_shader_parameter("hover", v), float(hov0) if hov0 != null else 0.0, hv, 0.15)
 	if not on:
 		tw.chain().tween_callback(func() -> void: g.visible = _lit.has(i))
 	while _ghost_tw.size() <= i:

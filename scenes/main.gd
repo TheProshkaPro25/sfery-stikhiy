@@ -4,6 +4,7 @@ extends Node
 
 const ARENA_SCENE: PackedScene = preload("res://scenes/arena.tscn")
 const BALL_SCENE: PackedScene = preload("res://scenes/creature_ball.tscn")
+const AttackFx := preload("res://scenes/attack_fx.gd")
 const CARD_SCENE: PackedScene = preload("res://scenes/arena_card_node.tscn")
 const HUD_SCENE: PackedScene = preload("res://scenes/ui/hud.tscn")
 const SETUP_SCENE: PackedScene = preload("res://scenes/ui/setup_panel.tscn")
@@ -1166,6 +1167,8 @@ func _anim_battle_resolved(result: BattleResult) -> void:
 		lb.counter_lunge(wb.global_position)
 		await wb.lunge(lb.global_position)
 		lb.take_hit(VisualUtil.attr_color(_creature_def(result.winner_uid).attribute).lightened(0.2))
+		AttackFx.play(world, _creature_def(result.winner_uid).attribute, wb.global_position - Vector3(0, CreatureBall.RADIUS, 0),
+				lb.global_position - Vector3(0, CreatureBall.RADIUS, 0), lb.figure_height(), lb.figure_size(), wh)
 		var mid: Vector3 = (wb.global_position + lb.global_position) * 0.5 + Vector3(0, Arena.FIG_H * 0.25, 0)
 		var wc: Color = VisualUtil.attr_color(_creature_def(result.winner_uid).attribute)
 		VisualUtil.burst(world, mid, wc.lightened(0.3), Arena.WORLD)
@@ -1202,6 +1205,11 @@ func _anim_no_winner(result: BattleResult) -> void:
 			db.counter_lunge(ab.global_position)
 			ab.take_hit(Color(1.0, 0.4, 0.3))
 			db.take_hit(Color(1.0, 0.4, 0.3))
+			var floor_off := Vector3(0, CreatureBall.RADIUS, 0)
+			AttackFx.play(world, _creature_def(result.attacker_uid).attribute, ab.global_position - floor_off,
+					db.global_position - floor_off, db.figure_height(), db.figure_size(), ab.figure_height())
+			AttackFx.play(world, _creature_def(result.defender_uid).attribute, db.global_position - floor_off,
+					ab.global_position - floor_off, ab.figure_height(), ab.figure_size(), db.figure_height())
 		SoundFx.i().play("clash")
 		cam.shake(1.0, 0.5)
 		hud.screen_flash(Color(1.0, 0.35, 0.25, 0.5))

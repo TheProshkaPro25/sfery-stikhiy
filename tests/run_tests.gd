@@ -98,12 +98,33 @@ func _initialize() -> void:
 	_test_turn_limit()
 	_test_determinism()
 	_test_simulation()
+	await _test_attack_fx()
 	print("")
 	print("Проверок: %d, ошибок: %d" % [_checks, _failures])
 	quit(1 if _failures > 0 else 0)
 
 
 # ---------------------------------------------------------------- утилиты
+
+## Эффекты удара AttackFx: каждая стихия на каждом уровне графики создаёт узлы и все их освобождает по окончании.
+func _test_attack_fx() -> void:
+	var fx = load("res://scenes/attack_fx.gd")
+	var host := Node3D.new()
+	root.add_child(host)
+	await process_frame
+	var old_level: int = GraphicsSettings.level
+	for lvl in 3:
+		GraphicsSettings.force_level(lvl)
+		for attr in 6:
+			var dur: float = fx.play(host, attr, Vector3(-3, 0, 0), Vector3(3, 0, 0), 4.0, 3.0, 4.0)
+			_check(dur > 0.4 and dur < 1.0, "AttackFx: длительность стихии %d (уровень %d): %f" % [attr, lvl, dur])
+			_check(host.get_child_count() > 0, "AttackFx: стихия %d создаёт узлы" % attr)
+	await create_timer(1.6).timeout
+	_check(host.get_child_count() == 0, "AttackFx: узлы освобождены (осталось %d)" % host.get_child_count())
+	_check(fx.play(null, 0, Vector3.ZERO, Vector3.ONE, 1.0, 1.0) == 0.0, "AttackFx: без родителя ничего не делает")
+	GraphicsSettings.level = old_level
+	host.queue_free()
+
 
 func _check(cond: bool, msg: String) -> void:
 	_checks += 1
