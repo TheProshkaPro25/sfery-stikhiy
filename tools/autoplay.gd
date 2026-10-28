@@ -16,9 +16,17 @@ var match_frames := 0
 var acted_key := ""
 
 func _initialize() -> void:
+	_lock_fps()
 	Engine.time_scale = 4.0
 	Engine.physics_ticks_per_second = 240
 	_new_match()
+
+## Проверки (кроме замеров производительности) идут с лимитом 60 fps — без записи в settings.cfg.
+## perf.gd снимает лимит после super._initialize().
+func _lock_fps() -> void:
+	GraphicsSettings.max_fps = 60
+	Engine.max_fps = 60
+
 
 func _new_match() -> void:
 	if main != null:

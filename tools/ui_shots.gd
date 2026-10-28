@@ -11,6 +11,7 @@ func _initialize() -> void:
 	if args.size() > 0:
 		out_dir = args[0]
 	DirAccess.make_dir_recursive_absolute(out_dir)
+	_lock_fps()
 	Engine.time_scale = 2.0
 	Engine.physics_ticks_per_second = 240
 	main = load("res://scenes/main.tscn").instantiate()
