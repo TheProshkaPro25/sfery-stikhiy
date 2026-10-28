@@ -103,10 +103,15 @@ void fragment() {
 	logo.add_theme_constant_override("shadow_outline_size", 18)
 	_column.add_child(logo)
 
-	# шесть стихий — цветные точки под логотипом и подзаголовок
+	# шесть стихий — цветные точки под логотипом, подзаголовок — отдельной строкой ниже (в одном ряду с точками
+	# он налезал на них при другой ширине шрифта/окна)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
-	_column.add_child(row)
+	var row_pad := MarginContainer.new()
+	row_pad.add_theme_constant_override("margin_left", 6)
+	row_pad.add_theme_constant_override("margin_top", 2)
+	row_pad.add_child(row)
+	_column.add_child(row_pad)
 	for a in range(6):
 		var dot := Panel.new()
 		dot.custom_minimum_size = Vector2(14, 14)
@@ -115,9 +120,15 @@ void fragment() {
 		dot.add_theme_stylebox_override("panel", UiTheme.box(c, c.lightened(0.5), 1, 7, 0))
 		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(dot)
-	var sub := VisualUtil.label("  битва шести стихий", 20)
+	var sub := VisualUtil.label("битва шести стихий", 20)
 	sub.add_theme_color_override("font_color", UiTheme.TEXT_DIM)
-	row.add_child(sub)
+	sub.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	sub.add_theme_constant_override("outline_size", 4)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	var sub_pad := MarginContainer.new()
+	sub_pad.add_theme_constant_override("margin_left", 6)
+	sub_pad.add_child(sub)
+	_column.add_child(sub_pad)
 
 	var gap := Control.new()
 	gap.custom_minimum_size = Vector2(0, 26)

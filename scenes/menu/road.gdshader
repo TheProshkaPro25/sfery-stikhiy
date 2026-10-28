@@ -1,11 +1,9 @@
-// Дороги и мосты пейзажа меню (один MultiMesh из плоскостей 1×1). Машины — только шейдер: бегущие светлые
-// штрихи с хвостом (белые фары в одну сторону, красные габариты в другую), плотность — traffic (по времени
-// суток). Фонари — оранжевые точки по краям и тёплые пятна на асфальте ночью. Днём машины — цветные коробочки.
+// Дороги и мосты пейзажа меню (один MultiMesh из плоскостей 1×1): асфальт, разметка, бордюр. Фонари — оранжевые
+// точки по краям и тёплые пятна на асфальте ночью. Машины — отдельные меши (MenuTraffic, vehicle.gdshader).
 // INSTANCE_CUSTOM: x — длина, м; y — зерно; z — полос в одну сторону; w — скорость (множитель).
 shader_type spatial;
 render_mode diffuse_burley;
 
-uniform float traffic = 0.6;
 uniform float night = 0.0;
 uniform float anim_t = 0.0;
 
@@ -46,28 +44,6 @@ void fragment() {
 	// бордюр
 	float curb = smoothstep(half_w - 0.35 - pix, half_w - 0.35, aw);
 	albedo = mix(albedo, vec3(0.32), curb);
-
-	// машины
-	float dir = w > 0.0 ? 1.0 : -1.0;
-	float lane = clamp(floor((aw - 0.3) / lane_w), 0.0, lanes - 1.0);
-	float lane_c = 0.3 + (lane + 0.5) * lane_w;
-	float across = 1.0 - smoothstep(0.55, 0.55 + max(pix * 1.5, 0.25), abs(aw - lane_c));
-	float spd = (11.0 + 7.0 * h21(vec2(seed * 31.0, lane))) * cd.w;
-	float spacing = 22.0;
-	float pos = s - dir * spd * anim_t + h21(vec2(lane, seed)) * 50.0;
-	float ci = floor(pos / spacing);
-	float fr = fract(pos / spacing);
-	float present = step(h21(vec2(ci, lane * 7.0 + seed * 13.0 + dir)), traffic);
-	// голова машины в начале ячейки (по ходу движения), хвост светится позади
-	float ph = dir > 0.0 ? 1.0 - fr : fr;           // расстояние от головы назад, в долях ячейки
-	float body = 1.0 - smoothstep(0.17, 0.2, ph);
-	float trail = exp(-ph * 9.0);
-	float car_mask = across * present;
-	vec3 car_col = mix(vec3(0.6, 0.1, 0.08), vec3(0.85), h21(vec2(ci, 3.0 + lane)));
-	car_col = h21(vec2(ci, 9.0)) > 0.7 ? vec3(0.1, 0.2, 0.45) : car_col;
-	albedo = mix(albedo, car_col, body * car_mask * (1.0 - night * 0.7));
-	vec3 lc = dir > 0.0 ? vec3(1.0, 0.92, 0.78) * 2.6 : vec3(1.0, 0.07, 0.03) * 2.4;
-	emit += lc * car_mask * mix(body * 0.25, trail * 1.1 + body * 0.6, night) * mix(0.15, 1.0, night);
 
 	// фонари по обочинам: точки и тёплые пятна
 	float lamp_s = fract(s / 26.0 + seed) * 26.0;

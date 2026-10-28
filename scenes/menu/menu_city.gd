@@ -2,8 +2,8 @@ class_name MenuCity
 extends Node3D
 ## Живой пейзаж главного меню: город у реки с видом с холма. Всё процедурно: небоскрёбы и дома — один MultiMesh
 ## единичных кубов (окна, неон, огни — в building.gdshader), крыши частных домов и деревья — ещё по MultiMesh,
-## дороги и мосты — MultiMesh плоскостей (машины — штрихи в road.gdshader), вода, земля, горы-силуэты, небо
-## с облаками. Цикл суток DayCycle.CYCLE_SEC: солнце/луна по дуге, свет, туман, окна и машины по времени.
+## дороги и мосты — MultiMesh плоскостей (разметка и фонари — road.gdshader), вода, земля, горы-силуэты, небо
+## с облаками. Транспорт (машины, метро, лодки, самолёт, вертолёт) — MenuTraffic, шары стихий в полночь — MenuOrbs. Цикл суток DayCycle.CYCLE_SEC: солнце/луна по дуге, свет, туман, окна и машины по времени.
 ## Точечных источников света нет — все огни эмиссией; тени — только от одного DirectionalLight3D.
 
 const RIVER_FAR := 20.0      # z дальней набережной (город)
@@ -34,17 +34,23 @@ var _road_mat: ShaderMaterial
 var _water_mat: ShaderMaterial
 var _terrain_mat: ShaderMaterial
 var _mount_mat: ShaderMaterial
-var _plane: MeshInstance3D
-var _plane_mat: ShaderMaterial
+var traffic: MenuTraffic
+var orbs: MenuOrbs
 var _rng := RandomNumberGenerator.new()
 var _noise := FastNoiseLite.new()
 var _parallax := Vector2.ZERO
+var _tree_mat: ShaderMaterial
+var _tower_mat: ShaderMaterial
+var _tree_mis: Array[MultiMeshInstance3D] = []
+var _tree_far_mi: MultiMeshInstance3D
 
 # накопители инстансов: [Transform3D, Color(custom)]
 var _bld: Array = []
 var _roads: Array = []
 var _roofs: Array = []
-var _trees: Array = []
+var _trees: Array = []        # [Transform3D, Color, вид кроны 0..2]
+var _towers: Array = []       # водобашни на крышах
+var _road_specs: Array = []   # для MenuTraffic: [a, b, ширина, полос, y, скорость]
 
 
 func _ready() -> void:
@@ -60,7 +66,14 @@ func _ready() -> void:
 	_build_near_bank()
 	_flush_multimeshes()
 	_build_mountains()
-	_build_plane()
+	traffic = MenuTraffic.new()
+	traffic.name = "Traffic"
+	add_child(traffic)
+	traffic.build(_road_specs, CAM_POS)
+	_road_specs.clear()
+	orbs = MenuOrbs.new()
+	orbs.name = "Orbs"
+	add_child(orbs)
 	cam = Camera3D.new()
 	cam.fov = 50.0
 	cam.near = 1.0
@@ -85,6 +98,12 @@ func apply_quality(level: int) -> void:
 	sun.directional_shadow_max_distance = 1400.0 if level == GraphicsSettings.Level.HIGH else 1000.0
 	env.glow_enabled = not low
 	_sky_mat.set_shader_parameter("detail", 0.0 if low else 1.0)
+	traffic.apply_quality(level)
+	orbs.apply_quality(level)
+	if _tree_far_mi != null:
+		_tree_far_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for mi in _tree_mis:
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if low else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 
 # ---------------------------------------------------------------- цикл суток
@@ -125,7 +144,6 @@ func _update(delta: float) -> void:
 		m.set_shader_parameter("anim_t", anim_t)
 	_bld_mat.set_shader_parameter("win_on", s.windows)
 	_bld_mat.set_shader_parameter("sky_tint", hor.lerp(zen, 0.5))
-	_road_mat.set_shader_parameter("traffic", s.traffic)
 	_water_mat.set_shader_parameter("win_on", s.windows)
 	_water_mat.set_shader_parameter("deep_col", Color(0.02, 0.05, 0.07).lerp(zen * 0.25, 0.5))
 	_terrain_mat.set_shader_parameter("night", night)
@@ -134,9 +152,10 @@ func _update(delta: float) -> void:
 	_mount_mat.set_shader_parameter("light_col", s.sun_color)
 	_mount_mat.set_shader_parameter("day", s.day)
 	_mount_mat.set_shader_parameter("night", night)
-	_plane_mat.set_shader_parameter("anim_t", anim_t)
-	_plane_mat.set_shader_parameter("night", night)
-	_update_plane()
+	_tree_mat.set_shader_parameter("anim_t", anim_t)
+	_tower_mat.set_shader_parameter("night", night)
+	traffic.update(anim_t, night, s.traffic, _water_mat)
+	orbs.update(phase, anim_t, _water_mat)
 	_update_camera(delta)
 
 
@@ -305,6 +324,7 @@ func _add_road(a: Vector2, b: Vector2, width: float, lanes: int, y: float, speed
 	var basis := Basis(Vector3.UP, ang) * Basis.from_scale(Vector3(len, 1.0, width))
 	var mid := (a + b) * 0.5
 	_roads.append([Transform3D(basis, Vector3(mid.x, y, mid.y)), Color(len, _rng.randf(), lanes, speed)])
+	_road_specs.append([a, b, width, lanes, y, speed])
 
 
 ## Отрезок прямой внутри эллипса города: по x (horizontal=true, z фиксирован) или по z.
@@ -431,6 +451,11 @@ func _add_building(base: Vector3, w: float, d: float, h: float) -> void:
 	else:
 		_add_box(base, Vector3(w, h, d), kind, seed_v, flags, hue)
 	var top := base + Vector3(0, h, 0)
+	# водобашня на крыше старого жилого дома
+	if kind == 2 and h > 16.0 and h < 90.0 and minf(w, d) > 12.0 and _rng.randf() < 0.28:
+		var ts := _rng.randf_range(0.8, 1.2)
+		var tp := top + Vector3(_rng.randf_range(-0.25, 0.25) * w, 0.0, _rng.randf_range(-0.25, 0.25) * d)
+		_towers.append([Transform3D(Basis(Vector3.UP, _rng.randf() * TAU) * Basis.from_scale(Vector3.ONE * ts), tp), Color(0, 0, 0, 0)])
 	# надстройки на крыше
 	for k in range(_rng.randi_range(0, 3 if h > 30.0 else 1)):
 		var sw := _rng.randf_range(2.0, minf(w, d) * 0.4)
@@ -455,6 +480,7 @@ func _build_river_and_bridges() -> void:
 	# дороги вдоль реки: набережная города и шоссе на нашем берегу
 	_add_road(Vector2(SEA_X + 40.0, RIVER_FAR - 6.0), Vector2(xr, RIVER_FAR - 6.0), 13.0, 2, CITY_Y + 0.15, 1.1)
 	_add_road(Vector2(SEA_X - 20.0, RIVER_NEAR + 11.0), Vector2(xr, RIVER_NEAR + 11.0), 18.0, 3, CITY_Y + 0.15, 1.5)
+	_build_metro()
 	for bi in range(BRIDGES.size()):
 		var bx: float = BRIDGES[bi]
 		var deck_y := 13.0
@@ -482,6 +508,27 @@ func _build_river_and_bridges() -> void:
 						var foot := Vector3(bx + sx * 9.5, deck_y + 0.5, zc + dir * (18.0 + k * 11.0))
 						var v := top - foot
 						_add_box(foot, Vector3(0.25, v.length(), 0.25), 8, 0.8, 0, 0.0, _basis_along(v.normalized()))
+
+
+## Эстакада метро над водой у городской набережной: настил, бортики, опоры в воде (поезда — MenuTraffic).
+## Настил ниже пролётов мостов — поезд проходит под ними.
+func _build_metro() -> void:
+	var z := MenuTraffic.RAIL_Z
+	var y := MenuTraffic.RAIL_Y
+	var x0: float = MenuTraffic.RAIL_X.x
+	var x1: float = MenuTraffic.RAIL_X.y
+	_add_box(Vector3((x0 + x1) * 0.5, y - 1.3, z), Vector3(x1 - x0, 1.3, 9.4), 7, 0.15)
+	for sz in [-1.0, 1.0]:
+		_add_box(Vector3((x0 + x1) * 0.5, y, z + sz * 4.5), Vector3(x1 - x0, 0.9, 0.4), 7, 0.25)
+	var x := x0 + 20.0
+	while x < x1 - 10.0:
+		var near_bridge := false
+		for bx: float in BRIDGES:
+			near_bridge = near_bridge or absf(x - bx) < 14.0
+		if not near_bridge:
+			_add_box(Vector3(x, -4.0, z), Vector3(2.4, y + 2.7 - 1.3, 3.2), 7, 0.5)
+			_add_box(Vector3(x, y - 2.6, z), Vector3(3.0, 1.3, 8.0), 7, 0.55)   # ригель под настилом
+		x += 42.0
 
 
 ## Базис, у которого ось Y смотрит вдоль dir (для тонких балок-вант).
@@ -525,8 +572,7 @@ func _build_near_bank() -> void:
 		if _rng.randf() > smoothstep(RIVER_NEAR + 20.0, RIVER_NEAR + 70.0, z):
 			continue
 		var s := _rng.randf_range(6.0, 13.0)
-		var c := Color(0.035, 0.08, 0.045).lerp(Color(0.10, 0.17, 0.07), _rng.randf())
-		_trees.append([Transform3D(Basis.from_scale(Vector3(s * 0.55, s, s * 0.55)), Vector3(x, y + s * 0.5 - 0.5, z)), c])
+		_trees.append(_tree_item(x, y - 0.4, z, s, 0 if _rng.randf() < 0.62 else 1))
 	# деревья на холмах за городом (дальний лес)
 	for k in range(1600):
 		var x := _rng.randf_range(-1600.0, 1800.0)
@@ -537,8 +583,25 @@ func _build_near_bank() -> void:
 		if y < 3.0:
 			continue
 		var s := _rng.randf_range(8.0, 16.0)
-		var c := Color(0.06, 0.12, 0.07).lerp(Color(0.12, 0.2, 0.09), _rng.randf())
-		_trees.append([Transform3D(Basis.from_scale(Vector3(s * 0.6, s, s * 0.6)), Vector3(x, y + s * 0.5 - 1.0, z)), c])
+		_trees.append(_tree_item(x, y - 1.0, z, s, 2))
+
+
+## Дерево: вид 0 — лиственное (крона из шаров), 1 — ель (шары сужаются кверху), 2 — дальнее (2 шара).
+## Цвет: тёмная хвоя / разная листва, изредка желтеющие и красноватые кроны; a — вид.
+func _tree_item(x: float, y: float, z: float, s: float, kind: int) -> Array:
+	var c: Color
+	if kind == 1:
+		c = Color(0.04, 0.09, 0.06).lerp(Color(0.07, 0.14, 0.08), _rng.randf())
+	else:
+		c = Color(0.07, 0.13, 0.05).lerp(Color(0.16, 0.22, 0.07), _rng.randf())
+		var r := _rng.randf()
+		if r < 0.07:
+			c = c.lerp(Color(0.42, 0.34, 0.08), 0.6)
+		elif r < 0.11:
+			c = c.lerp(Color(0.40, 0.14, 0.06), 0.5)
+	var w := s * (0.42 if kind == 1 else _rng.randf_range(0.55, 0.75))
+	var basis := Basis(Vector3.UP, _rng.randf() * TAU) * Basis.from_scale(Vector3(w, s, w))
+	return [Transform3D(basis, Vector3(x, y, z)), Color(c.r, c.g, c.b, kind)]
 
 
 # ---------------------------------------------------------------- сборка MultiMesh
@@ -562,20 +625,80 @@ func _flush_multimeshes() -> void:
 	roof_mat.roughness = 0.85
 	_make_mm(prism, _roofs, roof_mat, false, true)
 
-	var cone := CylinderMesh.new()
-	cone.top_radius = 0.0
-	cone.bottom_radius = 0.5
-	cone.height = 1.0
-	cone.radial_segments = 6
-	cone.rings = 1
-	var tree_mat := StandardMaterial3D.new()
-	tree_mat.vertex_color_use_as_albedo = true
-	tree_mat.roughness = 0.95
-	_make_mm(cone, _trees, tree_mat, false, true)
+	_tree_mat = ShaderMaterial.new()
+	_tree_mat.shader = load("res://scenes/menu/tree.gdshader")
+	var meshes := _tree_meshes()
+	for kind in range(3):
+		var part: Array = []
+		for it: Array in _trees:
+			if int(it[1].a) == kind:
+				part.append(it)
+		var mi := _make_mm(meshes[kind], part, _tree_mat, true, kind != 2)
+		if kind == 2:
+			_tree_far_mi = mi
+		else:
+			_tree_mis.append(mi)
+
+	_tower_mat = ShaderMaterial.new()
+	_tower_mat.shader = load("res://scenes/menu/vehicle.gdshader")
+	_make_mm(_tower_mesh(), _towers, _tower_mat, true, true)
+	_towers.clear()
 	_bld.clear()
 	_roads.clear()
-	_roofs.clear()
 	_trees.clear()
+	_roofs.clear()
+
+
+## Кроны в единицах: высота дерева 1, ширина 1 (масштаб инстанса — (ширина, высота, ширина)).
+func _tree_meshes() -> Array[ArrayMesh]:
+	var out: Array[ArrayMesh] = []
+	var k := MenuTraffic.MeshKit.new()
+	k.box(Vector3(-0.035, 0.0, -0.035), Vector3(0.035, 0.42, 0.035), 1)
+	k.shade = 0.5
+	k.ico(Vector3(0.0, 0.62, 0.0), Vector3(0.36, 0.27, 0.36), 0)
+	k.shade = 0.15
+	k.ico(Vector3(0.2, 0.5, 0.12), Vector3(0.27, 0.21, 0.27), 0)
+	k.shade = 0.85
+	k.ico(Vector3(-0.14, 0.78, -0.1), Vector3(0.25, 0.2, 0.25), 0)
+	k.shade = 0.3
+	k.ico(Vector3(-0.18, 0.5, 0.2), Vector3(0.22, 0.18, 0.22), 0)
+	out.append(k.commit())
+	k = MenuTraffic.MeshKit.new()
+	k.box(Vector3(-0.04, 0.0, -0.04), Vector3(0.04, 0.25, 0.04), 1)
+	var lv := [[0.3, 0.5, 0.2], [0.52, 0.38, 0.6], [0.72, 0.25, 0.4], [0.88, 0.13, 0.9]]
+	for l: Array in lv:
+		k.shade = l[2]
+		k.ico(Vector3(0.0, l[0], 0.0), Vector3(l[1], 0.16, l[1]), 0)
+	out.append(k.commit())
+	k = MenuTraffic.MeshKit.new()
+	k.shade = 0.35
+	k.ico(Vector3(0.0, 0.45, 0.0), Vector3(0.45, 0.4, 0.45), 0)
+	k.shade = 0.8
+	k.ico(Vector3(0.1, 0.75, 0.05), Vector3(0.3, 0.24, 0.3), 0)
+	out.append(k.commit())
+	return out
+
+
+## Водобашня на крыше: опоры, деревянный бак-восьмигранник, конус крыши. Части — как у vehicle.gdshader.
+func _tower_mesh() -> ArrayMesh:
+	var k := MenuTraffic.MeshKit.new()
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			k.box(Vector3(sx * 1.4 - 0.12, 0.0, sz * 1.4 - 0.12), Vector3(sx * 1.4 + 0.12, 3.0, sz * 1.4 + 0.12), 6)
+	k.box(Vector3(-1.7, 2.8, -1.7), Vector3(1.7, 3.05, 1.7), 6)
+	var ring: Array = []
+	var top: Array = []
+	for i in range(8):
+		var a := TAU * i / 8.0
+		ring.append(Vector3(cos(a) * 1.9, 3.05, sin(a) * 1.9))
+	k.prism(ring, Vector3(0, 4.2, 0), 7)
+	for i in range(8):
+		var a := TAU * i / 8.0
+		top.append(Vector3(cos(a) * 2.05, 7.25, sin(a) * 2.05))
+	var apex := Vector3(0, 9.0, 0)
+	for i in range(8):
+		k.tri(top[i], top[(i + 1) % 8], apex, 6, Vector3(0, 7.6, 0))
+	return k.commit()
 
 
 ## items: [Transform3D, Color]; custom=true — цвет идёт в INSTANCE_CUSTOM, иначе в цвет инстанса (COLOR).
@@ -655,50 +778,3 @@ func _build_mountains() -> void:
 func _mvert(st: SurfaceTool, p: Vector3, layer: float, h01: float) -> void:
 	st.set_color(Color(layer, 0.0, h01))
 	st.add_vertex(p)
-
-
-# ---------------------------------------------------------------- самолёт с огоньками
-
-const PLANE_SHADER := """
-shader_type spatial;
-render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
-uniform float anim_t = 0.0;
-uniform float night = 0.0;
-void vertex() {
-	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
-}
-float dot_at(vec2 uv, vec2 c, float r) { return smoothstep(r, 0.0, length(uv - c)); }
-void fragment() {
-	vec2 uv = UV * 2.0 - 1.0;
-	float strobe = step(0.92, fract(anim_t * 0.9));
-	float beacon = step(0.5, fract(anim_t * 0.7 + 0.3));
-	vec3 c = vec3(1.0) * dot_at(uv, vec2(0.0), 0.25) * strobe * 6.0;
-	c += vec3(1.0, 0.1, 0.05) * dot_at(uv, vec2(-0.6, 0.05), 0.18) * 2.5;
-	c += vec3(0.1, 1.0, 0.2) * dot_at(uv, vec2(0.6, 0.05), 0.18) * 2.5;
-	c += vec3(1.0, 0.2, 0.1) * dot_at(uv, vec2(0.0, 0.3), 0.15) * beacon * 3.0;
-	ALBEDO = c * mix(0.25, 1.0, night);
-}
-"""
-const PLANE_PERIOD := 55.0
-
-
-func _build_plane() -> void:
-	var q := QuadMesh.new()
-	q.size = Vector2(28, 28)
-	_plane = MeshInstance3D.new()
-	_plane.mesh = q
-	var sh := Shader.new()
-	sh.code = PLANE_SHADER
-	_plane_mat = ShaderMaterial.new()
-	_plane_mat.shader = sh
-	_plane.material_override = _plane_mat
-	_plane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(_plane)
-
-
-## Самолёт пролетает высоко над городом справа налево раз в PLANE_PERIOD секунд.
-func _update_plane() -> void:
-	var k := fposmod(anim_t, PLANE_PERIOD) / PLANE_PERIOD
-	var a := Vector3(2600.0, 520.0, -1500.0)
-	var b := Vector3(-2400.0, 600.0, -700.0)
-	_plane.position = a.lerp(b, k)

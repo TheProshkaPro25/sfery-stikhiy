@@ -5,6 +5,9 @@
 // INSTANCE_CUSTOM: x — зерно 0..1, y — тип (0 стекло, 1 офис-ленты, 2 жилой, 3 тёмная башня, 4 надстройка,
 // 5 антенна, 6 частный дом, 7 бетон моста/набережной, 8 пилон моста), z — флаги (1 неон, 2 корона, 4 рёбра,
 // 8 огни на углах крыши), w — оттенок неона 0..1.
+// Днём фасады — с деталями (всё процедурно, без текстур): рамы и импосты окон, подоконники, этажные карнизы
+// с тенью, цоколь, маркизы над витринами, руст на углах кирпичных домов, верхний карниз, потёки и грязь
+// у земли. Крыши: парапет с тенью, гравий/плитка, вентрешётки, у части — сады, солнечные панели, вертолётные площадки.
 shader_type spatial;
 render_mode diffuse_burley;
 
@@ -97,6 +100,45 @@ void fragment() {
 		float n = h21(floor(m.xz * 1.5));
 		albedo = (kind <= 3 ? vec3(0.17, 0.17, 0.18) : wall * 0.8) * (0.85 + 0.25 * n);
 		rough = 0.9;
+		if (kind <= 3 || kind == 6) {
+			vec2 e2 = min(m.xz, sz.xz - m.xz);
+			float e = min(e2.x, e2.y);
+			vec2 rf = fwidth(m.xz);
+			float px = max(rf.x, rf.y);
+			float rh = h11(seed * 59.0);
+			// плитка/рубероид полосами, вентрешётки
+			float tiles = step(0.5, fract(m.x / 2.0)) * 0.06;
+			albedo *= 0.94 + tiles;
+			vec2 vc = fract(m.xz / 7.0);
+			float vent = box_mask(vc, vec2(0.22), vec2(0.02 + px / 7.0)) * step(0.55, h21(floor(m.xz / 7.0) + seed * 31.0));
+			albedo = mix(albedo, vec3(0.55, 0.56, 0.57), vent * 0.8);
+			if (kind == 2 && rh < 0.3 && sz.x > 12.0) {
+				// сад на крыше: зелёные грядки с дорожками
+				float bed = step(0.25, fract(m.x / 4.0)) * step(0.2, fract(m.z / 5.0));
+				albedo = mix(albedo, vec3(0.13, 0.22, 0.07) * (0.8 + 0.4 * n), bed * step(2.0, e));
+			} else if (kind == 1 && rh < 0.45) {
+				// солнечные панели рядами
+				vec2 pc = fract(m.xz / vec2(2.2, 3.0));
+				float pan = step(0.08, pc.x) * step(pc.x, 0.92) * step(0.1, pc.y) * step(pc.y, 0.75) * step(2.0, e);
+				albedo = mix(albedo, vec3(0.05, 0.08, 0.16), pan);
+				rough = mix(rough, 0.25, pan);
+				metal = mix(metal, 0.5, pan);
+			} else if ((kind == 0 || kind == 3) && sz.y > 130.0 && min(sz.x, sz.z) > 18.0 && rh < 0.6) {
+				// вертолётная площадка: круг и «H»
+				vec2 q = m.xz - sz.xz * 0.5;
+				float r = length(q);
+				float ring = 1.0 - smoothstep(0.35, 0.35 + px, abs(r - 6.5));
+				float hh = step(abs(q.x), 2.2) * step(abs(q.y), 3.0) * (step(1.6, abs(q.x)) + step(abs(q.y), 0.35));
+				albedo = mix(albedo, vec3(0.22, 0.23, 0.24), step(r, 7.5));
+				albedo = mix(albedo, vec3(0.85, 0.82, 0.3), clamp(ring + hh, 0.0, 1.0));
+				emit += vec3(0.4, 1.0, 0.5) * step(abs(r - 7.3), 0.25) * step(0.5, fract(atan(q.y, q.x) * 2.546)) * night * 1.5;
+			}
+			// парапет: светлая кромка и тень за ней
+			float lip = 1.0 - smoothstep(0.55, 0.55 + px, e);
+			float shadow = 1.0 - smoothstep(0.55, 1.6, e);
+			albedo *= mix(1.0, 0.6, shadow * (1.0 - lip));
+			albedo = mix(albedo, kind <= 1 ? vec3(0.55, 0.55, 0.54) : wall * 0.95, lip);
+		}
 	} else if (ln.y < -0.5) {
 		albedo = vec3(0.1);
 	} else if (windows) {
@@ -117,6 +159,26 @@ void fragment() {
 		// межэтажные пояса чуть темнее, у офисов — вертикальные пилоны
 		float belt = smoothstep(0.0, 0.06 + fw.y, fr.y) * (1.0 - smoothstep(0.94 - fw.y, 1.0, fr.y));
 		albedo = wall * mix(0.82, 1.0, in_grid ? belt : 1.0);
+		float near = 1.0 - far;
+		if (kind == 2 || kind == 6 || kind == 1) {
+			// этажный карниз: светлая полка, под ней тень
+			float ledge = (1.0 - smoothstep(0.07, 0.07 + fw.y, fr.y));
+			float under = smoothstep(0.93 - fw.y, 0.97, fr.y) * (1.0 - smoothstep(0.985, 1.0, fr.y));
+			vec3 trim = kind == 1 ? wall * 1.12 : mix(wall, vec3(0.86, 0.84, 0.80), 0.55);
+			albedo = mix(albedo, trim, ledge * near * (in_grid ? 1.0 : 0.0));
+			albedo *= 1.0 - under * 0.25 * near * (in_grid ? 1.0 : 0.0);
+		}
+		if (kind == 1 && in_grid) {
+			// офис: вертикальные ламели между лентами окон
+			float fin = 1.0 - smoothstep(0.035, 0.035 + fw.x, min(fr.x, 1.0 - fr.x));
+			albedo = mix(albedo, wall * 1.15, fin * near);
+		}
+		if (kind == 2 || kind == 6) {
+			// руст на углах кирпичных/оштукатуренных домов
+			float edge = min(f.x, face_w - f.x);
+			float quoin = step(edge, 0.9 + 0.5 * step(0.5, fract(f.y / 1.2))) * step(hb, 0.33);
+			albedo = mix(albedo, vec3(0.78, 0.74, 0.66), quoin * near);
+		}
 		// огонёк окна
 		float hw = h31(vec3(ci, face_id + seed * 113.0));
 		float hf = h21(vec2(ci.y, seed * 71.0 + face_id));
@@ -143,14 +205,43 @@ void fragment() {
 			albedo = mix(albedo, glass, shop * 0.8);
 			vec3 sc = sh > 0.7 ? hue(sh * 3.0) * 0.6 + 0.4 : vec3(1.0, 0.82, 0.55);
 			emit += sc * shop * step(0.25, sh) * night * 1.8;
+			// цоколь и маркизы над витринами (днём)
+			float plinth = 1.0 - smoothstep(0.75, 0.8 + fw.y, f.y);
+			albedo = mix(albedo, wall * 0.55, plinth);
+			float awn = step(ground - 1.35, f.y) * step(f.y, ground - 0.75) * step(0.35, fract(f.x / 6.0)) * step(0.45, sh);
+			vec3 ac = hue(fract(sh * 5.0)) * 0.55 + 0.2;
+			float stripes = step(0.5, fract(f.x / 0.8));
+			albedo = mix(albedo, ac * mix(0.75, 1.0, stripes), awn * near);
 		}
+		// верхний карниз
+		float cornice = step(top + 0.1, f.y) * step(f.y, top + 0.55);
+		albedo = mix(albedo, kind == 0 || kind == 3 ? wall * 1.2 : mix(wall, vec3(0.85, 0.83, 0.78), 0.5), cornice * near);
+		albedo *= 1.0 - step(top - 0.35, f.y) * step(f.y, top + 0.1) * 0.3 * near;
+		// потёки под окнами и грязь у земли
+		float streak = h21(vec2(floor(f.x * 1.3), seed * 7.0));
+		albedo *= 1.0 - 0.09 * streak * smoothstep(0.3, 1.0, fract(v)) * near * (kind == 0 || kind == 3 ? 0.3 : 1.0);
+		albedo *= mix(0.78, 1.0, smoothstep(0.0, 7.0, f.y));
 		// стекло днём отражает небо
 		vec3 gl = glass * (0.8 + 0.4 * h11(hw * 5.3));
 		gl += sky_tint * 0.05 * (1.0 - night);
+		// рама окна, импост (у жилых и с фрамугой) и подоконник
+		float frame_k = 0.0;
+		if (in_grid && kind != 0 && kind != 3) {
+			vec2 fsz = kind == 1 ? vec2(0.06, 0.10) : vec2(0.10, 0.10);   // толщина рамы, м
+			float inner = box_mask(fr, max(wsize - 2.0 * fsz / cell, vec2(0.0)), fw);
+			float mull = (1.0 - smoothstep(0.025, 0.025 + fw.x, abs(fr.x - 0.5))) * (kind == 1 ? step(0.5, fract(ci.x * 0.5)) : 1.0);
+			float transom = kind == 1 ? 0.0 : (1.0 - smoothstep(0.02, 0.02 + fw.y, abs(fr.y - (0.5 + wsize.y * 0.22))));
+			frame_k = clamp(wm - inner + (mull + transom) * wm, 0.0, 1.0) * near;
+			float sill_y = (1.0 - wsize.y) * 0.5;
+			float sill = step(sill_y - 0.06, fr.y) * step(fr.y, sill_y) * step(abs(fr.x - 0.5), wsize.x * 0.5 + 0.06);
+			albedo = mix(albedo, vec3(0.80, 0.78, 0.74), sill * near * (kind == 1 ? 0.0 : 0.9));
+		}
+		vec3 frame_col = kind == 1 ? vec3(0.22, 0.23, 0.25) : (h11(seed * 41.0) < 0.6 ? vec3(0.88, 0.87, 0.84) : vec3(0.32, 0.22, 0.15));
+		gl = mix(gl, frame_col, frame_k);
 		albedo = mix(albedo, gl, wm);
 		rough = mix(rough, 0.12, wm);
 		metal = mix(0.0, glass_metal, wm);
-		emit += we * wm;
+		emit += we * wm * (1.0 - frame_k * 0.85);
 		// у стеклянных башен стекло и между окнами (сплошная навеска)
 		if (kind == 0 || kind == 3) {
 			float spandrel = in_grid ? 1.0 - wm : 0.0;

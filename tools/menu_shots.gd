@@ -2,15 +2,16 @@ extends SceneTree
 ## Главное меню в окне: снимки 8 моментов цикла суток и контактный лист, либо замер fps.
 ##   godot -s res://tools/menu_shots.gd --resolution 1920x1080 -- [ключ=значение ...]
 ## Ключи:
-##   mode=shots   — 8 кадров (рассвет, восход, утро, день, золотой час, закат, сумерки, ночь) → лист
+##   mode=shots   — 10 кадров (рассвет, восход, утро, день, золотой час, закат, сумерки, ночь, шары стихий
+##                  загораются, полночь — шары в кольце) → лист
 ##                  tools/shots_anime/menu_<Ш>x<В>.png, отдельные кадры — в dir=<папка> (по умолчанию user://menu_shots)
 ##   mode=fps     — vsync выкл., без лимита: 40 с, фаза пробегает весь цикл; итог строкой «MENUPERF …»
 ##   mode=cpu     — то же при 60 кадрах/с: загрузка основного потока (% одного ядра) по /proc
 ##   quality=     — low/medium/high (без записи в settings.cfg), иначе из user://settings.cfg
 ##   secs=40      — длительность замера
 
-const PHASES := [0.235, 0.27, 0.36, 0.52, 0.715, 0.752, 0.785, 0.92]
-const NAMES := ["рассвет", "восход", "утро", "день", "золотой час", "закат", "сумерки", "ночь"]
+const PHASES := [0.235, 0.27, 0.36, 0.52, 0.715, 0.752, 0.785, 0.92, 0.976, 0.015]
+const NAMES := ["рассвет", "восход", "утро", "день", "золотой час", "закат", "сумерки", "ночь", "шары загораются", "полночь"]
 
 var opts := {"mode": "shots", "quality": "", "secs": "40", "dir": "user://menu_shots"}
 var menu: MainMenu
@@ -58,14 +59,16 @@ func _shots() -> void:
 		menu.city.phase = PHASES[i]
 		for _f in range(24):
 			await process_frame
+		RenderingServer.force_draw(false)   # при заблокированном экране окно не перерисовывается само
 		var img := root.get_viewport().get_texture().get_image()
 		img.save_png("%s/menu_%s_%d.png" % [dir, tag, i])
 		imgs.append(img)
 		print("кадр %d: %s (фаза %.3f, %s)" % [i, NAMES[i], PHASES[i], DayCycle.clock_text(PHASES[i])])
-	# контактный лист 4×2, плитка 640 по ширине
+	# контактный лист по 4 в ряд, плитка 640 по ширине
 	var tw := 640
 	var th := int(round(640.0 * size.y / size.x))
-	var sheet := Image.create(tw * 4 + 12, th * 2 + 4, false, Image.FORMAT_RGB8)
+	var rows := (imgs.size() + 3) / 4
+	var sheet := Image.create(tw * 4 + 12, th * rows + 4 * (rows - 1), false, Image.FORMAT_RGB8)
 	sheet.fill(Color(0.1, 0.1, 0.1))
 	for i in range(imgs.size()):
 		var im := imgs[i]
