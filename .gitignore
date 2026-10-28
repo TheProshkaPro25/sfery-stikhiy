@@ -9,3 +9,5 @@ tools/blender/inspect/
 *.png
 *.jpg
 __pycache__/
+*.exe
+*.pck
