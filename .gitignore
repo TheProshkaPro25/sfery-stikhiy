@@ -11,3 +11,4 @@ tools/blender/inspect/
 __pycache__/
 *.exe
 *.pck
+build/
