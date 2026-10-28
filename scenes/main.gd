@@ -304,6 +304,7 @@ func _build_logic() -> void:
 
 func _start_game() -> void:
 	hud.set_hint("Сферы Стихий")
+	SoundFx.i().play_music(SoundFx.i().turn_music())  # матч начался — музыка ходов
 	var view: MatchState = ctrl.get_view(HUMAN)
 	var cols: Array = [[], []]
 	for p in range(2):
