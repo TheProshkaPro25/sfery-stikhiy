@@ -164,7 +164,8 @@ func choose_throw(view: MatchState) -> Dictionary:
 	return {"uid": best_uid, "target_slot": best_slot}
 
 
-## preview — MatchController.get_battle_preview(). &"" = пас (в бою пас окончателен).
+## preview — MatchController.get_battle_preview(). &"" = пас (если соперник уже спасовал — бой решается;
+## после моей карты соперник снова может ответить).
 ## legal: карты, разрешённые контроллером сейчас (ctrl.legal_abilities); пусто — вся рука.
 ## Обмен способностями: проигрываю — самая дешёвая карта, после которой выигрываю (HARD ищет и пару карт);
 ## выигрываю — пас, если соперник уже не может ответить или запас перевеса достаточен, иначе карта «про запас».
@@ -178,7 +179,8 @@ func choose_ability(view: MatchState, preview: BattleResult, legal: Array = []) 
 			cards.append(StringName(id))
 	if cards.is_empty():
 		return &""
-	var foe_can: int = _foe_plays_left(view, preview, side)
+	var foe_can: int = _foe_plays_left(view, preview, side)  # ответит ли соперник на мой пас
+	var foe_reply: int = _foe_plays_left(view, preview, side, true)  # ...и на мою карту (пас не окончателен)
 	var margin: float = _margin(preview, side)
 	if difficulty == Difficulty.EASY:
 		if margin > 0.0 or _rng.randf() < 0.35:
@@ -197,12 +199,16 @@ func choose_ability(view: MatchState, preview: BattleResult, legal: Array = []) 
 	var safe: float = 0.0
 	if foe_can > 0:
 		safe = 80.0 if difficulty == Difficulty.NORMAL else 60.0 + 40.0 * foe_can
+	# запас после своей карты: на неё соперник ответит, даже если до этого пасовал
+	var safe_play: float = 0.0
+	if foe_reply > 0:
+		safe_play = 80.0 if difficulty == Difficulty.NORMAL else 60.0 + 40.0 * foe_reply
 	if margin > 0.0:
 		if margin >= safe:
 			return &""
 		# выигрываю впритык, а соперник ещё ответит: усилиться, если это даёт запас
 		for id in cards:
-			if _margin(_with_card(view, preview, id, side), side) >= safe:
+			if _margin(_with_card(view, preview, id, side), side) >= safe_play:
 				return id
 		return &""
 	var best_id: StringName = &""
@@ -210,7 +216,7 @@ func choose_ability(view: MatchState, preview: BattleResult, legal: Array = []) 
 	for id in cards:
 		var m: float = _margin(_with_card(view, preview, id, side), side)
 		if m > 0.0:
-			if difficulty == Difficulty.NORMAL or m >= safe:
+			if difficulty == Difficulty.NORMAL or m >= safe_play:
 				return id
 			if m > best_m:
 				best_m = m
@@ -300,10 +306,11 @@ func _margin(r: BattleResult, side: int) -> float:
 	return raw
 
 
-## Сколько карт ещё может сыграть соперник в этом бою (0, если он спасовал или ему запрещены способности).
-func _foe_plays_left(view: MatchState, preview: BattleResult, side: int) -> int:
+## Сколько карт ещё может сыграть соперник в этом бою (0, если ему запрещены способности или он спасовал
+## и мой пас решает бой). after_play — ответ на мою карту: пас соперника тогда не мешает.
+func _foe_plays_left(view: MatchState, preview: BattleResult, side: int, after_play: bool = false) -> int:
 	var foe: int = 1 - side
-	if preview.passed[foe] or preview.silenced[foe]:
+	if (preview.passed[foe] and not after_play) or preview.silenced[foe]:
 		return 0
 	var used: int = 0
 	for pl in preview.plays:
@@ -458,7 +465,7 @@ func _choose_hard(view: MatchState, preview: BattleResult, cards: Array[StringNa
 		var r: BattleResult = _with_card(view, preview, id, side)
 		if _margin(r, side) <= 0.0:
 			continue
-		r.passed = preview.passed
+		r.passed = [false, false]  # на карту соперник может ответить, даже если пасовал
 		var cost: float = CARD_COST_RETURNS if CardEffects.returns_to_hand(CardDB.card(id)) else CARD_COST
 		var v: float = 1.0 - _flip_prob(view, r, side) - cost
 		if v > best_v + 0.001:

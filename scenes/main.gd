@@ -292,16 +292,18 @@ func _build_logic() -> void:
 	ctrl.abilities_recharged.connect(_on_abilities_recharged)
 	ctrl.gates_recycled.connect(func() -> void: events.push(func() -> void:
 		hud.flash("Ворота кончились: выигранные карты вернулись в руки")
-		await _wait(1.2)
+		await hud.wait_read(HudUI.read_time(1.2, "Ворота кончились: выигранные карты вернулись в руки"))
 		hud.clear_flash()))
 	ctrl.creatures_refilled.connect(func(p: int) -> void: events.push(_anim_refilled.bind(p)))
 	ctrl.standoff.connect(func(a: int, d: int) -> void: events.push(func() -> void:
-		hud.flash("Бросать некому — %s идёт на %s!" % [_cname(a), _cname(d)])
-		await _wait(1.4)
+		var msg := "Бросать некому — %s идёт на %s!" % [_cname(a), _cname(d)]
+		hud.flash(msg)
+		await hud.wait_read(HudUI.read_time(1.4, msg))
 		hud.clear_flash()))
 	ctrl.turn_skipped.connect(func(p: int) -> void: events.push(func() -> void:
-		hud.flash("Все ваши существа на воротах — ход переходит сопернику" if p == HUMAN else "Все существа соперника на воротах — ваш ход")
-		await _wait(1.2)
+		var msg2 := "Все ваши существа на воротах — ход переходит сопернику" if p == HUMAN else "Все существа соперника на воротах — ваш ход"
+		hud.flash(msg2)
+		await hud.wait_read(HudUI.read_time(1.2, msg2))
 		hud.clear_flash()))
 	ability_panel.ability_chosen.connect(_on_ability_chosen)
 	ability_panel.passed.connect(_on_ability_passed)
@@ -778,7 +780,7 @@ func _anim_fighter_swapped(old_uid: int, new_uid: int, _slot: int) -> void:
 	_cry(new_uid, "appear", 0.2)
 	VisualUtil.ring_wave(world, pos - Vector3(0, CreatureBall.RADIUS - 0.1, 0), VisualUtil.attr_color(_creature_def(new_uid).attribute), Arena.FIG_W * 0.7, 0.55)
 	_focus_labels(_battle_uids)
-	await _wait(0.9)
+	await hud.wait_read(0.9)
 	hud.clear_flash()
 
 
@@ -885,7 +887,7 @@ func _anim_attached(player: int, uid: int, card_id: StringName) -> void:
 		var c: Color = VisualUtil.attr_color(_creature_def(uid).attribute).lightened(0.3)
 		VisualUtil.ring_wave(world, b.global_position - Vector3(0, CreatureBall.RADIUS - 0.1, 0), c, Arena.FIG_W * 0.6, 0.6)
 	hud.flash("%s «%s»" % [_say(player, "Вы прикрепляете", "Соперник прикрепляет"), _card_name(card_id)])
-	await _wait(1.0)
+	await hud.wait_read(1.0)
 	hud.clear_flash()
 	if player == HUMAN and ctrl.get_phase() == MatchController.Phase.AWAIT_LANDING and throw_ctl.is_enabled():
 		_show_pre_throw()
@@ -1009,7 +1011,7 @@ func _anim_relocated(uid: int, _from: int, to: int) -> void:
 func _anim_refilled(player: int) -> void:
 	hud.coach("used", "Зона использованных: существа после промаха или боя отдыхают. Когда бросать некого, они все возвращаются в руку.")
 	hud.flash("Существа вернулись из зоны использованных" if player == HUMAN else "У соперника вернулись существа")
-	await _wait(1.0)
+	await hud.wait_read(1.4)
 	hud.clear_flash()
 
 
@@ -1129,7 +1131,7 @@ func _anim_ability_msg(player: int, card_id: StringName, cancelled: bool, powers
 		hud.flash("%s «%s» отменена" % ["Ваша карта" if player == HUMAN else "Карта соперника", cname])
 	else:
 		hud.flash(("Вы играете «%s»" if player == HUMAN else "Соперник играет «%s»") % cname)
-	await _wait(1.1)
+	await hud.wait_read(1.1)
 	hud.clear_flash()
 	if not cancelled and _battle_uids.size() == 2:
 		cam.battle_wide()
@@ -1284,6 +1286,7 @@ func _gate_slots() -> Array:
 func _on_throw_committed(impulse: Vector3) -> void:
 	arena.set_highlight([])
 	ability_panel.hide_panel()
+	hud.dismiss_coach("throw")  # бросок сделан — подсказка о нём больше не нужна
 	hud.set_hint("Шар катится...")
 	if _active_ball != null:
 		cam.follow(_active_ball)
@@ -1447,13 +1450,13 @@ func _do_ability(player: int) -> void:
 		if fusion_only:
 			hdr = "Слияние: добавьте карту поверх своей способности (%d против %d) или пас" % [preview.powers[0], preview.powers[1]]
 		var my_side: int = 0 if _owner_of(preview.attacker_uid) == HUMAN else 1
-		var note := "Пас окончателен: больше карт в этом бою вы не сыграете."
+		var note := "Пас — пропустить ход: если соперник сыграет карту, вы снова сможете ответить."
 		if preview.passed.size() == 2 and preview.passed[1 - my_side]:
-			note = "Соперник уже спасовал — отвечать будет нечем. " + note
+			note = "Соперник спасовал: ваш пас решит бой, а на вашу карту он сможет ответить."
 		hud.set_hint("Слияние?" if fusion_only else "Ваша способность?")
-		hud.coach("ability", "Бой! Ворота ещё закрыты. Карты играются по очереди, до 3 на бой — счётчик на плашке. Светящиеся — доступны. «Пас» окончателен: соперник сможет доиграть, а вы уже нет. Сыгранные карты отдыхают 2 боя и возвращаются в руку.")
+		hud.coach("ability", "Бой! Ворота ещё закрыты. Карты играются по очереди, до 3 на бой — счётчик на плашке. Светящиеся — доступны. «Пас» — пропуск хода: на карту соперника можно ответить, бой решается после двух пасов подряд. Сыгранные карты отдыхают 2 боя и возвращаются в руку.")
 		ability_panel.show_options(entries, hdr, {"moment": &"battle", "used": MatchController.MAX_BATTLE_ABILITIES - ctrl.abilities_left(HUMAN),
-			"pass_text": "Пас", "pass_tip": "Закончить обмен картами в этом бою. Назад дороги нет.", "note": note})
+			"pass_text": "Пас", "pass_tip": "Пропустить ход обмена. Спасуют оба подряд — бой решится.", "note": note})
 	else:
 		hud.set_hint("Соперник думает...")
 		var cid: StringName = ai.choose_ability(ctrl.get_view(AI_PLAYER), preview, ctrl.legal_abilities(AI_PLAYER))

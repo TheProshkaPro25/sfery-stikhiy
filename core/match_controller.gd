@@ -97,7 +97,7 @@ var _b_atk: int = -1
 var _b_def: int = -1
 var _b_plays: Array = []  # карты обмена этого боя: [[сторона, card_id], ...] (0 — атакующий)
 var _b_count: Array[int] = [0, 0]  # карт сторон в бою (с прикреплёнными)
-var _b_passed: Array[bool] = [false, false]  # пас окончателен
+var _b_passed: Array[bool] = [false, false]  # пас в текущем круге: сбрасывается, как только кто-то сыграл карту
 var _b_turn: int = 0  # сторона, чей черёд в обмене
 var _landed_uid: int = -1  # существо в окне «после приземления»
 var _gate_throw_slot: int = -1  # слот карты, выложенной «воротами + броском» в этот ход
@@ -566,8 +566,9 @@ func play_ability(player: int, card_id: StringName) -> Error:
 		_shift_gate(side)
 	elif CardEffects.is_effect(card, &"swap_fighter"):
 		_swap_fighter(side)
-	if not _b_passed[1 - side]:
-		_b_turn = 1 - side
+	# пошаговый обмен: после карты ход переходит сопернику, и оба снова могут ответить
+	_b_passed = [false, false]
+	_b_turn = 1 - side
 	_open_window()
 	_flush()
 	return OK
@@ -612,7 +613,8 @@ func _swap_fighter(side: int) -> void:
 	_ev(&"fighter_swapped", [old, nu, _b_slot])
 
 
-## Пас: в бою — окончательный (второй игрок может доиграть свои карты); после приземления — конец хода.
+## Пас: в бою — пропуск хода обмена (если соперник сыграет, можно ответить снова; спасовали оба подряд — бой
+## решается); после приземления — конец хода.
 func pass_ability(player: int) -> Error:
 	if player != state.active_player:
 		return ERR_UNAUTHORIZED
@@ -772,8 +774,8 @@ func _battle_player(side: int) -> int:
 	return state.creatures[uid].owner
 
 
-## Обмен способностями: открывает окно стороне _b_turn; кто спасовал или не может сыграть — выбывает из обмена.
-## Когда не может играть никто, бой решается.
+## Обмен способностями: открывает окно стороне _b_turn; кто не может сыграть — пропускает ход (как пас).
+## Когда обе стороны подряд спасовали или пропустили — бой решается.
 func _open_window() -> void:
 	for _guard in range(4):
 		var side: int = _b_turn

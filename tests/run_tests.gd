@@ -571,6 +571,8 @@ func _test_fusion_and_locks() -> void:
 	_check(ctrl.pass_ability(1) == OK, "защитник пасует")
 	_check(ctrl.legal_abilities(0) == [&"ability_dragnar_heart"], "Драгнару доступно слияние поверх своей карты")
 	_check(ctrl.play_ability(0, &"ability_dragnar_heart") == OK, "слияние сыграно")
+	_check(ctrl.get_active_player() == 1, "на слияние защитник может ответить")
+	ctrl.pass_ability(1)
 	_check(ctrl.get_phase() != MatchController.Phase.ABILITY_WINDOW, "бой решён")
 	_check(ctrl.state.players[0].captured.size() == 1, "Драгнар 340 + 60 + 80 + 200 побеждает")
 	# видовой замок: Ратник (LU) не может сыграть карту Драгнара
@@ -581,7 +583,8 @@ func _test_fusion_and_locks() -> void:
 	_check(not c2.legal_abilities(0).has(&"ability_dragnar_heart"), "Ратнику слияние Драгнара недоступно")
 
 
-## Обмен способностями: поочерёдно, пас окончателен, второй доигрывает, не больше 3 карт на игрока за бой.
+## Обмен способностями: пошаговый — поочерёдно, пас пропускает ход (на карту соперника можно ответить снова),
+## бой решается после двух пасов подряд; не больше 3 карт на игрока за бой.
 func _test_exchange() -> void:
 	var ab3: Array = [PLUS, MINUS, &"ability_fire_spark"]
 	var ctrl: MatchController = _battle_ctrl(ab3, [PLUS, MINUS, SHIELD], NEUTRAL, 0, 0, 61)
@@ -593,20 +596,24 @@ func _test_exchange() -> void:
 	ctrl.play_ability(0, PLUS)
 	ctrl.play_ability(1, PLUS)
 	ctrl.pass_ability(0)
-	_check(ctrl.get_active_player() == 1 and ctrl.get_phase() == MatchController.Phase.ABILITY_WINDOW, "после паса атакующего защитник доигрывает")
+	_check(ctrl.get_active_player() == 1 and ctrl.get_phase() == MatchController.Phase.ABILITY_WINDOW, "после паса атакующего ход защитника")
 	ctrl.play_ability(1, MINUS)
-	_check(ctrl.get_active_player() == 1, "спасовавший больше не получает окон")
-	_check(ctrl.play_ability(0, MINUS) != OK, "пас окончателен")
+	_check(ctrl.get_active_player() == 0 and ctrl.get_phase() == MatchController.Phase.ABILITY_WINDOW, "пас не окончателен: на карту соперника можно ответить")
+	_check(ctrl.play_ability(0, MINUS) == OK, "спасовавший отвечает картой")
 	ctrl.play_ability(1, SHIELD)
-	_check(ctrl.get_phase() != MatchController.Phase.ABILITY_WINDOW, "у защитника 3 карты — обмен окончен")
-	_check(log == [1, 0, 1, 1], "порядок окон после первого: %s" % str(log))
+	_check(ctrl.get_active_player() == 0 and ctrl.abilities_left(1) == 0, "у защитника 3 карты — ход атакующего")
+	ctrl.play_ability(0, &"ability_fire_spark")
+	_check(ctrl.get_phase() != MatchController.Phase.ABILITY_WINDOW, "обе стороны сыграли по 3 — бой решён")
+	_check(log == [1, 0, 1, 0, 1, 0], "окна по очереди после первого: %s" % str(log))
 	var c2: MatchController = _battle_ctrl(ab3, [SHIELD, MINUS, PLUS], NEUTRAL, 0, 0, 62)
+	c2.pass_ability(0)
+	_check(c2.get_active_player() == 1 and c2.get_phase() == MatchController.Phase.ABILITY_WINDOW, "один пас — бой ещё идёт")
+	c2.play_ability(1, PLUS)
 	c2.play_ability(0, PLUS)
 	c2.pass_ability(1)
-	c2.play_ability(0, MINUS)
-	_check(c2.abilities_left(0) == 1, "осталась одна карта из трёх")
-	c2.play_ability(0, &"ability_fire_spark")
-	_check(c2.get_phase() != MatchController.Phase.ABILITY_WINDOW, "после третьей карты бой решён")
+	_check(c2.get_active_player() == 0 and c2.get_phase() == MatchController.Phase.ABILITY_WINDOW, "после паса соперника можно доиграть")
+	c2.pass_ability(0)
+	_check(c2.get_phase() != MatchController.Phase.ABILITY_WINDOW, "два паса подряд — бой решён")
 
 
 ## Способности вне боя: до броска и после приземления карта прикрепляется к существу и срабатывает в его бою.
@@ -861,6 +868,7 @@ func _test_recharge() -> void:
 	ctrl.pass_ability(1)
 	_check(ctrl.get_phase() == MatchController.Phase.ABILITY_WINDOW and ctrl.legal_abilities(0).size() == 1, "после паса соперника третья карта доступна")
 	ctrl.play_ability(0, &"ability_fire_spark")
+	ctrl.pass_ability(1)
 	_check(ctrl.get_phase() != MatchController.Phase.ABILITY_WINDOW, "три карты в одном бою сыграны")
 	var ps: PlayerState = ctrl.state.players[0]
 	_check(ps.ability_hand.is_empty() and ps.abilities_used.size() == 3, "после боя руки нет: %s" % str(ps.ability_hand))

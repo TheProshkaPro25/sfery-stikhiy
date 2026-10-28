@@ -4,7 +4,7 @@ extends Control
 
 signal closed
 
-const AUTO_CLOSE_SEC := 5.0
+const AUTO_CLOSE_SEC := 5.0  # минимум; для длинных разборов добавляется время на строку
 
 var _dim: ColorRect
 var _panel: PanelContainer
@@ -100,8 +100,8 @@ func show_result(r: BattleResult, names: Dictionary = {}) -> Signal:
 	_vbox.add_child(win)
 
 	var btn := Button.new()
-	btn.text = "Дальше"
-	btn.custom_minimum_size = Vector2(160, 42)
+	btn.text = "Дальше (Enter)"
+	btn.custom_minimum_size = Vector2(190, 42)
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	btn.pressed.connect(_close)
 	_vbox.add_child(btn)
@@ -113,7 +113,7 @@ func show_result(r: BattleResult, names: Dictionary = {}) -> Signal:
 	_open = true
 	_seq += 1
 	var my_seq := _seq
-	get_tree().create_timer(AUTO_CLOSE_SEC).timeout.connect(func() -> void:
+	get_tree().create_timer(AUTO_CLOSE_SEC + 0.6 * float(_vbox.get_child_count())).timeout.connect(func() -> void:
 		if _open and _seq == my_seq:
 			_close())
 	return closed
@@ -197,6 +197,15 @@ func _pretty_source(src: String) -> String:
 			"mark":
 				return "метка «%s»" % n
 	return src
+
+
+func _unhandled_key_input(e: InputEvent) -> void:
+	if not _open or not (e is InputEventKey):
+		return
+	var k := e as InputEventKey
+	if k.pressed and not k.echo and k.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
+		get_viewport().set_input_as_handled()
+		_close()
 
 
 func _close() -> void:

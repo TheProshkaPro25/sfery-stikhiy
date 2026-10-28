@@ -25,6 +25,9 @@ var _cancel_btn: Button
 var _help_btn: Button
 var _battle := false
 var _built := false
+var _reading := 0
+var _skip_flag := false
+var _skip_hint: Label
 
 
 func _ready() -> void:
@@ -102,6 +105,13 @@ func _build() -> void:
 	_flash.visible = false
 	VisualUtil.place(_flash, 0.5, 0.0, 0.0, 128.0)
 	add_child(_flash)
+	_skip_hint = VisualUtil.label("Enter / Пробел / клик — дальше", 15)
+	_skip_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_skip_hint.modulate = Color(1, 1, 1, 0.7)
+	_skip_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_skip_hint.visible = false
+	VisualUtil.place(_skip_hint, 0.5, 0.56, 0.0, 0.0)
+	add_child(_skip_hint)
 
 	_help_btn = Button.new()
 	_help_btn.text = "?"
@@ -209,6 +219,54 @@ func flash(text: String) -> void:
 	tw.tween_property(_flash, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
 
+## Время на прочтение надписи: короткие не затягиваем, длинные держим дольше (≈ 0.035 с на символ).
+static func read_time(base: float, text: String = "") -> float:
+	return maxf(base, 0.5 + 0.035 * float(text.length()))
+
+
+## Пауза «на прочтение»: заканчивается по таймеру или раньше — по Enter / Пробелу / ЛКМ (не по клику на кнопке UI,
+## такой клик забирает интерфейс). Если пауза длинная, внизу показывается подпись «Enter — дальше».
+func wait_read(sec: float) -> void:
+	_build()
+	_skip_flag = false
+	_reading += 1
+	var show_hint := sec >= 0.8
+	if show_hint:
+		_skip_hint.visible = true
+	var t := 0.0
+	while t < sec and not _skip_flag and is_inside_tree():
+		await get_tree().process_frame
+		t += get_process_delta_time()
+	_reading -= 1
+	if _reading <= 0:
+		_reading = 0
+		_skip_hint.visible = false
+	_skip_flag = false
+
+
+func _unhandled_input(e: InputEvent) -> void:
+	var pressed := false
+	var is_key := false
+	if e is InputEventKey:
+		var k := e as InputEventKey
+		if k.pressed and not k.echo and k.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
+			pressed = true
+			is_key = true
+	elif e is InputEventMouseButton:
+		var m := e as InputEventMouseButton
+		# ЛКМ пропускает только ожидание надписи: в прицеле и броске _reading == 0
+		if m.pressed and m.button_index == MOUSE_BUTTON_LEFT and _reading > 0:
+			pressed = true
+	if not pressed:
+		return
+	if _reading > 0:
+		_skip_flag = true
+		get_viewport().set_input_as_handled()
+	elif is_key and _coach != null and is_instance_valid(_coach):
+		_close_coach()
+		get_viewport().set_input_as_handled()
+
+
 func clear_flash() -> void:
 	_build()
 	_flash.visible = false
@@ -272,7 +330,9 @@ func banner(title: String, sub: String, c: Color, hold: float = 1.0) -> void:
 	tw.tween_property(band, "scale:y", 1.0, 0.12)
 	tw.tween_property(t, "position:x", 0.0, 0.3).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(s, "position:x", 0.0, 0.36).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
-	tw.tween_interval(hold)
+	await tw.finished
+	await wait_read(read_time(hold, sub))
+	tw = create_tween()
 	tw.tween_property(t, "position:x", -vp.x, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.parallel().tween_property(s, "position:x", vp.x, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_property(band, "scale:y", 0.0, 0.1)
@@ -349,22 +409,52 @@ func _place_coach() -> void:
 	if _battle:
 		VisualUtil.place(_coach, 0.0, 0.0, 16.0, 232.0)
 	else:
-		VisualUtil.place(_coach, 0.0, 1.0, 12.0, -14.0)
+		VisualUtil.place(_coach, 0.0, 0.0, 12.0, 116.0)
 
 
-## Подсказка-наставник: один раз за запуск для каждого ключа. Компактная карточка в левом нижнем углу,
-## чтобы не перекрывать поле; закрывается кнопкой или сама через 14 с.
+## Подсказка-наставник: один раз за запуск для каждого ключа. Компактная карточка в левом нижнем углу.
+## Висит, пока игрок не нажмёт «Ясно» (или Enter / Пробел); новые подсказки ждут своей очереди и не сменяют её.
 func coach(key: String, text: String) -> void:
 	_build()
 	if _coached.has(key):
 		return
 	_coached[key] = true
+	_coach_queue.append([key, text])
+	if _coach == null or not is_instance_valid(_coach):
+		_show_next_coach()
+
+
+var _coach_queue: Array = []  # [ключ, текст]
+var _coach_key: String = ""
+
+
+## Подсказка про действие, которое игрок уже сделал, больше не нужна: закрыть (или убрать из очереди).
+func dismiss_coach(key: String) -> void:
+	_coach_queue = _coach_queue.filter(func(e: Array) -> bool: return e[0] != key)
+	if _coach_key == key and _coach != null and is_instance_valid(_coach):
+		_close_coach()
+
+
+func _close_coach() -> void:
 	if _coach != null and is_instance_valid(_coach):
 		_coach.queue_free()
+	_coach = null
+	_coach_key = ""
+	_show_next_coach()
+
+
+func _show_next_coach() -> void:
+	if _coach_queue.is_empty():
+		return
+	var e: Array = _coach_queue.pop_front()
+	_coach_key = e[0]
+	var text: String = e[1]
 	_coach = PanelContainer.new()
+	_coach.mouse_filter = Control.MOUSE_FILTER_IGNORE  # мышь ловит только кнопка: бросок можно тянуть и поверх подсказки
 	_coach.add_theme_stylebox_override("panel", UiTheme.box(Color(0.03, 0.06, 0.1, 0.9), Color(0.45, 0.8, 1.0), 2, 10, 10))
 	_place_coach()
 	var vb := VBoxContainer.new()
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vb.add_theme_constant_override("separation", 4)
 	_coach.add_child(vb)
 	var head := VisualUtil.label("Подсказка", 13)
@@ -375,17 +465,12 @@ func coach(key: String, text: String) -> void:
 	l.custom_minimum_size = Vector2(250, 0)
 	vb.add_child(l)
 	var b := Button.new()
-	b.text = "Ясно"
-	b.custom_minimum_size = Vector2(80, 30)
+	b.text = "Ясно (Enter)" if _coach_queue.is_empty() else "Далее (Enter) · ещё %d" % _coach_queue.size()
+	b.custom_minimum_size = Vector2(110, 30)
 	b.size_flags_horizontal = Control.SIZE_SHRINK_END
 	var wr: WeakRef = weakref(_coach)
 	b.pressed.connect(func() -> void:
-		var pn: Object = wr.get_ref()
-		if pn != null:
-			pn.queue_free())
+		if wr.get_ref() != null:
+			_close_coach())
 	vb.add_child(b)
 	add_child(_coach)
-	get_tree().create_timer(6.0 if _battle else 7.0).timeout.connect(func() -> void:
-		var pn: Object = wr.get_ref()
-		if pn != null:
-			pn.queue_free())

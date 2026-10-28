@@ -69,9 +69,23 @@ func is_enabled() -> bool:
 	return _enabled
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if not _enabled or _ball == null:
+## Начатую оттяжку ведёт _input: движение и отпускание над панелями интерфейса (подсказка, рука карт) не должны
+## теряться — иначе бросок не происходит. Нажатие — в _unhandled_input, чтобы кнопки интерфейса работали.
+func _input(event: InputEvent) -> void:
+	if not _dragging or not _enabled or _ball == null:
 		return
+	if event is InputEventMouseMotion or (event is InputEventMouseButton and (event as InputEventMouseButton).button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]):
+		_handle(event)
+		get_viewport().set_input_as_handled()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _dragging or not _enabled or _ball == null:
+		return
+	_handle(event)
+
+
+func _handle(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
