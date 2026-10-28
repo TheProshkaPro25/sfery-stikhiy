@@ -469,3 +469,10 @@ effort: medium
 - Экспорт: `godot --headless --export-release "Windows Desktop" "build/win/Сферы Стихий.exe"`, архив
   `build/Сферы_Стихий_win64.zip`. pck 1.58 → 0.89 ГБ: из сборки ушли старые копии текстур моделей (`*_0.png`, Godot
   переименовал их в `*_Image_0.png`); все 48 моделей, их текстуры и звуки в pck на месте. Тесты 1076/0.
+
+## Баг: material_override на удалённом кольце владельца (2026-10-28, вечер)
+- `CreatureBall.setup` очищал детей `_figure` целиком — вместе с кольцом владельца `_foot_ring`, созданным
+  в `_ensure_built` того же вызова. При раскрытии существа `_apply_owner_marks` писал в удалённый узел:
+  «Invalid assignment of property 'material_override' … on a base object of type 'previously freed'», кольца под
+  существами не было. Теперь очищается только модель. Тест `_test_ball_owner_marks` (без правки — 2 ошибки). Тесты 1078/0.
+- Экспорт Windows пересобран (`build/win`, `build/Сферы_Стихий_win64.zip`).

@@ -205,7 +205,10 @@ func setup(d: CreatureDef, u: int) -> void:
 	_shell_param("owner_col", OWNER_GLOW[0] if not _home_set else _owner_color())
 	_core.set_instance_shader_parameter("col", _ecol())
 	_set_glow(0.0)
-	VisualUtil.clear_children(_figure)
+	for c in _figure.get_children():
+		if c != _foot_ring:  # кольцо владельца живёт с шаром, меняется только модель
+			_figure.remove_child(c)
+			c.queue_free()
 	var model := CreatureModels.build(d)
 	if model != null:
 		# аниматор стоит в основании модели (пол), фигура вращается/масштабируется вокруг центра шара

@@ -99,6 +99,7 @@ func _initialize() -> void:
 	_test_determinism()
 	_test_simulation()
 	await _test_attack_fx()
+	await _test_ball_owner_marks()
 	print("")
 	print("Проверок: %d, ошибок: %d" % [_checks, _failures])
 	quit(1 if _failures > 0 else 0)
@@ -124,6 +125,22 @@ func _test_attack_fx() -> void:
 	_check(fx.play(null, 0, Vector3.ZERO, Vector3.ONE, 1.0, 1.0) == 0.0, "AttackFx: без родителя ничего не делает")
 	GraphicsSettings.level = old_level
 	host.queue_free()
+
+
+## Шар существа: setup (и повторный) не уничтожает кольцо владельца; раскрытие ставит ему материал без ошибок.
+func _test_ball_owner_marks() -> void:
+	CardDB.load_all()
+	var b = load("res://scenes/creature_ball.tscn").instantiate()
+	root.add_child(b)
+	b.setup(CardDB.creature(CardDB.creature_ids()[0]), 1)
+	b.setup(CardDB.creature(CardDB.creature_ids()[1]), 1)
+	await process_frame
+	_check(is_instance_valid(b._foot_ring) and b._foot_ring.get_parent() == b._figure, "CreatureBall: кольцо владельца живо после setup")
+	b.freeze_at(Vector3(0, 1, -5))
+	b.open_animated(false)
+	await process_frame
+	_check(is_instance_valid(b._foot_ring) and b._foot_ring.material_override != null, "CreatureBall: раскрытие ставит материал кольцу")
+	b.queue_free()
 
 
 func _check(cond: bool, msg: String) -> void:
