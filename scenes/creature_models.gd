@@ -116,6 +116,26 @@ static func _bounds(n: Node, xf: Transform3D) -> AABB:
 	return out
 
 
+## Мировой AABB видимых мешей поддерева (для камеры): учитывает плащи, крылья, хвосты. Отдельные эффекты
+## (top_level: столбы света, следы) не входят. Пустой AABB, если мешей нет.
+static func world_aabb(n: Node) -> AABB:
+	var out := AABB()
+	var has := false
+	var stack: Array[Node] = [n]
+	while not stack.is_empty():
+		var c: Node = stack.pop_back()
+		if c is Node3D and c != n and (c as Node3D).top_level:
+			continue
+		if c is MeshInstance3D:
+			var mi := c as MeshInstance3D
+			if mi.mesh != null and mi.is_visible_in_tree():
+				var b := mi.global_transform * mi.mesh.get_aabb()
+				out = b if not has else out.merge(b)
+				has = true
+		stack.append_array(c.get_children())
+	return out
+
+
 ## Материалы моделей Hunyuan3D: в glTF не указан metallicFactor, а по стандарту это 1.0 — полностью металл,
 ## который под рассеянным светом и тёмным небом выглядит почти чёрным. Делаем диэлектрик (кожа, чешуя)
 ## и добавляем контурный свет цвета стихии, чтобы тёмные существа читались на тёмном полу.

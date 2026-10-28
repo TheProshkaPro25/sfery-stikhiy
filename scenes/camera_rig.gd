@@ -11,9 +11,9 @@ enum Mode { STATIC, FOLLOW, ORBIT, DOLLY }
 
 const MIN_Y := 0.9
 const FAR := 3000.0
-## Обход фигур существ: радиус цилиндра (доля роста) и высота подъёма над ним (доля роста).
-const AVOID_RADIUS := 0.55
-const AVOID_TOP := 1.8
+## Обход фигур существ по их реальному AABB: запас — доля наибольшего размера по полу плюс минимум (м).
+const AVOID_MARGIN := 0.15
+const AVOID_MIN := 1.5
 
 ## Таблица ракурсов (мировые единицы; доли «h» — от высоты существа). Правится здесь.
 ## pos/look — смещения от опорной точки, fov — угол обзора, smooth — мягкость перехода (больше = резче),
@@ -124,27 +124,43 @@ func _process(delta: float) -> void:
 ## Камера не входит внутрь раскрытых существ: если цель (или, при слежении, луч к шару) попадает
 ## в цилиндр фигуры, цель поднимается над ней. Объект съёмки крупных планов стоит вне своего цилиндра.
 func _avoid_figures() -> void:
-	if not _avoid or mode == Mode.DOLLY or not is_inside_tree():
+	if not is_inside_tree():
 		return
-	var lift := _goal_pos.y
+	var los := _avoid and mode == Mode.FOLLOW
 	for n in get_tree().get_nodes_in_group(&"creature_balls"):
 		var b := n as CreatureBall
 		if b == null or not b.is_figure_shown():
 			continue
-		var h := b.figure_height()
-		var c := b.global_position
-		var r := b.figure_size() * AVOID_RADIUS + 1.0
-		# сама камера на пути к цели вошла в фигуру — поднимаем её над существом
-		if Vector2(_base.x - c.x, _base.z - c.z).length() < r and _base.y < h * 1.1:
-			_base.y = lerpf(_base.y, h * AVOID_TOP, 0.2)
-		var samples := [1.0]
-		if mode == Mode.FOLLOW:
-			samples = [1.0, 0.75, 0.5, 0.3]
-		for f in samples:
-			var p := _goal_look.lerp(_goal_pos, f)
-			if Vector2(p.x - c.x, p.z - c.z).length() < r and p.y < h * 1.1:
-				lift = maxf(lift, h * AVOID_TOP)
-	_goal_pos.y = lift
+		var box := CreatureModels.world_aabb(b)
+		if box.size == Vector3.ZERO:
+			continue
+		# запас на длинные элементы (плащ, крылья, хвост) и на анимацию рывков
+		box = box.grow(maxf(box.size.x, box.size.z) * AVOID_MARGIN + AVOID_MIN)
+		# жёсткое правило: ни цель, ни сама камера не бывают внутри габарита существа
+		_goal_pos = _push_out(_goal_pos, box)
+		_base = _push_out(_base, box)
+		# при погоне — луч от камеры к шару не должен упираться в существо: поднимаемся над ним
+		if los:
+			for f in [0.8, 0.6, 0.4]:
+				var p := _goal_look.lerp(_goal_pos, f)
+				if box.has_point(p):
+					_goal_pos.y = maxf(_goal_pos.y, box.end.y + AVOID_MIN)
+					break
+
+
+## Точка внутри коробки выталкивается по горизонтали от её центра к ближайшей стенке (высота не меняется).
+static func _push_out(p: Vector3, box: AABB) -> Vector3:
+	if not box.has_point(p):
+		return p
+	var c := box.get_center()
+	var d := Vector2(p.x - c.x, p.z - c.z)
+	if d.length() < 0.01:
+		d = Vector2(1.0, 0.0)
+	d = d.normalized()
+	var hx := box.size.x * 0.5
+	var hz := box.size.z * 0.5
+	var t := minf(hx / maxf(absf(d.x), 0.0001), hz / maxf(absf(d.y), 0.0001)) * 1.02
+	return Vector3(c.x + d.x * t, p.y, c.z + d.y * t)
 
 
 ## Итоговый кадр: чистая позиция + «плечо» (мягкий шум, разный по осям) + крен; не ниже MIN_Y.
