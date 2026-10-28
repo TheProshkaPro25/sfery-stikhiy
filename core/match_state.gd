@@ -48,6 +48,16 @@ func used_count(player: int) -> int:
 	return n
 
 
+## Полная копия без маскировки (для пробных расчётов: «Вихревая подмена», «Сдвиг плит»).
+func duplicate_full() -> MatchState:
+	var v: MatchState = duplicate_view(-1)
+	for i in range(2):
+		v.players[i] = players[i].clone(false)
+	for i in range(slots.size()):
+		v.slots[i] = slots[i].clone(false)
+	return v
+
+
 ## Копия состояния с точки зрения for_player: чужие закрытые карты арены и чужие руки замаскированы.
 ## for_player = -1 даёт вид наблюдателя (скрыто всё скрытое).
 func duplicate_view(for_player: int) -> MatchState:

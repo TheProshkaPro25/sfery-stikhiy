@@ -74,62 +74,90 @@ static func _make() -> Theme:
 
 const FUSION_BASE := Color(0.10, 0.30, 0.34)
 const FUSION_GLOW := Color(0.70, 1.0, 0.92)
+const SPECIES_BASE := Color(0.24, 0.30, 0.14)
+const SPECIES_GLOW := Color(0.78, 1.0, 0.55)
 
 
-## Цвета карты способности/арены: (основа, свечение).
-## Стихийные способности — в цвете своей стихии, слияния — бирюзовые, прочие способности — фиолетовые.
+## Цвета карты способности/ворот: (основа, свечение).
+## Стихийные и усиления — в цвете своей стихии, видовые — болотно-зелёные, слияние — бирюзовое.
 static func card_colors(def: CardDef) -> Array:
 	if def == null:
 		return [ARENA_NEUTRAL, GOLD]
 	if def.kind == CardDef.Kind.ABILITY:
 		if CardEffects.is_fusion(def):
 			return [FUSION_BASE, FUSION_GLOW]
+		if CardEffects.species_lock(def) != &"":
+			return [SPECIES_BASE, SPECIES_GLOW]
 		var lock: int = CardEffects.lock_attr(def)
 		if lock >= 0:
 			var lc: Color = VisualUtil.attr_color(lock)
+			if def.effect_id == &"boost":
+				return [lc.darkened(0.6), lc.lightened(0.15)]
 			return [lc.darkened(0.45), lc.lightened(0.35)]
 		return [ABILITY_BASE, ABILITY_GLOW]
 	var a: int = int(def.params.get("attribute", def.params.get("attr", -1)))
 	if a >= 0:
 		var c: Color = VisualUtil.attr_color(a)
 		return [c.darkened(0.25), c.lightened(0.45)]
+	if def.effect_id == &"species_double":
+		return [SPECIES_BASE, SPECIES_GLOW]
+	if CardEffects.is_gate_trap(def):
+		return [Color(0.42, 0.16, 0.12), Color(1.0, 0.55, 0.4)]
 	return [ARENA_NEUTRAL, GOLD]
 
 
 ## Подпись типа под названием.
 static func card_kind(def: CardDef) -> String:
+	var sp: StringName = CardEffects.species_lock(def)
 	if def.kind != CardDef.Kind.ABILITY:
-		return "Арена"
-	if CardEffects.is_fusion(def):
-		return "Слияние"
+		match CardDB.card_class(def):
+			&"gold":
+				return "Ворота стихии"
+			&"silver":
+				return "Ворота вида · %s" % CardDB.species_name(sp)
+		return "Ловушка" if CardEffects.is_gate_trap(def) else "Командные ворота"
+	if sp != &"":
+		return "%s · %s" % ["Слияние" if CardEffects.is_fusion(def) else "Вид", CardDB.species_name(sp)]
 	var lock: int = CardEffects.lock_attr(def)
 	if lock >= 0:
-		return "Стихия · %s" % VisualUtil.attr_name(lock)
+		return "%s · %s" % ["Усиление" if def.effect_id == &"boost" else "Стихия", VisualUtil.attr_name(lock)]
 	return "Способность"
 
 
-## Символ в центре карты (см. CardView.SHADER: 1..6 стихии, 7 слияние, 8 щит, 9/10 стрелки, 11 обмен, 12 запрет, 13 плюс, 0 эмблема).
+## Символ в центре карты (см. CardView.SHADER: 1..6 стихии, 7 слияние, 8 щит, 9/10 стрелки, 11 обмен, 12 запрет,
+## 13 плюс, 14 перенос, 15 бездна, 16 возрождение, 17 копия, 18 когти, 19 ×2, 20 флаг, 0 эмблема).
 static func card_sigil(def: CardDef) -> int:
 	if CardEffects.is_fusion(def):
 		return 7
-	var lock: int = CardEffects.lock_attr(def)
-	if lock >= 0:
-		return lock + 1
 	match String(def.effect_id):
-		"shield", "bastion":
+		"negate", "cap_own_base":
 			return 8
-		"boost_self", "all_in", "legacy", "home_element", "underdog", "overweight":
-			return 9
-		"weaken_foe", "trap", "backflow":
+		"boost", "boost_fix", "owner_power":
+			return 9 if CardEffects.species_lock(def) == &"" or def.effect_id != &"boost" else 18
+		"scorch", "weaken_mark", "weaken", "funnel", "weight":
 			return 10
-		"overflow", "swap_base", "steal_arena", "mirror":
+		"drain", "siphon", "shift_gate", "mirror":
 			return 11
-		"nullify_arena", "void", "seal":
+		"purge_gate", "eclipse", "silence", "nullify_gate", "strip", "mute", "limit":
 			return 12
-		"throne":
-			return 9
-		"rescue":
+		"reset_base", "web":
 			return 13
+		"gust", "swap_fighter", "ebb", "aloft":
+			return 14
+		"doom", "clash":
+			return 15
+		"revive", "recall", "fallen_call":
+			return 16
+		"copy":
+			return 17
+		"species_double":
+			return 19
+		"hold":
+			return 20
+		"radiance":
+			return 3
+		"pact", "dusk_throne":
+			return 5
 	var a: int = int(def.params.get("attr", -1))
 	if def.kind == CardDef.Kind.ARENA and a >= 0:
 		return a + 1
@@ -140,34 +168,22 @@ static func card_sigil(def: CardDef) -> int:
 static func card_badge(def: CardDef) -> String:
 	var n: int = int(def.params.get("amount", 0))
 	match String(def.effect_id):
-		"boost_self", "all_in", "home_element", "steal_advantage", "swap_attr", "rescue", "fusion_chain", "attr_bonus", "bastion", "twilight", "underdog", "throne":
-			return "+%d" % n
-		"weaken_foe", "trap":
-			return "−%d" % absi(n)
-		"drain":
+		"drain", "radiance", "pact", "funnel":
 			return "+%d / −%d" % [n, n]
-		"stone_wall":
-			return "+%d / +%d" % [n, int(def.params.get("amount_def", n))]
-		"legacy", "fusion_echo":
-			return "+%d ×" % n
-		"fusion_double":
+		"scorch", "eclipse", "weaken_mark", "weaken", "weight":
+			return "−%d" % n
+		"negate":
+			return "−%d" % n if n > 0 else ""
+		"species_double":
 			return "×2"
-		"absorb":
-			return "½"
-		"strip":
-			return "= БС"
-		"swap_base":
-			return "БС ⇆"
-		"steal_arena":
-			return "поле ⇆"
-		"overflow":
-			return "стихия"
-		"shield":
-			return "блок"
-		"nullify_arena", "void":
-			return "0"
-		"overweight":
-			return "×2"
+		"limit":
+			return "%d" % n
+		"attr_bonus":
+			var g: Array = def.params.get("g", [])
+			var a: int = int(def.params.get("attr", 0))
+			return "+%d" % (int(g[a]) if a < g.size() else n)
+	if n > 0:
+		return "+%d" % n
 	return ""
 
 
@@ -179,23 +195,23 @@ static func card_elements(def: CardDef) -> Array:
 	var a: int = int(def.params.get("attr", -1))
 	if a >= 0:
 		return [a]
-	if def.effect_id == &"twilight":
-		return [2, 4]
+	if def.effect_id == &"dusk_throne":
+		return [4]
 	return []
 
 
 # ---------------------------------------------------------------- подсказки для новичка
 
 const CLASS_HELP := {
-	&"gold": ["Золотые ворота", "Карта поля боя. Кладётся рубашкой вверх и открывается в бою. Даёт силу G существу своей стихии (остальным — нет)."],
-	&"silver": ["Серебряные ворота", "Карта поля боя с особым бонусом силы: помогает защитнику, слабейшему или нужным стихиям."],
-	&"bronze": ["Бронзовые ворота", "Карта поля боя, меняющая правила боя на ней: отменяет или удваивает преимущество стихий. Бывает ловушкой: срабатывает при открытии ворот."],
-	&"red": ["Красная способность", "Зависит от стихии. Стихийную может сыграть только существо этой стихии — она сильнее обычных."],
-	&"blue": ["Синяя способность", "Прибавка или отнятие силы G в бою."],
-	&"green": ["Зелёная способность", "Меняет ситуацию боя: отменяет карты, меняет силы местами, спасает существо."],
+	&"gold": ["Ворота стихии", "Карта поля боя. Кладётся рубашкой вверх и открывается в бою. «Поле» даёт силу только существу своей стихии (у каждой стихии своё число), «Алтарь силы» — +300 защитнику-владельцу."],
+	&"silver": ["Ворота вида", "Существо этого вида на воротах удваивает базовую силу — у любой стороны, так что соперник тоже может ими воспользоваться."],
+	&"bronze": ["Командные ворота", "Меняют правила боя: перекачка силы, предел силы, победитель остаётся, возврат выбывших. Ловушки срабатывают при открытии ворот, пока никто их не видит."],
+	&"red": ["Стихийная способность", "Играет только существо своей стихии. У каждой стихии своя тема: Пламя жжёт, Буря переносит, Свет возрождает, Камень сдвигает, Тень губит, Прилив глушит."],
+	&"blue": ["Усиление", "Лесенка силы своей стихии: +30 нельзя отменить, +100 при условии, большие числа — для отстающих (такие карты возвращаются в руку)."],
+	&"green": ["Видовая способность", "Играет только существо своего вида любой стихии: отмена, сброс силы, перекачка бонусов, «нельзя отменить»."],
 }
-const ABILITY_WHEN := "Играется в бою (обмен по очереди, до 3 карт на бой; «Пас» окончателен), до броска или после приземления — тогда карта прикрепляется к существу. Каждая карта — один раз за игру."
-const FUSION_WHEN := "Слияние: кладётся сразу поверх своей способности в том же бою и усиливает её."
+const ABILITY_WHEN := "Играется в бою (обмен по очереди, до 3 карт на бой; «Пас» окончателен), до броска или после приземления — тогда карта прикрепляется к существу. Каждая карта — один раз за игру, если не сказано иное."
+const FUSION_WHEN := "Слияние: кладётся поверх своей способности в том же бою и усиливает её."
 const GATE_WHEN := "В начале хода можно положить одну карту ворот: ближе к сопернику, рядом с другими картами. Можно сразу бросить на неё существо («Ворота + бросок»)."
 
 
@@ -210,6 +226,9 @@ static func card_help(def: CardDef) -> Array:
 	var lock: int = CardEffects.lock_attr(def)
 	if lock >= 0:
 		kind += " · только для стихии %s" % VisualUtil.attr_name(lock)
+	var sp: StringName = CardEffects.species_lock(def)
+	if sp != &"":
+		kind += " · только для вида %s" % CardDB.species_name(sp)
 	var cc := {&"gold": Color(1.0, 0.82, 0.35), &"silver": Color(0.82, 0.86, 0.92), &"bronze": Color(0.9, 0.58, 0.32),
 		&"red": Color(1.0, 0.45, 0.4), &"blue": Color(0.5, 0.7, 1.0), &"green": Color(0.5, 0.92, 0.58)}
 	var extra: String = ""

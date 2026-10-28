@@ -274,8 +274,15 @@ func _build_logic() -> void:
 	setup_panel.placed_throw.connect(_on_setup_placed_throw)
 	hud.creature_cancelled.connect(_on_gate_throw_cancelled)
 	ctrl.creature_relocated.connect(func(uid: int, a: int, b: int) -> void:
-		_log("%s переходит на другие ворота" % _cname(uid))
+		if a != b:
+			_log("%s переходит на другие ворота" % _cname(uid))
 		events.push(_anim_relocated.bind(uid, a, b)))
+	ctrl.creature_revived.connect(_on_creature_revived)
+	ctrl.creature_marked.connect(_on_creature_marked)
+	ctrl.fighter_swapped.connect(_on_fighter_swapped)
+	ctrl.gates_swapped.connect(_on_gates_swapped)
+	ctrl.gate_discarded.connect(_on_gate_discarded)
+	ctrl.abilities_recalled.connect(_on_abilities_recalled)
 	ctrl.gates_recycled.connect(func() -> void: events.push(func() -> void:
 		hud.flash("Ворота кончились: выигранные карты вернулись в руки")
 		await _wait(1.2)
@@ -349,30 +356,36 @@ func _ability_fx(player: int, def: CardDef) -> void:
 		VisualUtil.light_pillar(mb, Vector3(0, -CreatureBall.RADIUS, 0), ec, h * 1.8, r * 0.9, 0.9)
 		VisualUtil.spiral(world, base, ec, h * 1.2, r * 1.2, 1.1)
 		VisualUtil.ring_wave(world, base + Vector3(0, 0.1, 0), ec, r * 3.0, 0.7)
-		if eff == "drain" or eff == "absorb" or eff == "strip":
+		if eff in ["drain", "scorch", "radiance", "eclipse", "pact", "doom"]:
 			VisualUtil.burst(world, foe_base + Vector3(0, h * 0.5, 0), Color(0.8, 0.15, 0.2), Arena.WORLD * 0.7)
+		if eff in ["purge_gate", "eclipse", "shift_gate"]:
+			_gate_fx(base, foe_base)
 	elif cls == &"blue":
-		if eff == "weaken_foe":
-			VisualUtil.spiral(world, foe_base, Color(0.85, 0.15, 0.2), h, r, 1.0)
-			VisualUtil.burst(world, foe_base + Vector3(0, h * 0.5, 0), Color(0.8, 0.1, 0.15), Arena.WORLD * 0.7)
-		else:
-			VisualUtil.spiral(world, base, Color(1.0, 0.8, 0.35), h * 1.1, r, 1.0)
-			VisualUtil.ring_wave(world, base + Vector3(0, 0.1, 0), Color(1.0, 0.75, 0.3), r * 2.5, 0.6)
+		var bc: Color = VisualUtil.attr_color(CardEffects.lock_attr(def)).lightened(0.3) if CardEffects.lock_attr(def) >= 0 else Color(1.0, 0.8, 0.35)
+		VisualUtil.spiral(world, base, bc, h * 1.1, r, 1.0)
+		VisualUtil.ring_wave(world, base + Vector3(0, 0.1, 0), bc, r * 2.5, 0.6)
 	else:
-		var gc := Color(0.4, 1.0, 0.6)
+		var gc := UiTheme.SPECIES_GLOW
 		match eff:
-			"shield", "rescue":
+			"negate", "cap_own_base":
 				VisualUtil.dome(world, base, gc, r * 1.9, 1.6)
-			"nullify_arena":
-				var cardpos: Vector3 = (base + foe_base) * 0.5
-				VisualUtil.ring_wave(world, cardpos + Vector3(0, 0.1, 0), Color(0.9, 0.95, 1.0), Arena.CARD_H * 0.9, 0.8)
-				VisualUtil.burst(world, cardpos + Vector3(0, 0.5, 0), Color(0.8, 0.9, 1.0), Arena.WORLD)
-			"swap_base", "steal_arena":
-				VisualUtil.spiral(world, base, gc, h, r, 1.0)
-				if fb != null:
-					VisualUtil.spiral(world, foe_base, gc, h, r, 1.0)
+			"nullify_gate", "aloft":
+				_gate_fx(base, foe_base)
+			"siphon", "strip", "reset_base", "weaken_mark", "scorch":
+				VisualUtil.spiral(world, foe_base, Color(0.85, 0.15, 0.2), h, r, 1.0)
+				VisualUtil.burst(world, foe_base + Vector3(0, h * 0.5, 0), Color(0.8, 0.1, 0.15), Arena.WORLD * 0.7)
+				if eff == "reset_base":
+					VisualUtil.spiral(world, base, gc, h, r, 1.0)
 			_:
+				VisualUtil.spiral(world, base, gc, h, r, 1.0)
 				VisualUtil.ring_wave(world, base + Vector3(0, 0.1, 0), gc, r * 2.5, 0.7)
+
+
+## Вспышка на воротах между бойцами (отмена или сдвиг ворот).
+func _gate_fx(base: Vector3, foe_base: Vector3) -> void:
+	var cardpos: Vector3 = (base + foe_base) * 0.5
+	VisualUtil.ring_wave(world, cardpos + Vector3(0, 0.1, 0), Color(0.9, 0.95, 1.0), Arena.CARD_H * 0.9, 0.8)
+	VisualUtil.burst(world, cardpos + Vector3(0, 0.5, 0), Color(0.8, 0.9, 1.0), Arena.WORLD)
 
 
 ## Крик существа по uid (с задержкой, чтобы совпасть с анимацией).
@@ -533,9 +546,9 @@ func _creature_tip(uid: int, view: MatchState) -> Array:
 	if cs.slot >= 0:
 		var sl: SlotState = view.slots[cs.slot]
 		var cd: CardDef = CardDB.card(sl.card_id)
-		# сила с воротами: бонус открытой карты своей стихии (те же правила, что в PowerCalc — CardEffects.arena_delta)
+		# сила с воротами: бонус открытой карты (те же правила, что в PowerCalc, роль защитника)
 		if sl.revealed and cd != null:
-			var gate: int = CardEffects.arena_delta(cd, false, d.attribute, power, power, PowerCalc._owner_attr(view, sl.card_owner))
+			var gate: int = PowerCalc.gate_bonus_for(view, uid, cs.slot)
 			if gate != 0:
 				extra.append("Сила %d %s %d ворота = %d" % [power, "+" if gate > 0 else "−", absi(gate), power + gate])
 			else:
@@ -545,6 +558,9 @@ func _creature_tip(uid: int, view: MatchState) -> Array:
 		extra.append("Стоит на воротах №%d%s" % [cs.slot + 1, (": «%s»" % cd.display_name) if cd != null else " (карта закрыта)"])
 	else:
 		extra.append("Шар: потяни мышь назад и отпусти, чтобы бросить" if mine else "Шар соперника")
+	for mk in cs.marks:
+		extra.append("Метка «%s»: %s в следующем бою" % [_card_name(StringName(mk.get("src", ""))),
+			("сила ровно %d" % int(mk["fix"])) if mk.has("fix") else "%+d" % int(mk.get("delta", 0))])
 	if not cs.attached.is_empty():
 		var names: Array[String] = []
 		for a in cs.attached:
@@ -631,6 +647,13 @@ func _on_ability_cancelled(player: int, card_id: StringName) -> void:
 
 func _on_battle_resolved(result: BattleResult) -> void:
 	_refresh_hand()
+	if result.winner_uid < 0:
+		var what: String = "Бой прерван: Отлив" if result.interrupted else "Выбывают оба бойца"
+		_log(what, UiTheme.GOLD)
+		_stats["battles"].append({"turn": ctrl.get_turn(), "winner": "—", "loser": "%s и %s" % [_cname(result.attacker_uid), _cname(result.defender_uid)],
+			"wp": result.powers[0], "lp": result.powers[1], "mine": false})
+		events.push(_anim_battle_resolved.bind(result))
+		return
 	var win_p: int = _owner_of(result.winner_uid)
 	var atk_won: bool = result.winner_uid == result.attacker_uid
 	var wp: int = result.powers[0 if atk_won else 1]
@@ -686,6 +709,110 @@ func _on_momentum_changed(player: int, value: int) -> void:
 func _on_final_round(player: int) -> void:
 	_log("ФИНАЛЬНЫЙ БОЙ", Color(1.0, 0.45, 0.35))
 	events.push(_anim_final_round.bind(player))
+
+
+## Выбывшее существо вернулось в игру (в зону использованных): шарик на плашке снова горит.
+func _on_creature_revived(uid: int) -> void:
+	_log("%s возвращается в игру" % _cname(uid), Color(1.0, 0.95, 0.6))
+	events.push(func() -> void:
+		var p: int = _owner_of(uid)
+		_alive[p] += 1
+		_refresh_status()
+		hud.revive_creature(p, int(_pip_idx.get(uid, -1)))
+		SoundFx.i().play("power_up", -4.0)
+		hud.screen_flash(Color(1.0, 0.95, 0.7, 0.3))
+		await hud.banner("ВОЗВРАЩЕНИЕ", "%s снова в игре (зона использованных)" % _cname(uid), Color(1.0, 0.92, 0.55), 0.8))
+
+
+## Метка на следующий бой: строка в ленте и вспышка у шара.
+func _on_creature_marked(uid: int, card_id: StringName, mark: Dictionary) -> void:
+	var txt: String = "сила ровно %d" % int(mark["fix"]) if mark.has("fix") else "%+d" % int(mark.get("delta", 0))
+	_log("%s: %s в следующем бою («%s»)" % [_cname(uid), txt, _card_name(card_id)], Color(0.85, 0.75, 1.0))
+	events.push(func() -> void:
+		var b: CreatureBall = balls.get(uid)
+		if b != null and is_instance_valid(b):
+			b.ability_pulse()
+			var good: bool = mark.has("fix") or int(mark.get("delta", 0)) > 0
+			VisualUtil.ring_wave(world, b.global_position - Vector3(0, CreatureBall.RADIUS - 0.1, 0), Color(0.6, 1.0, 0.6) if good else Color(1.0, 0.35, 0.3), Arena.CARD_W * 0.5, 0.5))
+
+
+## «Вихревая подмена»: прежний боец исчезает, новый появляется на его месте в бою.
+func _on_fighter_swapped(old_uid: int, new_uid: int, slot: int) -> void:
+	_log("Подмена: %s вместо %s" % [_cname(new_uid), _cname(old_uid)], Color(0.75, 0.6, 1.0))
+	events.push(_anim_fighter_swapped.bind(old_uid, new_uid, slot))
+
+
+func _anim_fighter_swapped(old_uid: int, new_uid: int, _slot: int) -> void:
+	var ob: CreatureBall = balls.get(old_uid)
+	var pos: Vector3 = ob.global_position if ob != null else Vector3.ZERO
+	var facing: Vector3 = Vector3.ZERO
+	if _battle_uids.size() == 2:
+		var foe: int = _battle_uids[1] if _battle_uids[0] == old_uid else _battle_uids[0]
+		var fb: CreatureBall = balls.get(foe)
+		if fb != null:
+			facing = fb.global_position
+		_battle_uids[_battle_uids.find(old_uid)] = new_uid
+	hud.flash("Вихревая подмена: %s врывается в бой" % _cname(new_uid))
+	if ob != null:
+		await _anim_remove_ball(old_uid)
+	var nb: CreatureBall = balls.get(new_uid)
+	if nb == null:
+		nb = _spawn_ball(new_uid)
+	nb.freeze_at(pos)
+	if facing != Vector3.ZERO:
+		nb.face_toward(facing)
+	nb.open_animated()
+	nb.roar(0.3)
+	_cry(new_uid, "appear", 0.2)
+	VisualUtil.ring_wave(world, pos - Vector3(0, CreatureBall.RADIUS - 0.1, 0), VisualUtil.attr_color(_creature_def(new_uid).attribute), Arena.CARD_W * 0.7, 0.55)
+	_focus_labels(_battle_uids)
+	await _wait(0.9)
+	hud.clear_flash()
+
+
+## «Сдвиг плит»: карты ворот меняются местами (узлы карт переезжают, существа остаются).
+func _on_gates_swapped(a: int, b: int) -> void:
+	_log("Сдвиг плит: ворота меняются местами", Color(0.75, 0.6, 1.0))
+	events.push(func() -> void:
+		var na: ArenaCardNode = card_nodes.get(a)
+		var nb: ArenaCardNode = card_nodes.get(b)
+		card_nodes.erase(a)
+		card_nodes.erase(b)
+		if na != null:
+			card_nodes[b] = na
+			na.slot = b
+			na.create_tween().tween_property(na, "position", arena.slot_position(b), 0.45).set_trans(Tween.TRANS_QUAD)
+		if nb != null:
+			card_nodes[a] = nb
+			nb.slot = a
+			nb.create_tween().tween_property(nb, "position", arena.slot_position(a), 0.45).set_trans(Tween.TRANS_QUAD)
+		cam.shake(0.4, 0.3)
+		SoundFx.i().play("card_place")
+		await _wait(0.55))
+
+
+## Ворота сгорели без захвата (оба бойца выбыли).
+func _on_gate_discarded(slot: int, _card_id: StringName) -> void:
+	_log("Ворота сгорают", Color(1.0, 0.6, 0.4))
+	events.push(func() -> void:
+		var node: ArenaCardNode = card_nodes.get(slot)
+		card_nodes.erase(slot)
+		if node == null:
+			return
+		VisualUtil.burst(world, node.global_position + Vector3(0, 0.3, 0), Color(1.0, 0.5, 0.25), Arena.WORLD * 0.6)
+		var tw := node.create_tween()
+		tw.tween_property(node, "scale", Vector3(0.01, 0.01, 0.01), 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		await tw.finished
+		node.queue_free())
+
+
+## Сыгранные способности вернулись в руку («Второе дыхание», карты камбэка).
+func _on_abilities_recalled(player: int, card_ids: Array) -> void:
+	_refresh_hand()
+	var names: PackedStringArray = PackedStringArray()
+	for id in card_ids:
+		names.append(_card_name(StringName(id)))
+	_log("%s в руку: %s" % [_say(player, "Карты возвращаются", "К сопернику возвращаются"), ", ".join(names)], Color(0.75, 0.6, 1.0))
 
 
 func _on_game_over(winner: int, reason: StringName) -> void:
@@ -752,12 +879,14 @@ func _anim_gate_thrown(player: int, _slot: int, uid: int) -> void:
 func _anim_trap(slot: int, card_id: StringName, effect: StringName) -> void:
 	var sub: String = "Ловушка сработала"
 	match effect:
-		&"seal":
-			sub = "Все способности этого боя сгорают"
+		&"mute":
+			sub = "Сопернику владельца способности запрещены"
 		&"mirror":
 			sub = "Силы бойцов меняются местами"
-		&"backflow":
-			sub = "Преимущество стихии получает тот, кого бьют"
+		&"limit":
+			sub = "Кто сильнее 400 — проигрывает"
+		&"clash":
+			sub = "Оба бойца выбывают"
 	SoundFx.i().play("gate_trap", -2.0)
 	cam.impact(arena.slot_position(slot) + Vector3(0, Arena.CARD_H * 0.2, 0))
 	cam.shake(0.7, 0.4)
@@ -832,8 +961,6 @@ func _anim_returned(uid: int, reason: StringName) -> void:
 			hud.set_hint("Промах: %s уходит в зону использованных" % _cname(uid))
 		&"gate_won":
 			hud.set_hint("Свои ворота: карта засчитана")
-		&"rescued":
-			hud.set_hint("Спасение: %s не выбывает" % _cname(uid))
 		&"lost":
 			await _anim_remove_ball(uid, true)
 			return
@@ -845,7 +972,7 @@ func _anim_returned(uid: int, reason: StringName) -> void:
 ## Попадание на свои ворота: существо переходит на другие ворота.
 func _anim_relocated(uid: int, _from: int, to: int) -> void:
 	var b: CreatureBall = balls.get(uid)
-	hud.set_hint("Свои ворота: %s переходит на другие" % _cname(uid))
+	hud.set_hint("%s остаётся на воротах" % _cname(uid) if _from == to else "%s переходит на другие ворота" % _cname(uid))
 	if b == null:
 		return
 	var target := arena.slot_position(to) + Vector3(0.0, BALL_Y + 0.02, 0.0)
@@ -877,7 +1004,7 @@ func _anim_remove_ball(uid: int, eliminated: bool = false) -> void:
 	balls.erase(uid)
 	if b == _active_ball:
 		_active_ball = null
-	await b.vanish()
+	await b.vanish(eliminated)
 	b.queue_free()
 
 
@@ -1005,6 +1132,9 @@ func _anim_battle_resolved(result: BattleResult) -> void:
 	arena.set_highlight([])
 	battle_hud.set_powers([result.powers[0], result.powers[1]])
 	await _wait(0.6)
+	if result.winner_uid < 0:
+		await _anim_no_winner(result)
+		return
 	# удар: победитель бросается на соперника, вспышка, тряска, проигравший рассыпается
 	var wb: CreatureBall = balls.get(result.winner_uid)
 	var lb: CreatureBall = balls.get(result.loser_uid)
@@ -1036,6 +1166,36 @@ func _anim_battle_resolved(result: BattleResult) -> void:
 	hud.set_battle_mode(false)
 	cam.snap_overview()  # кат на общий план после боя
 	_focus_labels([])
+	_battle_uids = []
+	await battle_overlay.show_result(result, _names_for(result))
+
+
+## Бой без победителя: «Отлив» (бой прерван) или выбывают оба (удар обоих, вспышка).
+func _anim_no_winner(result: BattleResult) -> void:
+	var ab: CreatureBall = balls.get(result.attacker_uid)
+	var db: CreatureBall = balls.get(result.defender_uid)
+	if result.both_lose:
+		if ab != null and db != null:
+			cam.impact((ab.global_position + db.global_position) * 0.5 + Vector3(0, ab.figure_height() * 0.45, 0))
+			ab.counter_lunge(db.global_position)
+			db.counter_lunge(ab.global_position)
+			ab.take_hit(Color(1.0, 0.4, 0.3))
+			db.take_hit(Color(1.0, 0.4, 0.3))
+		SoundFx.i().play("clash")
+		cam.shake(1.0, 0.5)
+		hud.screen_flash(Color(1.0, 0.35, 0.25, 0.5))
+		battle_hud.resolve(-1)
+		await hud.banner("ВЫБЫВАЮТ ОБА", "Ворота сгорают", Color(1.0, 0.45, 0.3), 0.8)
+	else:
+		SoundFx.i().play("miss", -2.0)
+		cam.shake(0.4, 0.3)
+		battle_hud.resolve(-1)
+		await hud.banner("БОЙ ПРЕРВАН", "Отлив уносит соперника на другие ворота", Color(0.45, 0.75, 1.0), 0.8)
+	battle_hud.close()
+	hud.set_battle_mode(false)
+	cam.snap_overview()
+	_focus_labels([])
+	_battle_uids = []
 	await battle_overlay.show_result(result, _names_for(result))
 
 

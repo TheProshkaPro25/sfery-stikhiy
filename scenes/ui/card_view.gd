@@ -14,7 +14,7 @@ uniform float hover = 0.0;
 uniform float dim = 0.0;
 uniform float selected = 0.0;
 uniform float compact = 0.0;
-uniform int sigil = 0; // 0 эмблема, 1..6 стихии (Пламя..Прилив), 7 слияние, 8 щит, 9/10 стрелки, 11 обмен, 12 запрет, 13 плюс
+uniform int sigil = 0; // 0 эмблема, 1..6 стихии, 7 слияние, 8 щит, 9/10 стрелки, 11 обмен, 12 запрет, 13 плюс, 14 перенос, 15 бездна, 16 возрождение, 17 копия, 18 когти, 19 ×2, 20 флаг
 uniform vec3 elem_a = vec3(0.0); // подсветка кружков стихий: Пламя, Буря, Свет
 uniform vec3 elem_b = vec3(0.0); // Камень, Тень, Прилив
 uniform vec3 elem_c0 : source_color = vec3(0.92, 0.32, 0.14);
@@ -113,8 +113,52 @@ float sigil_mask(vec2 e, int id) {
 		float l = smoothstep(0.016, 0.008, abs(e.x + e.y) * 0.7071) * step(r, 0.085);
 		return max(c, l);
 	}
-	if (id == 13) { // спасение: крест-плюс
+	if (id == 13) { // плюс
 		return fill(min(sd_box(e, vec2(0.0), vec2(0.026, 0.09)), sd_box(e, vec2(0.0), vec2(0.09, 0.026))));
+	}
+	if (id == 14) { // перенос: дуга-стрелка к точке
+		float ang = atan(e.y, e.x);
+		float arc = stroke(r - 0.075, 0.013) * step(0.0, -e.y + 0.02) * step(-2.6, ang) * step(ang, -0.4);
+		float head = fill(sd_tri(e, vec2(0.04, -0.07), vec2(0.11, -0.03), vec2(0.085, -0.115)));
+		float dot = fill(length(e - vec2(-0.06, 0.06)) - 0.025);
+		return clamp(arc + head + dot, 0.0, 1.0);
+	}
+	if (id == 15) { // бездна: разорванное кольцо с крестом
+		float ring2 = stroke(r - 0.09, 0.012) * step(0.025, abs(e.x));
+		float x1 = smoothstep(0.014, 0.007, abs(e.x - e.y) * 0.7071) * step(r, 0.065);
+		float x2 = smoothstep(0.014, 0.007, abs(e.x + e.y) * 0.7071) * step(r, 0.065);
+		return clamp(ring2 + x1 + x2, 0.0, 1.0);
+	}
+	if (id == 16) { // возрождение: восходящее солнце с лучами
+		float sun = fill(length(e - vec2(0.0, 0.03)) - 0.055) * step(e.y, 0.03);
+		float ang2 = atan(-(e.y - 0.03), e.x);
+		float rays = smoothstep(0.75, 0.95, abs(cos(ang2 * 3.5))) * step(0.07, length(e - vec2(0.0, 0.03))) * step(length(e - vec2(0.0, 0.03)), 0.11) * step(e.y, 0.03);
+		float base_line = fill(sd_box(e, vec2(0.0, 0.05), vec2(0.11, 0.009)));
+		return clamp(sun + rays + base_line, 0.0, 1.0);
+	}
+	if (id == 17) { // копия: два наложенных квадрата
+		float a1 = stroke(sd_box(e, vec2(-0.025, -0.025), vec2(0.055, 0.055)), 0.011);
+		float a2 = fill(sd_box(e, vec2(0.03, 0.03), vec2(0.055, 0.055)));
+		return clamp(max(a1 * (1.0 - a2), a2 - fill(sd_box(e, vec2(0.03, 0.03), vec2(0.035, 0.035))) * 0.7), 0.0, 1.0);
+	}
+	if (id == 18) { // когти: три косых удара
+		float m = 0.0;
+		for (int k = -1; k <= 1; k++) {
+			vec2 q = e - vec2(float(k) * 0.045, 0.0);
+			float d = abs(q.x + q.y * 0.35) * 0.94;
+			m = max(m, smoothstep(0.016 - abs(q.y) * 0.1, 0.004, d) * step(abs(q.y), 0.1));
+		}
+		return m;
+	}
+	if (id == 19) { // ×2: два шеврона вверх
+		float c1 = stroke(((e.y + 0.07) - abs(e.x)) * 0.7071, 0.02) * step(abs(e.x), 0.09);
+		float c2 = stroke(((e.y - 0.0) - abs(e.x)) * 0.7071, 0.02) * step(abs(e.x), 0.09);
+		return clamp(c1 + c2, 0.0, 1.0);
+	}
+	if (id == 20) { // удержание: флаг на древке
+		float pole = fill(sd_box(e, vec2(-0.05, 0.0), vec2(0.011, 0.11)));
+		float flag = fill(sd_tri(e, vec2(-0.04, -0.105), vec2(-0.04, -0.015), vec2(0.09, -0.06)));
+		return clamp(pole + flag, 0.0, 1.0);
 	}
 	return 0.0;
 }

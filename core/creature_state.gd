@@ -14,6 +14,9 @@ var recalled_from: int = -1
 ## Прикреплённые способности (сыграны до броска или после приземления): [[метка времени, card_id], ...].
 ## Срабатывают в следующем бою существа (первыми, по метке) и снимаются после него. Видны обоим игрокам.
 var attached: Array = []
+## Метки на следующий бой (от карт вроде «Пепельного дождя»): [{"src": card_id, "delta": int} | {"src", "fix": int}].
+## Срабатывают в следующем бою существа (шаг 7 PowerCalc) и снимаются после него. Видны обоим.
+var marks: Array = []
 
 
 func _init(p_uid: int = -1, p_def_id: StringName = &"", p_owner: int = 0) -> void:
@@ -29,4 +32,5 @@ func clone() -> CreatureState:
 	c.used = used
 	c.recalled_from = recalled_from
 	c.attached = attached.duplicate(true)
+	c.marks = marks.duplicate(true)
 	return c

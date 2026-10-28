@@ -90,6 +90,19 @@ func kill(idx: int) -> void:
 	tw.parallel().tween_method(func(_v: float) -> void: _pips.queue_redraw(), 0.0, 1.0, 0.7)
 
 
+## Существо с индексом idx вернулось в игру: шарик снова горит, с вспышкой.
+func revive(idx: int) -> void:
+	if idx < 0 or idx >= _pips.dead.size():
+		return
+	_pips.dead[idx] = false
+	_pips.flash = 1.0
+	_pips.flash_idx = idx
+	_pop(_pips)
+	var tw := create_tween()
+	tw.tween_property(_pips, "flash", 0.0, 0.7)
+	tw.parallel().tween_method(func(_v: float) -> void: _pips.queue_redraw(), 0.0, 1.0, 0.7)
+
+
 func set_gates(n: int) -> void:
 	var changed: bool = _gates.text != "Ворота: %d" % n
 	_gates.text = "Ворота: %d" % n
@@ -145,6 +158,8 @@ class _Pips extends Control:
 				if flash > 0.0 and i == flash_idx:
 					draw_circle(c, 11.0 + (1.0 - flash) * 16.0, Color(1, 0.9, 0.7, flash * 0.6))
 			else:
+				if flash > 0.0 and i == flash_idx:
+					draw_circle(c, 12.0 + (1.0 - flash) * 14.0, Color(1, 1, 0.8, flash * 0.5))
 				for j in range(5):
 					var t: float = float(j) / 4.0
 					draw_circle(c + Vector2(-3, -3) * t, lerpf(12.0, 3.0, t), col.darkened(0.55).lerp(col.lightened(0.5), t))

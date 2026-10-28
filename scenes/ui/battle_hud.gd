@@ -14,7 +14,7 @@ var _powers: Array[Label] = []
 var _shown: Array[float] = [0.0, 0.0]
 var _vs: Label
 var _target: Array[int] = [0, 0]     # последние заданные силы (для всплывающих +/−)
-var _chain: HBoxContainer            # лента карт боя: «Рывок → Щит → ПАС»
+var _chain: HBoxContainer            # лента карт боя: «Пожирающий жар → Волчья хватка → ПАС»
 var _open := false
 var _built := false
 
@@ -217,8 +217,15 @@ func _pulse(l: Label, c: Color) -> void:
 
 
 ## Итог: плашка победителя вспыхивает, проигравшего гаснет.
+## winner_side -1 — победителя нет (бой прерван или выбыли оба): обе плашки гаснут.
 func resolve(winner_side: int) -> void:
 	if not _open:
+		return
+	if winner_side < 0:
+		var tw0 := create_tween().set_parallel(true)
+		for pl in _plates:
+			tw0.tween_property(pl, "modulate", Color(0.55, 0.55, 0.6, 0.7), 0.3)
+		_vs.visible = false
 		return
 	var w: PanelContainer = _plates[winner_side]
 	var l: PanelContainer = _plates[1 - winner_side]

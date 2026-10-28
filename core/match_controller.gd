@@ -53,12 +53,24 @@ signal ability_attached(player: int, uid: int, card_id: StringName)
 signal attach_window(player: int, uid: int, options: Array)
 ## «Ворота + бросок»: карта ворот выложена в слот slot в момент броска существа uid (цель броска — эта карта).
 signal gate_thrown(player: int, slot: int, uid: int)
-## Ловушка ворот открылась в начале боя (сразу после card_revealed). effect: seal / mirror / backflow.
+## Ворота-ловушка открылись в начале боя (сразу после card_revealed). effect: mirror / limit / clash / mute.
 signal gate_trap_triggered(slot: int, card_id: StringName, effect: StringName)
 ## «Натиск» игрока изменился (0..PowerCalc.MOMENTUM_MAX); бонус в бою = value × PowerCalc.MOMENTUM_STEP.
 signal momentum_changed(player: int, value: int)
 ## Финальный раунд объявлен (один раз за матч): у player осталось одно живое существо (-1 — у обоих).
 signal final_round_started(player: int)
+## Выбывшее существо вернулось в игру (в зону использованных): «Возрождение», «Зов павших».
+signal creature_revived(uid: int)
+## На существо повешена метка на следующий бой: mark = {"src": card_id, "delta": int} или {"src", "fix": int}.
+signal creature_marked(uid: int, card_id: StringName, mark: Dictionary)
+## «Вихревая подмена»: боец old_uid ушёл в руку, new_uid занял его место в бою на воротах slot.
+signal fighter_swapped(old_uid: int, new_uid: int, slot: int)
+## «Сдвиг плит»: карты ворот слотов a (бой) и b поменялись местами (существа остались); затем card_revealed(a, …).
+signal gates_swapped(slot_a: int, slot_b: int)
+## Ворота сгорели без захвата (оба бойца выбыли): карта убрана с поля.
+signal gate_discarded(slot: int, card_id: StringName)
+## «Второе дыхание»: сыгранные способности игрока вернулись в руку.
+signal abilities_recalled(player: int, card_ids: Array)
 
 ## Полное (нескрытое) состояние. Внешний код читает только через get_view().
 var state: MatchState
@@ -197,7 +209,7 @@ func can_skip_gate() -> bool:
 
 
 ## Карты способностей, доступные игроку прямо сейчас: в бою (свой черёд обмена), до броска (существо выбрано,
-## фаза AWAIT_LANDING — карта прикрепится к нему) и после приземления (Phase.AFTER_LANDING).
+## фаза AWAIT_LANDING — карта прикрепится к нему) и после приземления (Phase.AFTER_LANDING; там же «Попутный шквал»).
 func legal_abilities(player: int) -> Array[StringName]:
 	var out: Array[StringName] = []
 	if player != state.active_player:
@@ -205,18 +217,23 @@ func legal_abilities(player: int) -> Array[StringName]:
 	var uid: int = -1
 	var own: Array = []
 	var limit_left: int = 0
+	var mom: StringName = &""
 	match state.phase:
 		Phase.ABILITY_WINDOW:
 			var side: int = _b_turn
 			if _battle_player(side) != player or _b_passed[side]:
 				return out
-			if CardEffects.is_effect(CardDB.card(state.slots[_b_slot].card_id), &"seal"):
-				return out  # «Печать тишины»: способности в этом бою не играются
+			var pre: BattleResult = PowerCalc.compute_seq(state, _b_atk, _b_def, _b_slot, _b_plays)
+			if pre.silenced[side]:
+				return out  # «Глухие врата» / «Глубинная тишь»: способности этой стороне запрещены
 			uid = _b_atk if side == 0 else _b_def
 			for pl in PowerCalc.attached_plays(state, _b_atk, _b_def) + _b_plays:
 				if int(pl[0]) == side:
 					own.append(pl[1])
+					if CardEffects.is_lockout(CardDB.card(StringName(pl[1]))):
+						return out  # «Кольца глубин»: после неё своя сторона не играет
 			limit_left = MAX_BATTLE_ABILITIES - _b_count[side]
+			mom = &"battle"
 		Phase.AWAIT_LANDING, Phase.AFTER_LANDING:
 			uid = _pending_uid if state.phase == Phase.AWAIT_LANDING else _landed_uid
 			if uid < 0:
@@ -224,28 +241,46 @@ func legal_abilities(player: int) -> Array[StringName]:
 			for a in state.creatures[uid].attached:
 				own.append(a[1])
 			limit_left = MAX_BATTLE_ABILITIES - own.size()
+			mom = &"pre_throw" if state.phase == Phase.AWAIT_LANDING else &"landing"
 		_:
 			return out
-	if limit_left <= 0:
-		return out
 	for id in state.players[player].ability_hand:
-		if _ability_legal(uid, id, own):
+		var c: CardDef = CardDB.card(id)
+		if limit_left <= 0:
+			continue
+		if _ability_legal(uid, id, own, mom):
 			out.append(id)
 	return out
 
 
-## Можно ли сыграть карту за существо uid: стихийный замок; слияние — только поверх своей основной карты без слияния.
-## own — уже сыгранные этой стороной карты боя (или прикреплённые к существу) по порядку.
-func _ability_legal(uid: int, id: StringName, own: Array) -> bool:
+## Можно ли сыграть карту за существо uid в момент mom (&"battle" / &"pre_throw" / &"landing"):
+## стихийный и видовой замки; слияние — только поверх своей основной карты без слияния; момент карты (params.moment);
+## мгновенные — только если есть цель. own — уже сыгранные этой стороной карты боя (или прикреплённые к существу).
+func _ability_legal(uid: int, id: StringName, own: Array, mom: StringName = &"battle") -> bool:
 	var c: CardDef = CardDB.card(id)
 	if c == null:
+		return false
+	var cm: StringName = CardEffects.moment(c)
+	if cm == &"landing" and mom != &"landing":
+		return false
+	if cm == &"battle" and mom != &"battle":
 		return false
 	if CardEffects.is_fusion(c):
 		if own.is_empty() or CardEffects.is_fusion(CardDB.card(StringName(own[own.size() - 1]))):
 			return false
+	var cdef: CreatureDef = CardDB.creature(state.creatures[uid].def_id)
 	var lock: int = CardEffects.lock_attr(c)
-	if lock >= 0 and CardDB.creature(state.creatures[uid].def_id).attribute != lock:
+	if lock >= 0 and cdef.attribute != lock:
 		return false
+	var sp: StringName = CardEffects.species_lock(c)
+	if sp != &"" and cdef.species != sp:
+		return false
+	var owner: int = state.creatures[uid].owner
+	match String(c.effect_id):
+		"swap_fighter":
+			return PowerCalc.swap_candidate(state, owner, [_b_atk, _b_def]) >= 0
+		"shift_gate":
+			return PowerCalc.best_gate_swap(state, _b_atk, _b_def, _b_slot, _b_plays, _b_turn) >= 0
 	return true
 
 
@@ -485,6 +520,23 @@ func play_ability(player: int, card_id: StringName) -> Error:
 		return ERR_UNAVAILABLE
 	ps.ability_hand.erase(card_id)
 	ps.abilities_used.append(card_id)
+	var card: CardDef = CardDB.card(card_id)
+	if ph == Phase.AFTER_LANDING and CardEffects.is_effect(card, &"gust") and PowerCalc.gust_target(state, player) >= 0:
+		# «Попутный шквал»: вставшее существо перелетает к самому слабому существу соперника — бой
+		var mover: int = _landed_uid
+		var target: int = PowerCalc.gust_target(state, player)
+		var from: int = state.creatures[mover].slot
+		var to: int = state.creatures[target].slot
+		state.slots[from].occupant_uid = -1
+		state.creatures[mover].slot = -1
+		# карта остаётся при бойце (её +100 действует в этом бою и входит в лимит 3 карт)
+		state.creatures[mover].attached.append([state.play_stamp, card_id])
+		_landed_uid = -1
+		state.play_stamp += 1
+		_ev(&"ability_played", [player, card_id])
+		_ev(&"creature_relocated", [mover, from, to])
+		_start_battle(mover, state.creatures[target].uid, to)
+		return OK
 	if ph != Phase.ABILITY_WINDOW:
 		var uid: int = _pending_uid if ph == Phase.AWAIT_LANDING else _landed_uid
 		state.creatures[uid].attached.append([state.play_stamp, card_id])
@@ -504,11 +556,54 @@ func play_ability(player: int, card_id: StringName) -> Error:
 	_b_count[side] += 1
 	state.play_stamp += 1
 	_ev(&"ability_played", [player, card_id])
+	if CardEffects.is_effect(card, &"shift_gate"):
+		_shift_gate(side)
+	elif CardEffects.is_effect(card, &"swap_fighter"):
+		_swap_fighter(side)
 	if not _b_passed[1 - side]:
 		_b_turn = 1 - side
 	_open_window()
 	_flush()
 	return OK
+
+
+## «Сдвиг плит»: ворота боя меняются местами с выгоднейшими своими свободными воротами (карта открывается).
+func _shift_gate(side: int) -> void:
+	var plays: Array = _b_plays.slice(0, _b_plays.size() - 1)
+	var j: int = PowerCalc.best_gate_swap(state, _b_atk, _b_def, _b_slot, plays, side)
+	if j < 0:
+		return
+	PowerCalc._swap_cards(state, _b_slot, j)
+	state.slots[_b_slot].revealed = true
+	_ev(&"gates_swapped", [_b_slot, j])
+	_ev(&"card_revealed", [_b_slot, state.slots[_b_slot].card_id])
+
+
+## «Вихревая подмена»: боец стороны уходит в руку (прикреплённые карты остаются на нём), сильнейшее существо
+## из руки или зоны использованных занимает его место в бою.
+func _swap_fighter(side: int) -> void:
+	var old: int = _b_atk if side == 0 else _b_def
+	var player: int = state.creatures[old].owner
+	var nu: int = PowerCalc.swap_candidate(state, player, [_b_atk, _b_def])
+	if nu < 0:
+		return
+	var oc: CreatureState = state.creatures[old]
+	var nc: CreatureState = state.creatures[nu]
+	if side == 1:
+		oc.slot = -1
+		nc.slot = _b_slot
+		state.slots[_b_slot].occupant_uid = nu
+		_b_def = nu
+	else:
+		_b_atk = nu
+	oc.used = false
+	nc.used = false
+	var count: int = nc.attached.size()
+	for pl in _b_plays:
+		if int(pl[0]) == side:
+			count += 1
+	_b_count[side] = count
+	_ev(&"fighter_swapped", [old, nu, _b_slot])
 
 
 ## Пас: в бою — окончательный (второй игрок может доиграть свои карты); после приземления — конец хода.
@@ -655,6 +750,12 @@ func _start_battle(atk_uid: int, def_uid: int, slot: int) -> void:
 	var gc: CardDef = CardDB.card(gs.card_id)
 	if CardEffects.is_gate_trap(gc):
 		_ev(&"gate_trap_triggered", [slot, gc.id, gc.effect_id])
+	if CardEffects.is_effect(gc, &"fallen_call"):
+		# «Зов павших»: все выбывшие обеих сторон возвращаются в игру (в зону использованных)
+		for p in range(2):
+			for u in state.players[p].creature_uids:
+				if not state.creatures[u].alive:
+					_revive(u)
 	_open_window()
 	_flush()
 
@@ -689,67 +790,144 @@ func _open_window() -> void:
 func _resolve() -> void:
 	state.phase = Phase.RESOLVING
 	var r: BattleResult = PowerCalc.compute_seq(state, _b_atk, _b_def, _b_slot, _b_plays)
-	var wc: CreatureState = state.creatures[r.winner_uid]
-	var lc: CreatureState = state.creatures[r.loser_uid]
 	var s: SlotState = state.slots[_b_slot]
-	var captured_id: StringName = s.card_id
 	var slot: int = _b_slot
+	var uids: Array[int] = [_b_atk, _b_def]
+	var owners: Array[int] = [state.creatures[_b_atk].owner, state.creatures[_b_def].owner]
 
-	# «Ва-банк»: проигравший теряет случайную способность из руки (если карта не отменена)
-	var loser_is_atk: bool = r.loser_uid == r.attacker_uid
-	if (r.atk_all_in if loser_is_atk else r.def_all_in):
-		var hand: Array[StringName] = state.players[lc.owner].ability_hand
-		if not hand.is_empty():
-			var idx: int = _rng.randi_range(0, hand.size() - 1)
-			r.lost_ability = hand[idx]
-			hand.remove_at(idx)
-
-	# «Спасение»: проигравший не выбывает, а уходит в зону использованных
-	r.rescued = r.atk_rescue if loser_is_atk else r.def_rescue
-	var atk_owner: int = state.creatures[_b_atk].owner
-	var def_owner: int = state.creatures[_b_def].owner
-
-	# прикреплённые карты отыграли
-	state.creatures[_b_atk].attached.clear()
-	state.creatures[_b_def].attached.clear()
+	# прикреплённые карты и метки бойцов отыграли
+	for u in uids:
+		state.creatures[u].attached.clear()
+		state.creatures[u].marks.clear()
 
 	# отменённые карты и итог боя
 	for cp in r.cancelled_plays:
-		_ev(&"ability_cancelled", [atk_owner if int(cp[0]) == 0 else def_owner, cp[1]])
+		_ev(&"ability_cancelled", [owners[int(cp[0])], cp[1]])
 	_ev(&"battle_resolved", [r])
 
-	# проигравший выбывает (или уходит в использованные со «Спасением»), победитель — в использованные
-	if r.rescued:
-		_to_used(lc.uid, &"rescued")
+	var next_player: int = 1 - _turn_player
+	if r.interrupted:
+		# «Отлив»: боя нет — существо соперника уносит на свободные ворота, второй боец стоит на воротах боя
+		var mover: int = r.relocate_uid
+		var stayer: int = uids[0] if mover == uids[1] else uids[1]
+		if s.occupant_uid == mover:
+			s.occupant_uid = -1
+		state.creatures[mover].slot = r.relocate_to
+		state.slots[r.relocate_to].occupant_uid = mover
+		state.creatures[stayer].slot = slot
+		s.occupant_uid = stayer
+		_ev(&"creature_relocated", [mover, slot, r.relocate_to])
+		_ev(&"creature_relocated", [stayer, slot, slot])
+	elif r.both_lose:
+		# оба бойца выбывают, ворота сгорают
+		for u in uids:
+			_eliminate(u)
+		var burnt: StringName = s.card_id
+		_clear_slot(s)
+		_ev(&"gate_discarded", [slot, burnt])
+		for p in range(2):
+			if state.players[p].momentum > 0:
+				state.players[p].momentum = 0
+				_ev(&"momentum_changed", [p, 0])
 	else:
-		if lc.slot >= 0 and state.slots[lc.slot].occupant_uid == lc.uid:
-			state.slots[lc.slot].occupant_uid = -1
-		lc.slot = -1
-		lc.alive = false
-		_ev(&"creature_eliminated", [lc.uid])
-	_to_used(wc.uid, &"won")
+		var wc: CreatureState = state.creatures[r.winner_uid]
+		var lc: CreatureState = state.creatures[r.loser_uid]
+		_eliminate(lc.uid)
+		if r.winner_stays:
+			# «Удержание»: победитель остаётся на воротах, карта лежит дальше (открытой)
+			wc.slot = slot
+			s.occupant_uid = wc.uid
+			_ev(&"creature_relocated", [wc.uid, slot, slot])
+		else:
+			var captured_id: StringName = s.card_id
+			_to_used(wc.uid, &"won")
+			_clear_slot(s)
+			state.players[wc.owner].captured.append(captured_id)
+			_ev(&"card_captured", [wc.owner, slot, captured_id])
+		# «Натиск»: победитель наращивает серию, проигравший её теряет
+		var wp: PlayerState = state.players[wc.owner]
+		var lp: PlayerState = state.players[lc.owner]
+		if wp.momentum < PowerCalc.MOMENTUM_MAX:
+			wp.momentum += 1
+			_ev(&"momentum_changed", [wc.owner, wp.momentum])
+		if lp.momentum > 0:
+			lp.momentum = 0
+			_ev(&"momentum_changed", [lc.owner, 0])
+		next_player = wc.owner
+
+	# последствия карт: возрождение, возврат сыгранных способностей, метки на следующий бой
+	for side in range(2):
+		if r.revive[side]:
+			for u in state.players[owners[side]].creature_uids:
+				if not state.creatures[u].alive:
+					_revive(u)
+					break
+		if r.recall[side] != &"":
+			var ps: PlayerState = state.players[owners[side]]
+			var back: Array = []
+			for id in ps.abilities_used:
+				if id != r.recall[side]:
+					back.append(id)
+			if not back.is_empty():
+				for id in back:
+					ps.abilities_used.erase(id)
+					ps.ability_hand.append(id)
+				_ev(&"abilities_recalled", [owners[side], back])
+	# карты «возвращается в руку» (лесенка камбэка): снова в руке после боя, где их сыграли
+	for side in range(2):
+		var ps2: PlayerState = state.players[owners[side]]
+		var back2: Array = []
+		for pl in r.plays:
+			var rid: StringName = StringName(pl[1])
+			if int(pl[0]) == side and CardEffects.returns_to_hand(CardDB.card(rid)) and ps2.abilities_used.has(rid):
+				back2.append(rid)
+		if not back2.is_empty():
+			for id in back2:
+				ps2.abilities_used.erase(id)
+				ps2.ability_hand.append(id)
+			_ev(&"abilities_recalled", [owners[side], back2])
+	for pair in r.marks:
+		var mc: CreatureState = state.creatures.get(int(pair[0]))
+		if mc != null and mc.alive:
+			var mk: Dictionary = (pair[1] as Dictionary).duplicate()
+			mc.marks.append(mk)
+			_ev(&"creature_marked", [mc.uid, StringName(mk.get("src", "")), mk])
+
+	if not _check_victory():
+		_check_final_round()
+		_begin_turn(next_player)
+
+
+## Проигравший выбывает (с поля, если стоял).
+func _eliminate(uid: int) -> void:
+	var c: CreatureState = state.creatures[uid]
+	if c.slot >= 0 and state.slots[c.slot].occupant_uid == uid:
+		state.slots[c.slot].occupant_uid = -1
+	c.slot = -1
+	c.alive = false
+	c.used = false
+	c.attached.clear()
+	c.marks.clear()
+	_ev(&"creature_eliminated", [uid])
+
+
+## Выбывшее существо возвращается в игру: в зону использованных.
+func _revive(uid: int) -> void:
+	var c: CreatureState = state.creatures[uid]
+	if c.alive:
+		return
+	c.alive = true
+	c.used = true
+	c.slot = -1
+	_ev(&"creature_revived", [uid])
+
+
+func _clear_slot(s: SlotState) -> void:
 	s.occupant_uid = -1
 	s.card_id = &""
 	s.card_owner = -1
 	s.has_card = false
 	s.revealed = false
-	state.players[wc.owner].captured.append(captured_id)
-	_ev(&"card_captured", [wc.owner, slot, captured_id])
-
-	# «Натиск»: победитель наращивает серию, проигравший её теряет
-	var wp: PlayerState = state.players[wc.owner]
-	var lp: PlayerState = state.players[lc.owner]
-	if wp.momentum < PowerCalc.MOMENTUM_MAX:
-		wp.momentum += 1
-		_ev(&"momentum_changed", [wc.owner, wp.momentum])
-	if lp.momentum > 0:
-		lp.momentum = 0
-		_ev(&"momentum_changed", [lc.owner, 0])
-
-	# следующим ходит победитель
-	if not _check_victory():
-		_check_final_round()
-		_begin_turn(wc.owner)
 
 
 ## Финальный раунд: впервые у кого-то осталось одно живое существо.
@@ -766,10 +944,14 @@ func _check_final_round() -> void:
 	_ev(&"final_round_started", [last[0] if last.size() == 1 else -1])
 
 
-## Победа — у соперника не осталось существ (все три выбиты).
+## Победа — у соперника не осталось существ (все три выбиты). Выбиты оба последних сразу — ничья.
 func _check_victory() -> bool:
+	var out: Array[bool] = [state.alive_count(0) == 0, state.alive_count(1) == 0]
+	if out[0] and out[1]:
+		_end_game(-1, &"knockout")
+		return true
 	for p in range(2):
-		if state.alive_count(p) == 0:
+		if out[p]:
 			_end_game(1 - p, &"knockout")
 			return true
 	return false

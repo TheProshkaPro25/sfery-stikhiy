@@ -86,13 +86,14 @@ func show_result(r: BattleResult, names: Dictionary = {}) -> Signal:
 		var fr := VisualUtil.label("Финальный бой: преимущество стихии ×2", 16)
 		fr.add_theme_color_override("font_color", Color(1.0, 0.5, 0.4))
 		_vbox.add_child(fr)
-	if r.sealed:
-		_vbox.add_child(VisualUtil.label("Печать тишины: способности боя сгорели", 16))
-	if r.mirrored:
-		_vbox.add_child(VisualUtil.label("Зеркало: силы бойцов поменялись местами", 16))
-	if r.lost_ability != &"":
-		_vbox.add_child(VisualUtil.label("Потеряна способность: %s" % _card_name(r.lost_ability), 16))
-
+	for line in _outcome_lines(r):
+		var ol := VisualUtil.label(line, 16)
+		ol.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
+		_vbox.add_child(ol)
+	if r.interrupted:
+		wn = "никто — бой прерван"
+	elif r.both_lose:
+		wn = "никто — выбывают оба"
 	var win := VisualUtil.label("Побеждает: %s" % wn, 26)
 	win.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	win.add_theme_color_override("font_color", UiTheme.GOLD)
@@ -125,18 +126,45 @@ func _card_name(id: StringName) -> String:
 	return c.display_name
 
 
+## Особые исходы боя: ловушки, перенос, двойное выбывание, удержание ворот, возрождение, метки.
+func _outcome_lines(r: BattleResult) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	if r.mirrored:
+		out.append("Зеркало: силы бойцов поменялись местами")
+	if r.auto_win:
+		out.append("Трон сумрака: существо Тени побеждает")
+	if r.interrupted:
+		out.append("Отлив: бой прерван, соперника унесло на другие ворота")
+	if r.both_lose:
+		out.append("Выбывают оба бойца, ворота сгорают")
+	if r.winner_stays:
+		out.append("Удержание: победитель остаётся на воротах")
+	for side in range(2):
+		if r.revive[side]:
+			out.append("Возрождение: выбывшее существо вернётся")
+		if r.recall[side] != &"":
+			out.append("«%s»: сыгранные карты вернутся в руку" % _card_name(r.recall[side]))
+	for c in r.copies:
+		out.append("«%s» повторяет «%s»" % [_card_name(c[1]), _card_name(c[2])])
+	if not r.marks.is_empty():
+		out.append("Метки на следующий бой: %d" % r.marks.size())
+	return out
+
+
 ## Строка ловушки ворот: название и что она сделала.
 func _trap_text(id: StringName) -> String:
 	var c: CardDef = CardDB.card(id)
 	var act: String = ""
 	if c != null:
 		match String(c.effect_id):
-			"seal":
-				act = "способности боя сгорели"
+			"mute":
+				act = "сопернику владельца способности запрещены"
 			"mirror":
 				act = "силы бойцов поменялись местами"
-			"backflow":
-				act = "преимущество стихии у того, чью стихию бьют"
+			"limit":
+				act = "кто сильнее %d — проигрывает" % int(c.params.get("amount", 400))
+			"clash":
+				act = "выбывают оба бойца"
 	return "Ловушка «%s»: %s" % [_card_name(id), act] if act != "" else "Ловушка «%s»" % _card_name(id)
 
 
@@ -150,6 +178,10 @@ func _pretty_source(src: String) -> String:
 		return "нижняя граница"
 	if src == "momentum":
 		return "натиск (серия побед)"
+	if src == "mark_fix":
+		return "метка: сила ровно"
+	if src.begins_with("rule:"):
+		return "правило ворот"
 	var parts: PackedStringArray = src.split(":", true, 1)
 	if parts.size() == 2:
 		var n: String = _card_name(StringName(parts[1]))
@@ -162,6 +194,8 @@ func _pretty_source(src: String) -> String:
 				return "«%s» отменена" % n
 			"trap":
 				return "ловушка «%s»" % n
+			"mark":
+				return "метка «%s»" % n
 	return src
 
 

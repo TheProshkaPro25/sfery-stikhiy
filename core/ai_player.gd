@@ -12,6 +12,9 @@ extends RefCounted
 ##   закрытых воротах (по уже раскрытым картам соперника), оценка ворот соперника под его существом (скорее всего
 ##   «Поле» его стихии), риск ответа в обмене (запас перевеса растёт с числом карт, которыми соперник ещё может
 ##   ответить), розыгрыш пары карт, если одной мало.
+## Новые карты (2026-10-28) ИИ понимает через предпросмотр PowerCalc.compute_with (мгновенные «Сдвиг плит» и
+## «Вихревая подмена» считаются на копии состояния) и оценку исхода _margin («Отлив», «Общая бездна», «Трон сумрака»,
+## «Предел»); «Попутный шквал» — в choose_attach на всех уровнях.
 
 enum Difficulty { EASY, NORMAL, HARD }
 
@@ -21,13 +24,14 @@ const AIM_ERROR: Array[float] = [0.62, 0.42, 0.30]
 
 const WIN_MARGIN: float = 40.0
 ## Порядок «дешевизны» способностей (по effect_id): от наименее ценных к самым рискованным.
+## Карты-«спасатели» (doom, ebb) и мгновенные стоят дороже: их ценность не в силе, а в исходе.
 const ABILITY_COST_ORDER: Array[String] = [
-	"home_element", "fusion_echo", "fusion_chain", "boost_self", "weaken_foe", "legacy", "steal_arena",
-	"swap_attr", "steal_advantage", "rescue", "stone_wall", "nullify_arena", "overflow", "drain",
-	"absorb", "fusion_double", "swap_base", "strip", "shield", "all_in",
+	"boost", "pact", "radiance", "scorch", "purge_gate", "eclipse", "nullify_gate", "aloft", "weaken_mark",
+	"boost_fix", "fusion_boost", "drain", "copy", "shift_gate", "silence", "negate", "cap_own_base", "strip",
+	"reset_base", "siphon", "swap_fighter", "revive", "recall", "doom", "ebb",
 ]
-## Доля ловушек среди бронзовых ворот (3 из 5): априорная вероятность, что бронзовая карта соперника — ловушка.
-const TRAP_SHARE: float = 0.6
+## Доля ловушек среди командных ворот (4 из 10): априорная вероятность, что бронзовая карта соперника — ловушка.
+const TRAP_SHARE: float = 0.4
 ## Штраф оценки броска в бой на чужие закрытые ворота за вероятность ловушки (HARD).
 const TRAP_RISK_PENALTY: float = 300.0
 
@@ -84,7 +88,7 @@ func choose_setup(view: MatchState, legal: Array = [], can_skip: bool = false) -
 			fit = _rng.randi_range(0, 9)
 		else:
 			for uid in ps_uids(view):
-				if _fits(card, CardDB.creature(view.creatures[uid].def_id).attribute):
+				if _fits(card, CardDB.creature(view.creatures[uid].def_id)):
 					fit += 1
 			# блеф: ловушка ложится первой, пока соперник не знает, где она
 			if difficulty == Difficulty.HARD and CardEffects.is_gate_trap(card) and _rng.randf() < 0.7:
@@ -101,7 +105,7 @@ func choose_setup(view: MatchState, legal: Array = [], can_skip: bool = false) -
 		var pick: int = -1
 		var attack: bool = false
 		for uid in _ready(view):
-			if pick < 0 and (_fits(bcard, CardDB.creature(view.creatures[uid].def_id).attribute) or CardEffects.is_effect(bcard, &"throne")):
+			if pick < 0 and _fits(bcard, CardDB.creature(view.creatures[uid].def_id)):
 				pick = uid
 			for i in range(view.slots.size()):
 				var occ: int = view.slots[i].occupant_uid
@@ -208,6 +212,10 @@ func choose_ability(view: MatchState, preview: BattleResult, legal: Array = []) 
 			for j in range(cards.size()):
 				if i == j:
 					continue
+				var ci: CardDef = CardDB.card(cards[i])
+				var cj: CardDef = CardDB.card(cards[j])
+				if CardEffects.is_instant(ci) or CardEffects.is_instant(cj) or CardEffects.is_lockout(ci):
+					continue
 				var bp: Array = preview.battle_plays.duplicate(true)
 				bp.append([side, cards[i]])
 				bp.append([side, cards[j]])
@@ -220,17 +228,31 @@ func choose_ability(view: MatchState, preview: BattleResult, legal: Array = []) 
 ## Прикрепить способность вне боя: moment &"after_landing" (существо uid встало на пустые ворота) или &"pre_throw".
 ## NORMAL/HARD после приземления прикрепляют самую дешёвую карту, которая снимает угрозу атаки на эти ворота.
 ## До броска ИИ не играет: в бою та же карта сильнее (видно ворота и ответ соперника). &"" — пас.
+## «Попутный шквал» (все уровни): перелететь к слабейшему стоящему сопернику, если бой там выгоден
+## (Новичок — при любом перевесе и через раз, Боец — перевес > 40, Мастер — > 60).
 func choose_attach(view: MatchState, uid: int, legal: Array, moment: StringName = &"after_landing") -> StringName:
-	if difficulty == Difficulty.EASY or moment != &"after_landing" or legal.is_empty():
+	if moment != &"after_landing" or legal.is_empty():
 		return &""
 	var c: CreatureState = view.creatures[uid]
 	if c.slot < 0:
+		return &""
+	for id in legal:
+		var gc: CardDef = CardDB.card(StringName(id))
+		if CardEffects.is_effect(gc, &"gust"):
+			var target: int = PowerCalc.gust_target(view, player)
+			if target >= 0:
+				var r: BattleResult = PowerCalc.compute_seq(view, uid, target, view.creatures[target].slot, [[0, StringName(id)]])
+				var need: float = [0.0, 40.0, 60.0][difficulty]
+				if _margin(r, 0) > need and (difficulty != Difficulty.EASY or _rng.randf() < 0.5):
+					return StringName(id)
+	if difficulty == Difficulty.EASY:
 		return &""
 	if _exposure(view, uid, c.slot) <= 0.0:
 		return &""
 	var cards: Array[StringName] = []
 	for id in legal:
-		cards.append(StringName(id))
+		if not CardEffects.is_instant(CardDB.card(StringName(id))):
+			cards.append(StringName(id))
 	cards.sort_custom(_cheaper)
 	for id in cards:
 		if _exposure(view, uid, c.slot, id) <= 0.0:
@@ -242,23 +264,33 @@ func choose_attach(view: MatchState, uid: int, legal: Array, moment: StringName 
 
 ## Предпросмотр боя, если сторона side сыграет id следующей картой обмена.
 func _with_card(view: MatchState, preview: BattleResult, id: StringName, side: int) -> BattleResult:
-	var bp: Array = preview.battle_plays.duplicate(true)
-	bp.append([side, id])
-	return PowerCalc.compute_seq(view, preview.attacker_uid, preview.defender_uid, preview.slot, bp)
+	return PowerCalc.compute_with(view, preview.attacker_uid, preview.defender_uid, preview.slot, preview.battle_plays, side, id)
 
 
 ## Перевес стороны side (ничья — в пользу защитника: атакующему нужен перевес > 0).
+## «Отлив» (боя нет) — чуть лучше ничьей для обоих; оба выбывают: ворота «Предел»/«Обоюдный удар» — нейтрально,
+## «Общая бездна» — спасение для того, кто проигрывал, и беда для того, кто выигрывал.
+## «Трон сумрака» и «Предел» решают бой без сравнения сил.
 func _margin(r: BattleResult, side: int) -> float:
+	if r.interrupted:
+		return 0.25
 	var m: float = float(r.powers[0] - r.powers[1])
-	if side == 0:
-		return m
-	return -m + 0.5  # защитник выигрывает и при равенстве
+	var raw: float = m if side == 0 else -m + 0.5  # защитник выигрывает и при равенстве
+	if r.both_lose:
+		if r.gate_effect == &"clash" or r.gate_effect == &"limit":
+			return -0.1
+		return 0.25 if raw <= 0.0 else -60.0
+	if r.winner_uid >= 0 and (r.auto_win or r.gate_effect == &"limit"):
+		var won: bool = r.winner_uid == (r.attacker_uid if side == 0 else r.defender_uid)
+		if won != (raw > 0.0):
+			return 200.0 if won else -200.0
+	return raw
 
 
-## Сколько карт ещё может сыграть соперник в этом бою (0, если он спасовал или ворота — «Печать тишины»).
+## Сколько карт ещё может сыграть соперник в этом бою (0, если он спасовал или ему запрещены способности).
 func _foe_plays_left(view: MatchState, preview: BattleResult, side: int) -> int:
 	var foe: int = 1 - side
-	if preview.passed[foe] or preview.sealed:
+	if preview.passed[foe] or preview.silenced[foe]:
 		return 0
 	var used: int = 0
 	for pl in preview.plays:
@@ -375,7 +407,9 @@ func _score(view: MatchState, uid: int, slot: int) -> float:
 	if occ >= 0:
 		# чужая закрытая карта в виде пуста = нейтральная арена (своя карта, в том числе ловушка, учтена)
 		var r: BattleResult = PowerCalc.compute(view, uid, occ, slot, &"", &"")
-		var margin: float = float(r.powers[0] - r.powers[1])
+		if r.both_lose:
+			return 450.0  # размен один на один
+		var margin: float = _margin(r, 0)
 		var risk: float = 0.0
 		if difficulty == Difficulty.HARD and s.card_owner != player and s.card_id == &"":
 			risk = _foe_trap_prob(view) * TRAP_RISK_PENALTY
@@ -390,7 +424,7 @@ func _score(view: MatchState, uid: int, slot: int) -> float:
 		var card: CardDef = CardDB.card(s.card_id)
 		if difficulty != Difficulty.EASY and CardEffects.is_gate_trap(card):
 			return _trap_bait_score(view, uid, card)
-		stand = 800.0 if _fits(card, cdef.attribute) else 650.0
+		stand = 800.0 if _fits(card, cdef) else 650.0
 	if difficulty == Difficulty.HARD:
 		stand -= _exposure(view, uid, slot)
 	return stand
@@ -427,11 +461,11 @@ func _exposure(view: MatchState, uid: int, slot: int, extra: StringName = &"") -
 	return worst
 
 
-## Своя ловушка без существа: «Зеркало» — приманка для слабейшего (сильный соперник проиграет),
-## «Печать тишины» — когда у соперника больше способностей в руке, «Обратный ток» — нейтрально.
+## Своя ловушка без существа: «Зеркало», «Обоюдный удар», «Предел» — приманка для слабейшего (размен в нашу пользу),
+## «Глухие врата» — когда у соперника больше способностей в руке.
 func _trap_bait_score(view: MatchState, uid: int, card: CardDef) -> float:
 	match String(card.effect_id):
-		"mirror":
+		"mirror", "clash", "limit":
 			var rank: int = 0
 			var bp: int = CardDB.creature(view.creatures[uid].def_id).base_power
 			for u in ps_uids(view):
@@ -439,17 +473,23 @@ func _trap_bait_score(view: MatchState, uid: int, card: CardDef) -> float:
 				if o.alive and u != uid and CardDB.creature(o.def_id).base_power < bp:
 					rank += 1
 			return 860.0 - rank * 150.0
-		"seal":
+		"mute":
 			var diff: int = view.players[1 - player].ability_hand.size() - view.players[player].ability_hand.size()
 			return 700.0 + diff * 40.0
 	return 640.0
 
 
-func _fits(card: CardDef, attribute: int) -> bool:
-	if card == null:
+## Ворота подходят существу: Поле его стихии, Алтарь силы, ворота его вида, Трон сумрака для Тени.
+func _fits(card: CardDef, d: CreatureDef) -> bool:
+	if card == null or d == null:
 		return false
-	if CardEffects.field_attr(card) == attribute:
+	if CardEffects.field_attr(card) == d.attribute:
 		return true
-	if card.effect_id == &"twilight":
-		return attribute == Attr.A.LIGHT or attribute == Attr.A.SHADOW
+	match String(card.effect_id):
+		"owner_power", "web", "funnel":
+			return true
+		"species_double":
+			return CardEffects.species_lock(card) == d.species
+		"dusk_throne":
+			return d.attribute == Attr.A.SHADOW
 	return false

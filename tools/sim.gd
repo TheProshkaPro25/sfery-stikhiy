@@ -3,7 +3,8 @@ extends SceneTree
 ## Запуск: godot --headless -s res://tools/sim.gd -- [n=600] [seed=1] [d0=1] [d1=1] [levels=1] [check=1]
 ##   n — число матчей; seed — первый seed; d0/d1 — сложность ИИ игроков 0/1 (0 новичок, 1 боец, 2 мастер);
 ##   levels=1 — дополнительно сравнить уровни сложности (мастер/боец/новичок, стороны меняются);
-##   check=1 — код выхода 1, если баланс вне рамок (старт 45–55 %, длина 12–20, каждая стихия 40–60 %).
+##   check=1 — код выхода 1, если баланс вне рамок (старт 45–55 %, длина 12–20, каждая стихия 40–60 %,
+##   камбэки 25–35 %: доля побед игрока, у которого первым осталось одно существо).
 ## Модель броска как в tests/run_tests.gd: с шансом HIT_CHANCE[сложность] шар попадает в цель, иначе соседний слот или промах.
 
 const STEP_CAP: int = 4000
@@ -14,6 +15,10 @@ const LEN_MIN: float = 12.0
 const LEN_MAX: float = 20.0
 const ELEM_MIN: float = 0.40
 const ELEM_MAX: float = 0.60
+const COMEBACK_MIN: float = 0.25
+const COMEBACK_MAX: float = 0.35
+## Счётчики событий новых карт (сигналы контроллера) за серию.
+const FX_KEYS: Array[String] = ["revived", "interrupted", "both_lose", "stays", "marked", "swapped", "shifted", "gust", "recalled", "discarded"]
 
 
 func _initialize() -> void:
@@ -48,9 +53,11 @@ func run_series(n: int, seed0: int, d0: int, d1: int) -> Dictionary:
 	var st: Dictionary = {
 		"wins": [0, 0], "draws": 0, "bad": 0, "turns": 0, "turn_list": [], "reasons": {},
 		"elem_games": [0, 0, 0, 0, 0, 0], "elem_wins": [0, 0, 0, 0, 0, 0],
-		"battles": 0, "attached": 0, "multi": 0, "gate_throws": 0, "cancels": 0, "traps": {}, "final": 0, "final_comeback": 0,
-		"momentum2": 0, "abilities": 0, "standoffs": 0,
+		"battles": 0, "attached": 0, "multi": 0, "gate_throws": 0, "cancels": 0, "traps": {}, "final": 0, "final_one": 0, "final_comeback": 0,
+		"momentum2": 0, "abilities": 0, "standoffs": 0, "cards": {}, "card_games": {}, "card_wins": {}, "matrix": {},
 	}
+	for k in FX_KEYS:
+		st[k] = 0
 	for k in range(n):
 		run_match(seed0 + k, d0, d1, st)
 	return st
@@ -80,6 +87,28 @@ func run_match(seed_value: int, d0: int, d1: int, st: Dictionary) -> void:
 		if v >= PowerCalc.MOMENTUM_MAX:
 			m["momentum2"] += 1)
 	ctrl.standoff.connect(func(_a: int, _d: int) -> void: m["standoffs"] += 1)
+	for k in FX_KEYS:
+		m[k] = 0
+	m["cards"] = {}
+	ctrl.creature_revived.connect(func(_u: int) -> void: m["revived"] += 1)
+	ctrl.creature_marked.connect(func(_u: int, _c: StringName, _mk: Dictionary) -> void: m["marked"] += 1)
+	ctrl.fighter_swapped.connect(func(_o: int, _n: int, _s: int) -> void: m["swapped"] += 1)
+	ctrl.gates_swapped.connect(func(_a: int, _b: int) -> void: m["shifted"] += 1)
+	ctrl.gate_discarded.connect(func(_s: int, _c: StringName) -> void: m["discarded"] += 1)
+	ctrl.abilities_recalled.connect(func(_p: int, _ids: Array) -> void: m["recalled"] += 1)
+	ctrl.ability_played.connect(func(_p: int, c: StringName) -> void:
+		(m["cards"] as Dictionary)[String(c)] = int(m["cards"].get(String(c), 0)) + 1
+		if CardEffects.is_effect(CardDB.card(c), &"gust"):
+			m["gust"] += 1)
+	ctrl.ability_attached.connect(func(_p: int, _u: int, c: StringName) -> void:
+		(m["cards"] as Dictionary)[String(c)] = int(m["cards"].get(String(c), 0)) + 1)
+	ctrl.battle_resolved.connect(func(r: BattleResult) -> void:
+		if r.interrupted:
+			m["interrupted"] += 1
+		if r.both_lose:
+			m["both_lose"] += 1
+		if r.winner_stays:
+			m["stays"] += 1)
 	ctrl.start()
 	var steps: int = 0
 	var pending_uid: int = -1
@@ -138,16 +167,36 @@ func run_match(seed_value: int, d0: int, d1: int, st: Dictionary) -> void:
 			st["elem_games"][el[i]] += 1
 			if w == i:
 				st["elem_wins"][el[i]] += 1
+		var mx: Dictionary = st["matrix"]
+		var key: String = "%d_%d" % [el[0], el[1]]
+		mx[key] = (mx.get(key, [0, 0]) as Array)
+		mx[key][0] += 1
+		if w == 0:
+			mx[key][1] += 1
+		# доля побед колод с картой (для балансировки отдельных карт: cards=1)
+		var decks: Array[DeckDef] = [deck0, deck1]
+		for i in range(2):
+			for c in decks[i].arena + decks[i].abilities:
+				var cg: Dictionary = st["card_games"]
+				cg[String(c.id)] = int(cg.get(String(c.id), 0)) + 1
+				if w == i:
+					st["card_wins"][String(c.id)] = int(st["card_wins"].get(String(c.id), 0)) + 1
 	for k in ["battles", "attached", "multi", "gate_throws", "cancels", "momentum2", "abilities", "standoffs"]:
 		st[k] += int(m[k])
+	for k in FX_KEYS:
+		st[k] += int(m[k])
+	for c in m["cards"]:
+		st["cards"][c] = int(st["cards"].get(c, 0)) + int(m["cards"][c])
 	for e in m["traps"]:
 		st["traps"][e] = int(st["traps"].get(e, 0)) + 1
 	var fp: int = int(m["final_player"])
 	if fp != -2:
 		st["final"] += 1
-		# камбэк: победил тот, у кого первым осталось одно существо
-		if fp >= 0 and w == fp:
-			st["final_comeback"] += 1
+		# камбэк: победил тот, у кого первым осталось одно существо (одновременные потери — fp = -1 — не считаются)
+		if fp >= 0:
+			st["final_one"] += 1
+			if w == fp:
+				st["final_comeback"] += 1
 
 
 ## Печать отчёта; true — баланс в рамках.
@@ -165,9 +214,15 @@ func report(st: Dictionary, n: int) -> bool:
 		float(st["battles"]) / played, float(st["abilities"]) / played, float(st["attached"]) / played, float(st["cancels"]) / played,
 		float(st["multi"]) / played, float(st["gate_throws"]) / played, float(st["standoffs"]) / played])
 	print("  ловушки сработали: %s; «Натиск» ×2 набран %.2f раза за матч" % [str(st["traps"]), float(st["momentum2"]) / played])
-	print("  финальный раунд в %.0f %% матчей, камбэк (победил тот, у кого осталось одно) %.0f %% из них" % [
-		100.0 * st["final"] / played, 100.0 * st["final_comeback"] / maxf(1.0, float(st["final"]))])
+	var comeback: float = float(st["final_comeback"]) / maxf(1.0, float(st["final_one"]))
+	print("  финальный раунд в %.0f %% матчей, камбэк (победил тот, у кого первым осталось одно) %.1f %% из %d" % [
+		100.0 * st["final"] / played, 100.0 * comeback, int(st["final_one"])])
+	var fx: PackedStringArray = PackedStringArray()
+	for k in FX_KEYS:
+		fx.append("%s %.2f" % [k, float(st[k]) / played])
+	print("  новые карты, за матч: " + ", ".join(fx))
 	var ok: bool = st["bad"] == 0 and p0 >= START_MIN and p0 <= START_MAX and avg_len >= LEN_MIN and avg_len <= LEN_MAX
+	ok = ok and comeback >= COMEBACK_MIN and comeback <= COMEBACK_MAX
 	var line: PackedStringArray = PackedStringArray()
 	for e in range(6):
 		var g: int = st["elem_games"][e]
@@ -176,8 +231,37 @@ func report(st: Dictionary, n: int) -> bool:
 			ok = false
 		line.append("%s %.1f %% (%d)" % [Attr.display_name(e), rate * 100.0, g])
 	print("  стихии (без зеркальных матчей): " + ", ".join(line))
-	print("  БАЛАНС: %s (старт %.0f–%.0f %%, длина %.0f–%.0f, стихии %.0f–%.0f %%)" % ["в рамках" if ok else "ВНЕ РАМОК",
-		START_MIN * 100, START_MAX * 100, LEN_MIN, LEN_MAX, ELEM_MIN * 100, ELEM_MAX * 100])
+	if OS.get_cmdline_user_args().has("cards=1"):
+		var keys: Array = (st["cards"] as Dictionary).keys()
+		keys.sort_custom(func(a, b) -> bool: return int(st["cards"][a]) > int(st["cards"][b]))
+		var cl: PackedStringArray = PackedStringArray()
+		for c in keys:
+			cl.append("%s %d" % [CardDB.card(StringName(c)).display_name, int(st["cards"][c])])
+		print("  розыгрыши карт: " + ", ".join(cl))
+		print("  стихия против стихии (доля побед строки):")
+		for e1 in range(6):
+			var row: PackedStringArray = PackedStringArray()
+			for e2 in range(6):
+				var g: int = 0
+				var wv: int = 0
+				var k1: String = "%d_%d" % [e1, e2]
+				var k2: String = "%d_%d" % [e2, e1]
+				if st["matrix"].has(k1):
+					g += st["matrix"][k1][0]
+					wv += st["matrix"][k1][1]
+				if st["matrix"].has(k2):
+					g += st["matrix"][k2][0]
+					wv += st["matrix"][k2][0] - st["matrix"][k2][1]
+				row.append("%3.0f" % (100.0 * wv / maxi(1, g)) if e1 != e2 else "  —")
+			print("    %-7s %s" % [Attr.display_name(e1), " ".join(row)])
+		var gk: Array = (st["card_games"] as Dictionary).keys()
+		gk.sort_custom(func(a, b) -> bool: return float(st["card_wins"].get(a, 0)) / st["card_games"][a] > float(st["card_wins"].get(b, 0)) / st["card_games"][b])
+		var wl: PackedStringArray = PackedStringArray()
+		for c in gk:
+			wl.append("%s %.0f%%" % [CardDB.card(StringName(c)).display_name, 100.0 * int(st["card_wins"].get(c, 0)) / int(st["card_games"][c])])
+		print("  победы колод с картой: " + ", ".join(wl))
+	print("  БАЛАНС: %s (старт %.0f–%.0f %%, длина %.0f–%.0f, стихии %.0f–%.0f %%, камбэки %.0f–%.0f %%)" % ["в рамках" if ok else "ВНЕ РАМОК",
+		START_MIN * 100, START_MAX * 100, LEN_MIN, LEN_MAX, ELEM_MIN * 100, ELEM_MAX * 100, COMEBACK_MIN * 100, COMEBACK_MAX * 100])
 	return ok
 
 

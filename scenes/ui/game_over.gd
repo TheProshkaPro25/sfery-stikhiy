@@ -60,12 +60,20 @@ func _build() -> void:
 	_battles = VBoxContainer.new()
 	_battles.add_theme_constant_override("separation", 0)
 	vb.add_child(_battles)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 16)
+	vb.add_child(row)
 	var b := Button.new()
-	b.text = "Новая игра"
+	b.text = "Ещё раз"
 	b.custom_minimum_size = Vector2(200, 50)
-	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	b.pressed.connect(func() -> void: restart_requested.emit())
-	vb.add_child(b)
+	row.add_child(b)
+	var m := Button.new()
+	m.text = "В меню"
+	m.custom_minimum_size = Vector2(200, 50)
+	m.pressed.connect(func() -> void: get_tree().change_scene_to_file("res://scenes/menu/main_menu.tscn"))
+	row.add_child(m)
 
 
 ## stats: {turns:int, alive:[a,b], captures:[a,b], wins:[a,b], abilities:[a,b], traps:int,

@@ -109,22 +109,9 @@ static func preset_deck(index: int) -> DeckDef:
 	return build_deck(row["creatures"], row["arena"], row["abilities"])
 
 
-# ---------------------------------------------------------------- колода по правилам Бакугана
-## Ворота: золотые (поля стихий), серебряные (сила G по ситуации), бронзовые (меняют правила боя).
-## Способности: красные (зависят от стихии), синие (бонус G), зелёные (зависят от ситуации боя).
-const GATE_CLASS := {
-	"attr_bonus": &"gold", "throne": &"gold",
-	"underdog": &"silver", "trap": &"silver", "bastion": &"silver", "twilight": &"silver",
-	"void": &"bronze", "overweight": &"bronze",
-	"seal": &"bronze", "mirror": &"bronze", "backflow": &"bronze",
-}
-const ABILITY_CLASS := {
-	"drain": &"red", "steal_advantage": &"red", "strip": &"red", "stone_wall": &"red", "absorb": &"red",
-	"swap_attr": &"red", "home_element": &"red", "overflow": &"red",
-	"boost_self": &"blue", "weaken_foe": &"blue", "legacy": &"blue", "all_in": &"blue", "fusion_echo": &"blue",
-	"shield": &"green", "nullify_arena": &"green", "steal_arena": &"green", "swap_base": &"green",
-	"rescue": &"green", "fusion_double": &"green", "fusion_chain": &"green",
-}
+# ---------------------------------------------------------------- колода
+## Ворота: gold — ворота стихии (Поле X, Алтарь силы), silver — ворота вида (×2 БС виду), bronze — командные.
+## Способности: red — стихийные, blue — усиления своей стихии (лесенка +30…+200), green — видовые.
 const GATE_CLASSES: Array[StringName] = [&"gold", &"silver", &"bronze"]
 const ABILITY_CLASSES: Array[StringName] = [&"red", &"blue", &"green"]
 
@@ -134,22 +121,50 @@ static func card_class(c: CardDef) -> StringName:
 	if c == null:
 		return &""
 	if c.kind == CardDef.Kind.ARENA:
-		return GATE_CLASS.get(String(c.effect_id), &"silver")
-	return ABILITY_CLASS.get(String(c.effect_id), &"green")
+		match String(c.effect_id):
+			"attr_bonus", "owner_power":
+				return &"gold"
+			"species_double":
+				return &"silver"
+		return &"bronze"
+	if CardEffects.species_lock(c) != &"":
+		return &"green"
+	if c.effect_id == &"boost":
+		return &"blue"
+	return &"red"
 
 
-## Карты пула данного вида и класса (для стихии element: красные — только своей стихии или без привязки).
-static func cards_of(kind: int, cls: StringName, element: int = -1) -> Array[StringName]:
+## Подходит ли карта команде: стихийный замок — стихии element, видовой — одному из видов species (пусто — любой).
+static func card_fits(c: CardDef, element: int, species: Array = []) -> bool:
+	var lock: int = CardEffects.lock_attr(c)
+	if lock < 0:
+		lock = CardEffects.field_attr(c)  # «Поле X» в колоду берётся только своей стихии
+	if element >= 0 and lock >= 0 and lock != element:
+		return false
+	var sp: StringName = CardEffects.species_lock(c)
+	if sp != &"" and not species.is_empty() and not species.has(sp):
+		return false
+	return true
+
+
+## Карты пула данного вида и класса, подходящие стихии element и видам species (пусто — без фильтра по виду).
+static func cards_of(kind: int, cls: StringName, element: int = -1, species: Array = []) -> Array[StringName]:
 	load_all()
 	var out: Array[StringName] = []
 	for id in (_arena_order if kind == CardDef.Kind.ARENA else _ability_order):
 		var c: CardDef = card(id)
-		if card_class(c) != cls:
-			continue
-		var lock: int = CardEffects.lock_attr(c)
-		if element >= 0 and lock >= 0 and lock != element:
-			continue
-		out.append(id)
+		if card_class(c) == cls and card_fits(c, element, species):
+			out.append(id)
+	return out
+
+
+## Виды существ команды (StringName), в порядке списка.
+static func team_species(creature_list: Array) -> Array:
+	var out: Array = []
+	for id in creature_list:
+		var d: CreatureDef = creature(StringName(id))
+		if d != null and d.species != &"" and not out.has(d.species):
+			out.append(d.species)
 	return out
 
 
@@ -165,7 +180,7 @@ static func creatures_of(element: int) -> Array[StringName]:
 
 ## Проверка колоды игрока. "" — колода годится, иначе текст ошибки.
 ## 3 разных существа одной стихии в лимите силы; ворота по одной золотой/серебряной/бронзовой;
-## способности по одной красной/синей/зелёной; красная — своей стихии.
+## способности по одной красной/синей/зелёной; стихийные карты и «Поле» — своей стихии, видовые — вида из команды.
 static func deck_error(creatures: Array, arena: Array, abilities: Array) -> String:
 	load_all()
 	if creatures.size() != 3:
@@ -184,6 +199,7 @@ static func deck_error(creatures: Array, arena: Array, abilities: Array) -> Stri
 		el = d.attribute
 	if team_power(creatures) > GameData.TEAM_POWER_LIMIT:
 		return "Сила команды больше %d" % GameData.TEAM_POWER_LIMIT
+	var species: Array = team_species(creatures)
 	for pair in [[arena, GATE_CLASSES, "ворот"], [abilities, ABILITY_CLASSES, "способностей"]]:
 		var list: Array = pair[0]
 		if list.size() != 3:
@@ -195,12 +211,25 @@ static func deck_error(creatures: Array, arena: Array, abilities: Array) -> Stri
 				return "Неизвестная карта"
 			classes.append(card_class(c))
 			var lock: int = CardEffects.lock_attr(c)
+			if lock < 0:
+				lock = CardEffects.field_attr(c)
 			if lock >= 0 and lock != el:
-				return "Стихийная способность «%s» не подходит к стихии команды" % c.display_name
+				return "«%s» — карта стихии %s, а команда — %s" % [c.display_name, Attr.display_name(lock), Attr.display_name(el)]
+			var sp: StringName = CardEffects.species_lock(c)
+			if sp != &"" and not species.has(sp):
+				return "«%s»: в команде нет вида %s" % [c.display_name, species_name(sp)]
 		for cls in pair[1]:
 			if not classes.has(cls):
 				return "Нужно по одной карте %s каждого класса" % pair[2]
 	return ""
+
+
+## Имя вида по id («Драгнар»).
+static func species_name(sp: StringName) -> String:
+	for row in GameData.SPECIES:
+		if StringName(row["id"]) == sp:
+			return String(row["name"])
+	return String(sp)
 
 
 ## Случайная колода по тем же правилам; детерминирована по состоянию rng.
@@ -213,12 +242,13 @@ static func random_deck(rng: RandomNumberGenerator) -> DeckDef:
 		team = _pick(creatures_of(el), 3, rng)
 		if team_power(team) <= GameData.TEAM_POWER_LIMIT:
 			break
+	var species: Array = team_species(team)
 	var arena: Array[StringName] = []
 	for cls in GATE_CLASSES:
-		arena.append_array(_pick(cards_of(CardDef.Kind.ARENA, cls, el), 1, rng))
+		arena.append_array(_pick(cards_of(CardDef.Kind.ARENA, cls, el, species), 1, rng))
 	var abil: Array[StringName] = []
 	for cls in ABILITY_CLASSES:
-		abil.append_array(_pick(cards_of(CardDef.Kind.ABILITY, cls, el), 1, rng))
+		abil.append_array(_pick(cards_of(CardDef.Kind.ABILITY, cls, el, species), 1, rng))
 	return build_deck(team, arena, abil)
 
 
@@ -244,7 +274,7 @@ static func team_power(ids: Array) -> int:
 	return sum
 
 
-## Колода из выбранных игроком 3 существ; карты арены и способностей — случайные из пула.
+## Колода из выбранных игроком 3 существ; ворота и способности — случайные по правилам колоды.
 ## null, если выбор некорректен (не 3 разных известных существа или превышен лимит БС).
 static func deck_from_creatures(ids: Array, rng: RandomNumberGenerator) -> DeckDef:
 	load_all()
@@ -255,31 +285,15 @@ static func deck_from_creatures(ids: Array, rng: RandomNumberGenerator) -> DeckD
 		seen[String(id)] = true
 	if ids.size() != 3 or seen.size() != 3 or team_power(ids) > GameData.TEAM_POWER_LIMIT:
 		return null
-	return build_deck(ids, _pick(_arena_order, 3, rng), _pick_abilities(ids, rng))
-
-
-## 3 способности: стихийные только под атрибуты команды, не больше одного «Слияния».
-static func _pick_abilities(team: Array, rng: RandomNumberGenerator) -> Array[StringName]:
-	var attrs: Array[int] = []
-	for id in team:
-		attrs.append(creature(StringName(id)).attribute)
-	var pool: Array[StringName] = []
-	for id in _ability_order:
-		var lock: int = CardEffects.lock_attr(card(id))
-		if lock < 0 or attrs.has(lock):
-			pool.append(id)
-	var out: Array[StringName] = []
-	var fusions: int = 0
-	while out.size() < 3 and not pool.is_empty():
-		var k: int = rng.randi_range(0, pool.size() - 1)
-		var id: StringName = pool[k]
-		pool.remove_at(k)
-		if CardEffects.is_fusion(card(id)):
-			if fusions >= 1:
-				continue
-			fusions += 1
-		out.append(id)
-	return out
+	var el: int = creature(StringName(ids[0])).attribute
+	var species: Array = team_species(ids)
+	var arena: Array[StringName] = []
+	for cls in GATE_CLASSES:
+		arena.append_array(_pick(cards_of(CardDef.Kind.ARENA, cls, el, species), 1, rng))
+	var abil: Array[StringName] = []
+	for cls in ABILITY_CLASSES:
+		abil.append_array(_pick(cards_of(CardDef.Kind.ABILITY, cls, el, species), 1, rng))
+	return build_deck(ids, arena, abil)
 
 
 static func _pick(ids: Array[StringName], n: int, rng: RandomNumberGenerator) -> Array[StringName]:

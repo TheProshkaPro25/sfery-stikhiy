@@ -1,7 +1,8 @@
 class_name TeamMenu
 extends Control
 ## Сборка колоды по правилам Бакугана: боец одной стихии — 3 существа этой стихии,
-## 3 карты ворот (золотая, серебряная, бронзовая) и 3 способности (красная, синяя, зелёная).
+## 3 карты ворот (стихии, вида, командные) и 3 способности (стихийная, усиление, видовая).
+## Карты стихии — только своей стихии, карты вида — только видов из команды.
 ## Три шага: стихия и существа → ворота → способности.
 
 signal team_chosen(ids: Array[StringName])
@@ -9,8 +10,8 @@ signal deck_chosen(creatures: Array[StringName], arena: Array[StringName], abili
 
 const MAX_TEAM := 3
 const CLASS_NAMES := {
-	&"gold": "Золотые ворота", &"silver": "Серебряные ворота", &"bronze": "Бронзовые ворота",
-	&"red": "Красная (стихия)", &"blue": "Синяя (сила G)", &"green": "Зелёная (ситуация)",
+	&"gold": "Ворота стихии", &"silver": "Ворота вида", &"bronze": "Командные ворота",
+	&"red": "Стихийная", &"blue": "Усиление", &"green": "Видовая",
 }
 const CLASS_COLORS := {
 	&"gold": Color(1.0, 0.82, 0.35), &"silver": Color(0.8, 0.84, 0.9), &"bronze": Color(0.85, 0.55, 0.3),
@@ -166,6 +167,7 @@ func _build() -> void:
 		_element = int(last_deck["element"])
 		_team.assign(last_deck["creatures"])
 		_pick = (last_deck["pick"] as Dictionary).duplicate()
+		_drop_unfit_picks()
 		_show_step(0)
 
 
@@ -249,9 +251,9 @@ func _build_cards_page(kind: int, classes: Array[StringName]) -> void:
 		head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		head.add_theme_color_override("font_color", CLASS_COLORS[cls])
 		col.add_child(head)
-		var ids: Array[StringName] = CardDB.cards_of(kind, cls, _element)
+		var ids: Array[StringName] = CardDB.cards_of(kind, cls, _element, CardDB.team_species(_team))
 		var grid := GridContainer.new()
-		grid.columns = clampi(ceili(ids.size() / 2.0), 1, 4)
+		grid.columns = clampi(ceili(ids.size() / 2.0), 1, 5)
 		grid.add_theme_constant_override("h_separation", 8)
 		grid.add_theme_constant_override("v_separation", 10)
 		col.add_child(grid)
@@ -280,7 +282,7 @@ func _on_element(a: int) -> void:
 		return
 	_element = a
 	_team.clear()
-	_pick.erase(&"red")  # красная способность привязана к стихии
+	_drop_unfit_picks()
 	var all: Array[StringName] = CardDB.creatures_of(a)
 	for id in all:
 		if _team.size() < MAX_TEAM:
@@ -293,7 +295,17 @@ func _on_creature(id: StringName) -> void:
 		_team.erase(id)
 	elif _team.size() < MAX_TEAM:
 		_team.append(id)
+	_drop_unfit_picks()
 	_show_step(0)
+
+
+## Убрать выбранные карты, которые больше не подходят команде (чужая стихия, вид не из команды, удалённая карта).
+func _drop_unfit_picks() -> void:
+	var species: Array = CardDB.team_species(_team)
+	for cls in _pick.keys():
+		var c: CardDef = CardDB.card(StringName(_pick[cls]))
+		if c == null or CardDB.card_class(c) != cls or not CardDB.card_fits(c, _element, species if _team.size() == MAX_TEAM else []):
+			_pick.erase(cls)
 
 
 func _on_card(cls: StringName, id: StringName) -> void:

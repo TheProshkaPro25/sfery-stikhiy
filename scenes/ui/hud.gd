@@ -154,6 +154,11 @@ func kill_creature(player: int, idx: int) -> void:
 	_plates[player].kill(idx)
 
 
+func revive_creature(player: int, idx: int) -> void:
+	_build()
+	_plates[player].revive(idx)
+
+
 func set_captures(c0: int, c1: int) -> void:
 	_build()
 	_plates[0].set_gates(c0)
