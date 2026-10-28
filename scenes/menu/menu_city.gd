@@ -223,7 +223,7 @@ func _build_env() -> void:
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
 	sun.shadow_blur = 1.0
-	sun.light_angular_distance = 0.5
+	sun.light_angular_distance = 0.0  # мягкость — shadow_blur: угловой размер солнца (PCSS) без TAA рассыпает край тени в точки
 	sun.shadow_bias = 0.08
 	sun.shadow_normal_bias = 1.5
 	sun.directional_shadow_blend_splits = true
