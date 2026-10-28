@@ -528,6 +528,15 @@ func _creature_tip(uid: int, view: MatchState) -> Array:
 	if cs.slot >= 0:
 		var sl: SlotState = view.slots[cs.slot]
 		var cd: CardDef = CardDB.card(sl.card_id)
+		# сила с воротами: бонус открытой карты своей стихии (те же правила, что в PowerCalc — CardEffects.arena_delta)
+		if sl.revealed and cd != null:
+			var gate: int = CardEffects.arena_delta(cd, false, d.attribute, power, power, PowerCalc._owner_attr(view, sl.card_owner))
+			if gate != 0:
+				extra.append("Сила %d %s %d ворота = %d" % [power, "+" if gate > 0 else "−", absi(gate), power + gate])
+			else:
+				extra.append("Сила %d (ворота бонуса не дают)" % power)
+		else:
+			extra.append("Сила %d (ворота закрыты)" % power)
 		extra.append("Стоит на воротах №%d%s" % [cs.slot + 1, (": «%s»" % cd.display_name) if cd != null else " (карта закрыта)"])
 	else:
 		extra.append("Шар: потяни мышь назад и отпусти, чтобы бросить" if mine else "Шар соперника")

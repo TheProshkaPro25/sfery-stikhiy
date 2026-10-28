@@ -60,8 +60,18 @@ func show_result(r: BattleResult, names: Dictionary = {}) -> Signal:
 	powers.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_vbox.add_child(powers)
 
+	var traps_shown: Dictionary = {}
 	for line in r.breakdown:
 		var side: int = int(line.get("side", 0))
+		var src0: String = str(line.get("source", ""))
+		# ловушка ворот без изменения силы пишется ядром по строке на сторону — показываем одной строкой
+		if src0.begins_with("trap:") and int(line.get("delta", 0)) == 0:
+			if not traps_shown.has(src0):
+				traps_shown[src0] = true
+				var tl := VisualUtil.label(_trap_text(StringName(src0.substr(5))), 16)
+				tl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
+				_vbox.add_child(tl)
+			continue
 		var who := "Атака" if side == 0 else "Защита"
 		var delta: int = int(line.get("delta", 0))
 		var sign_s := "+" if delta >= 0 else ""
@@ -113,6 +123,21 @@ func _card_name(id: StringName) -> String:
 	if c == null:
 		return String(id)
 	return c.display_name
+
+
+## Строка ловушки ворот: название и что она сделала.
+func _trap_text(id: StringName) -> String:
+	var c: CardDef = CardDB.card(id)
+	var act: String = ""
+	if c != null:
+		match String(c.effect_id):
+			"seal":
+				act = "способности боя сгорели"
+			"mirror":
+				act = "силы бойцов поменялись местами"
+			"backflow":
+				act = "преимущество стихии у того, чью стихию бьют"
+	return "Ловушка «%s»: %s" % [_card_name(id), act] if act != "" else "Ловушка «%s»" % _card_name(id)
 
 
 ## Источники из BattleResult.breakdown: base, advantage, floor, arena:<id>, ability:<id>, cancelled:<id>.
