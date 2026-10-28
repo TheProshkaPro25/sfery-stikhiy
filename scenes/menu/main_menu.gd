@@ -177,6 +177,19 @@ void fragment() {
 	_clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	ui.add_child(_clock)
 
+	# версия игры (application/config/version в project.godot — её же берёт экспорт)
+	var ver := VisualUtil.label("версия " + str(ProjectSettings.get_setting("application/config/version", "")), 14)
+	ver.add_theme_color_override("font_color", Color(UiTheme.TEXT_DIM, 0.85))
+	ver.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))  # читается и на дневном небе
+	ver.add_theme_constant_override("outline_size", 5)
+	ver.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	ver.offset_left = -200
+	ver.offset_right = -24
+	ver.offset_top = 14
+	ver.offset_bottom = 38
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	ui.add_child(ver)
+
 	_settings = MenuSettings.new()
 	_settings.city = city
 	_settings.visible = false
