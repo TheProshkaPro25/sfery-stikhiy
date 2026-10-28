@@ -758,8 +758,7 @@ func _anim_trap(slot: int, card_id: StringName, effect: StringName) -> void:
 			sub = "Силы бойцов меняются местами"
 		&"backflow":
 			sub = "Преимущество стихии получает тот, кого бьют"
-	SoundFx.i().play("clash", -4.0)
-	SoundFx.i().play_later("power_down", 0.15, -3.0)
+	SoundFx.i().play("gate_trap", -2.0)
 	cam.impact(arena.slot_position(slot) + Vector3(0, Arena.CARD_H * 0.2, 0))
 	cam.shake(0.7, 0.4)
 	hud.screen_flash(Color(1.0, 0.3, 0.2, 0.35))
@@ -973,7 +972,7 @@ func _anim_ability_msg(player: int, card_id: StringName, cancelled: bool, powers
 		battle_hud.set_powers(powers)
 	var c: CardDef = CardDB.card(card_id)
 	var cname: String = c.display_name if c != null else str(card_id)
-	SoundFx.i().play("ability_cancel" if cancelled else "ability_play")
+	SoundFx.i().ability(c, cancelled)
 	if not cancelled:
 		ability_panel.show_played(card_id, player != HUMAN)
 		_anim_ability_cam(player)
