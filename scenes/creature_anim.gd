@@ -26,7 +26,7 @@ var _tw_yaw: Tween
 var _tw_flash: Tween
 var _overlay: StandardMaterial3D
 var _meshes: Array[MeshInstance3D] = []
-## Скелетные клипы вида (tools/blender/rig_species.py): idle, roar, attack, hit. Без скелета — null.
+## Скелетные клипы вида (tools/blender/rig_species.py): idle, stance, roar, attack, hit. Без скелета — null.
 var _player: AnimationPlayer
 
 
@@ -45,6 +45,7 @@ func set_model(model: Node3D, d: CreatureDef) -> void:
 	_player = null
 	_collect(model)
 	if _player != null and _player.has_animation("idle"):
+		_player.playback_default_blend_time = 0.3  # клип → idle по очереди тоже со сведением
 		_player.get_animation("idle").loop_mode = Animation.LOOP_LINEAR
 		_player.play("idle")
 		_player.seek(randf() * _player.get_animation("idle").length)  # не синхронно с соседями
@@ -104,15 +105,18 @@ func _process(delta: float) -> void:
 func _apply(now: float) -> void:
 	var t := now + _phase
 	var b := _blend
+	# дыхание и покачивание всей моделью — только без скелета (со скелетом дышит сам клип idle,
+	# а масштаб и наклон целиком выглядят как надувная игрушка)
+	var bs := b if _player == null else 0.0
 	var breath := sin(t * 2.2)
-	var sy := 1.0 + breath * 0.025 * b
-	var sxz := 1.0 - breath * 0.012 * b  # компенсация объёма
+	var sy := 1.0 + breath * 0.015 * bs
+	var sxz := 1.0 - breath * 0.007 * bs  # компенсация объёма
 	var lift := 0.0
 	if _flyer:
 		lift = (0.6 + 0.4 * sin(t * 1.6)) * _height * 0.05 * b
 	var sway := sin(t * 0.9)
-	var rx := sin(t * 0.7 + 1.3) * deg_to_rad(1.2) * b
-	var rz := sway * deg_to_rad(1.5) * b
+	var rx := sin(t * 0.7 + 1.3) * deg_to_rad(1.0) * bs
+	var rz := sway * deg_to_rad(1.0) * bs
 	position = _base + fx_pos + Vector3(0.0, lift, 0.0)
 	scale = Vector3(sxz, sy, sxz) * fx_scale
 	rotation = Vector3(rx + fx_pitch, fx_yaw, rz + fx_roll)
@@ -125,42 +129,55 @@ func _new_tween() -> Tween:
 
 
 ## Скелетный клип поверх процедурных эффектов, потом снова idle. Если у модели нет скелета — ничего.
-func _clip(clip: StringName, delay: float = 0.0) -> void:
+func _clip(clip: StringName, delay: float = 0.0, speed: float = 1.0, blend: float = 0.12) -> void:
 	if _player == null or not _player.has_animation(clip):
 		return
 	if delay > 0.0:
 		await get_tree().create_timer(delay).timeout
 		if not is_inside_tree():
 			return
-	_player.play(clip, 0.08)
+	_player.play(clip, blend, speed)
 	if _player.has_animation("idle"):
 		_player.queue("idle")
 
 
-## Появление: полуоборот (масштаб растит сам шар через _figure).
-func appear() -> void:
+## Выход из сферы: существо вырастает сжатым (клип stance), доворачивается к сопернику, на ~0.65 с
+## распрямляется во весь размах с рёвом и чуть подпрыгивает, потом встаёт в боевую стойку (idle).
+## Масштаб растит сам шар (_figure). pose = false — только доворот (в бою стойку заменяет рёв).
+func appear(pose: bool = true) -> void:
 	_kill(_tw_yaw)
-	fx_yaw = -PI
+	fx_yaw = -PI * 0.8
 	_tw_yaw = create_tween()
-	_tw_yaw.tween_property(self, "fx_yaw", 0.0, 0.55).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_tw_yaw.tween_property(self, "fx_yaw", 0.0, 0.6).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	if not pose:
+		return
+	_clip(&"stance", 0.0, 0.85, 0.0)
+	var tw := _new_tween()
+	tw.tween_interval(0.5)
+	tw.set_parallel(true)
+	tw.tween_property(self, "fx_pos", Vector3(0.0, _height * 0.07, 0.0), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "fx_pitch", -0.06, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.chain().set_parallel(true)
+	tw.tween_property(self, "fx_pos", Vector3.ZERO, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(flash_color.bind(_color, 0.35, 0.5)).set_delay(0.16)
+	tw.tween_property(self, "fx_pitch", 0.0, 0.6).set_delay(0.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
-## Рёв: наклон назад с рывком вверх, импульс масштаба, резкий возврат.
+## Рёв: клип roar; телом — лёгкий подъём и отклон назад (основное движение делает скелет).
 func roar(delay: float = 0.0) -> void:
 	_clip(&"roar", delay)
 	var tw := _new_tween()
 	if delay > 0.0:
 		tw.tween_interval(delay)
-	var up := Vector3(0.0, _height * 0.06, -_height * 0.05)
+	var up := Vector3(0.0, _height * 0.03, -_height * 0.02)
+	var k := 1.0 if _player == null else 0.4
 	tw.set_parallel(true)
-	tw.tween_property(self, "fx_pitch", -0.28, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_pos", up, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_scale", 1.1, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.chain().tween_interval(0.08)
+	tw.tween_property(self, "fx_pitch", -0.2 * k, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "fx_pos", up, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_interval(0.45)
 	tw.chain().set_parallel(true)
-	tw.tween_property(self, "fx_pitch", 0.0, 0.12).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
-	tw.tween_property(self, "fx_pos", Vector3.ZERO, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.tween_property(self, "fx_scale", 1.0, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "fx_pitch", 0.0, 0.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(self, "fx_pos", Vector3.ZERO, 0.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
 ## Рывок вперёд (+Z) на dist метров и откат. Удар приходится на ~0.3 с.
@@ -168,11 +185,12 @@ func lunge(dist: float) -> void:
 	_clip(&"attack")
 	var tw := _new_tween()
 	tw.set_parallel(true)
+	var k := 1.0 if _player == null else 0.4  # со скелетом корпус наклоняет сам клип
 	tw.tween_property(self, "fx_pos", Vector3(0, 0, -dist * 0.15), 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_pitch", -0.12, 0.18)
+	tw.tween_property(self, "fx_pitch", -0.12 * k, 0.18)
 	tw.chain().set_parallel(true)
 	tw.tween_property(self, "fx_pos", Vector3(0, 0, dist), 0.12).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
-	tw.tween_property(self, "fx_pitch", 0.2, 0.12)
+	tw.tween_property(self, "fx_pitch", 0.2 * k, 0.12)
 	tw.chain().set_parallel(true)
 	tw.tween_property(self, "fx_pos", Vector3.ZERO, 0.3).set_delay(0.06).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_property(self, "fx_pitch", 0.0, 0.3).set_delay(0.06)
@@ -185,35 +203,36 @@ func counter(dist: float) -> void:
 
 ## Отдача проигравшего: откат назад (-Z), встряска, возврат; вспышка цветом стихии победителя.
 func hit(flash: Color, dist: float) -> void:
-	_clip(&"hit")
+	_clip(&"hit", 0.0, 1.0, 0.06)
 	var tw := _new_tween()
+	var k := 1.0 if _player == null else 0.5
 	tw.set_parallel(true)
 	tw.tween_property(self, "fx_pos", Vector3(0, 0, -dist), 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_pitch", -0.3, 0.1)
-	tw.tween_property(self, "fx_scale", 0.94, 0.1)
+	tw.tween_property(self, "fx_pitch", -0.25 * k, 0.1)
 	tw.chain().tween_method(_shake, 1.0, 0.0, 0.35)
-	tw.tween_property(self, "fx_pos", Vector3.ZERO, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_pitch", 0.0, 0.35)
-	tw.tween_property(self, "fx_scale", 1.0, 0.35)
+	tw.tween_property(self, "fx_pos", Vector3.ZERO, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "fx_pitch", 0.0, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	flash_color(flash, 0.5, 0.45)
 
 
 ## Дрожь: крен меняется со знаком, амплитуда затухает.
 func _shake(k: float) -> void:
-	fx_roll = sin(k * 38.0) * 0.12 * k
+	fx_roll = sin(k * 30.0) * 0.06 * k
 
 
-## Короткий наклон/импульс при игре карты способности.
+## Сила способности: короткая поза рёва (если есть скелет), подъём и вспышка своей стихии.
 func ability_pulse() -> void:
+	if _player != null and _player.has_animation(&"roar"):
+		_player.play(&"roar", 0.15, 1.4)
+		_player.queue(&"idle")
 	var tw := _new_tween()
 	tw.set_parallel(true)
-	tw.tween_property(self, "fx_scale", 1.08, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_pitch", -0.15, 0.15)
-	tw.tween_property(self, "fx_pos", Vector3(0, _height * 0.04, 0), 0.15)
+	tw.tween_property(self, "fx_pitch", -0.05, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "fx_pos", Vector3(0, _height * 0.04, 0), 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.chain().set_parallel(true)
-	tw.tween_property(self, "fx_scale", 1.0, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_pitch", 0.0, 0.3)
-	tw.tween_property(self, "fx_pos", Vector3.ZERO, 0.3)
+	tw.tween_property(self, "fx_pitch", 0.0, 0.35).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(self, "fx_pos", Vector3.ZERO, 0.35).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	flash_color(_color, 0.3, 0.5)
 
 
 ## Вспышка: аддитивный overlay поверх материалов, затухает за dur.

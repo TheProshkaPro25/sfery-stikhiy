@@ -762,8 +762,7 @@ func _anim_fighter_swapped(old_uid: int, new_uid: int, _slot: int) -> void:
 	nb.freeze_at(pos)
 	if facing != Vector3.ZERO:
 		nb.face_toward(facing)
-	nb.open_animated()
-	nb.roar(0.3)
+	nb.open_animated()  # выход со стойкой и рёвом (CreatureAnim.appear)
 	_cry(new_uid, "appear", 0.2)
 	VisualUtil.ring_wave(world, pos - Vector3(0, CreatureBall.RADIUS - 0.1, 0), VisualUtil.attr_color(_creature_def(new_uid).attribute), Arena.CARD_W * 0.7, 0.55)
 	_focus_labels(_battle_uids)
@@ -1027,8 +1026,7 @@ func _anim_stood(uid: int, slot: int) -> void:
 	VisualUtil.ring_wave(world, arena.slot_position(slot) + Vector3(0, 0.08, 0), VisualUtil.attr_color(_creature_def(uid).attribute), Arena.CARD_W * 0.7, 0.55)
 	SoundFx.i().play_later("capsule_open", 0.05)
 	_cry(uid, "appear", 0.4)
-	b.open_animated()
-	b.roar(0.65)
+	b.open_animated()  # выход со стойкой и рёвом (CreatureAnim.appear), пик — к тряске камеры
 	get_tree().create_timer(0.8).timeout.connect(func() -> void: cam.shake(0.3, 0.2))
 	await _wait(orbit_t)
 	# кат на общий план
@@ -1060,12 +1058,12 @@ func _anim_battle_started(slot: int, attacker_uid: int, defender_uid: int, power
 		atk.freeze_at(base + y + Vector3(0.0, 0.0, dz))
 		atk.set_label_shift(-110.0 * signf(dz))
 		atk.face_toward(base - Vector3(0.0, 0.0, dz))
-		atk.open_animated()
+		atk.open_animated(false)
 	if dfn != null:
 		dfn.freeze_at(base + y - Vector3(0.0, 0.0, dz))
 		dfn.set_label_shift(110.0 * signf(dz))
 		dfn.face_toward(base + Vector3(0.0, 0.0, dz))
-		dfn.open_animated()
+		dfn.open_animated(false)
 	hud.set_hint("Бой: %s против %s" % [_cname(attacker_uid), _cname(defender_uid)])
 	SoundFx.i().play("battle_start")
 	# общий план лицом к лицу → кат на крупный план каждого при рёве → снова общий план

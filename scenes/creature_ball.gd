@@ -386,7 +386,8 @@ func open_up() -> Signal:
 
 ## Раскрытие: сердцевина вспыхивает, лепестки откидываются наружу, крышка с эмблемой взлетает и кружится,
 ## знак стихии вспыхивает на карте, столб света и вихрь частиц стихии; существо вырастает из света.
-func open_animated() -> Signal:
+## pose — существо встаёт в боевую стойку с рёвом (CreatureAnim.appear); в бою вместо неё рёв по сигналу.
+func open_animated(pose: bool = true) -> Signal:
 	if _open:
 		var t0 := create_tween()
 		t0.tween_interval(0.01)
@@ -422,7 +423,7 @@ func open_animated() -> Signal:
 	tw.chain().tween_callback(_finish_open)
 	if _anim != null:
 		_anim.reset()
-		_anim.appear()
+		_anim.appear(pose)
 	return tw.finished
 
 

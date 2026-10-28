@@ -3,9 +3,8 @@
 Запуск (Blender без интерфейса):
   blender -b --factory-startup -P tools/blender/rig_species.py -- <вид> <in.glb> <out.glb> [--template <образец.glb>] [--preview <png-префикс>]
 Скелет вида — таблица опорных точек SKELETONS (координаты Blender: X вправо, Y вперёд-назад, Z вверх,
-модель Pixal3D в своей единичной рамке). Веса — автоматические (heat) на сглаженной копии-прокси,
-затем перенос на исходную сетку (у Pixal3D сетки не всегда цельные, heat по ним даёт дыры).
-Клипы: idle (петля), roar, attack, hit — экспортируются в .glb как отдельные анимации.
+модель Pixal3D в своей единичной рамке). Веса — ближайшая кость, очищенная по связности сетки, со сглаживанием по рёбрам (см. skin).
+Клипы: idle (петля), stance (выход из сферы), roar, attack, hit — экспортируются в .glb как отдельные анимации.
 Точки скелета заданы по модели-образцу вида (TEMPLATE); для других стихий скелет переносится подобием
 (поворот+сдвиг+масштаб), найденным ICP по облакам точек образца и модели — стоят они немного по-разному.
 """
@@ -262,178 +261,350 @@ def build_armature(spec):
     return obj
 
 
-SIGMA = 0.035  # ширина мягкого перехода весов между соседними костями (в единицах модели ~1)
+SMOOTH_ITERS = 24     # сглаживание весов по рёбрам сетки: ширина перехода между костями
+RIGID_ISLAND = 0.02   # куски сетки меньше этой доли вершин (рога, когти, шипы) двигаются целиком
 
 
-def skin(mesh, rig, spec):
-    """Веса по расстоянию до отрезков костей: две ближайшие кости, гауссово смешивание.
-    Heat-веса Blender на сетках Pixal3D (не цельных, 150k треугольников) не находят решения."""
+def _bone_dist(co, bones):
     import numpy as np
-    bones = [(n, np.array(h), np.array(t)) for n, h, t, _p, d in spec if d]
-    co = np.array([mesh.matrix_world @ v.co for v in mesh.data.vertices])
     dist = np.empty((len(co), len(bones)))
     for j, (_n, a, b) in enumerate(bones):
         ab = b - a
         t = np.clip(((co - a) @ ab) / max(ab @ ab, 1e-9), 0.0, 1.0)
         dist[:, j] = np.linalg.norm(co - (a + t[:, None] * ab), axis=1)
-    near = np.argsort(dist, axis=1)[:, :2]
-    d2 = np.take_along_axis(dist, near, axis=1)
-    w = np.exp(-((d2 - d2[:, :1]) / SIGMA) ** 2)  # ближайшая кость = 1, вторая затухает с разницей расстояний
-    w /= w.sum(axis=1, keepdims=True)
+    return dist
+
+
+def skin(mesh, rig, spec):
+    """Веса: ближайшая кость + чистка по связности сетки + растекание по рёбрам.
+    1) Вершина берёт ближайшую кость; обрывки метки, оторванные от основного куска кости (кончик рога
+       рядом с крылом), теряют метку. 2) Они получают метку ближайшей по рёбрам размеченной вершины.
+    3) Метки сглаживаются по рёбрам (мягкие сгибы). 4) Мелкие куски сетки — жёстко, одним весом.
+    Heat-веса Blender на сетках Pixal3D (не цельных, 150k треугольников) не находят решения."""
+    import heapq
+    import numpy as np
+    bones = [(n, np.array(h), np.array(t)) for n, h, t, _p, d in spec if d]
+    nb = len(bones)
+    mw = mesh.matrix_world
+    raw = np.array([mw @ v.co for v in mesh.data.vertices])
+    # вершины на швах UV продублированы — склеиваем по положению, иначе куски сетки распадаются
+    pos, uid = np.unique(np.round(raw, 5), axis=0, return_inverse=True)
+    uid = uid.reshape(-1)
+    m = len(pos)
+    ed = np.empty(len(mesh.data.edges) * 2, dtype=np.int64)
+    mesh.data.edges.foreach_get("vertices", ed)
+    ed = uid[ed.reshape(-1, 2)]
+    ed = ed[ed[:, 0] != ed[:, 1]]
+    ed = np.unique(np.sort(ed, axis=1), axis=0)
+    elen = np.linalg.norm(pos[ed[:, 0]] - pos[ed[:, 1]], axis=1)
+    adj = [[] for _ in range(m)]
+    for (u, v), l in zip(ed.tolist(), elen.tolist()):
+        adj[u].append((v, l))
+        adj[v].append((u, l))
+    # связные куски
+    comp = -np.ones(m, dtype=np.int64)
+    nc = 0
+    for s0 in range(m):
+        if comp[s0] >= 0:
+            continue
+        comp[s0] = nc
+        st = [s0]
+        while st:
+            u = st.pop()
+            for v, _l in adj[u]:
+                if comp[v] < 0:
+                    comp[v] = nc
+                    st.append(v)
+        nc += 1
+    csize = np.bincount(comp)
+    # 1) ближайшая кость по прямой; у каждой кости оставляем только самый крупный связный кусок её
+    #    вершин — оторванные обрывки (кончик рога, «помеченный» крылом через воздух) размечаются заново
+    near = np.argmin(_bone_dist(pos, bones), axis=1)
+    lab = near.copy()
+    reg = -np.ones(m, dtype=np.int64)
+    nr = 0
+    for s0 in range(m):
+        if reg[s0] >= 0:
+            continue
+        reg[s0] = nr
+        st = [s0]
+        while st:
+            u = st.pop()
+            for v, _l in adj[u]:
+                if reg[v] < 0 and lab[v] == lab[s0]:
+                    reg[v] = nr
+                    st.append(v)
+        nr += 1
+    rsize = np.bincount(reg)
+    rlab = np.zeros(nr, dtype=np.int64)
+    rlab[reg] = lab
+    rcomp = np.zeros(nr, dtype=np.int64)
+    rcomp[reg] = comp
+    # крупнейший кусок кости в каждом связном куске сетки
+    pair = rlab * nc + rcomp
+    srt = np.lexsort((-rsize, pair))
+    first = np.ones(nr, dtype=bool)
+    first[1:] = pair[srt][1:] != pair[srt][:-1]
+    keep = np.zeros(nr, dtype=bool)
+    keep[srt[first]] = True
+    lab[~keep[reg]] = -1
+    print(f"SKIN verts={m} islands={nc} kept={np.mean(lab >= 0):.3f}")
+    # 2) растекание меток по рёбрам (многоисточниковый Дейкстра)
+    best = np.where(lab >= 0, 0.0, np.inf)
+    heap = [(0.0, int(i)) for i in np.nonzero(lab >= 0)[0]]
+    heapq.heapify(heap)
+    while heap:
+        d, u = heapq.heappop(heap)
+        if d > best[u]:
+            continue
+        for v, l in adj[u]:
+            nd = d + l
+            if nd < best[v]:
+                best[v] = nd
+                lab[v] = lab[u]
+                heapq.heappush(heap, (nd, v))
+    lab[lab < 0] = near[lab < 0]  # на всякий случай: не дотянулось растекание
+    # 3) сглаживание по рёбрам
+    w = np.zeros((m, nb))
+    w[np.arange(m), lab] = 1.0
+    deg = np.bincount(ed.reshape(-1), minlength=m).astype(float) + 1.0
+    for _ in range(SMOOTH_ITERS):
+        acc = w.copy()
+        np.add.at(acc, ed[:, 0], w[ed[:, 1]])
+        np.add.at(acc, ed[:, 1], w[ed[:, 0]])
+        w = acc / deg[:, None]
+    # 4) мелкие куски — средний вес куска (жёсткое движение)
+    small = csize < max(30, RIGID_ISLAND * m)
+    if small.any():
+        sums = np.zeros((nc, nb))
+        np.add.at(sums, comp, w)
+        means = sums / csize[:, None]
+        sm = small[comp]
+        w[sm] = means[comp[sm]]
+    # не больше 4 костей на вершину (glTF)
+    top = np.argsort(-w, axis=1)[:, :4]
+    tw = np.take_along_axis(w, top, axis=1)
+    tw[tw < 0.02] = 0.0
+    tw /= np.maximum(tw.sum(axis=1, keepdims=True), 1e-9)
+    top, tw = top[uid], tw[uid]
     groups = [mesh.vertex_groups.new(name=n) for n, _a, _b in bones]
     for j, g in enumerate(groups):
-        for k in range(2):
-            idx = np.nonzero((near[:, k] == j) & (w[:, k] > 0.01))[0]
-            for wv in np.unique(np.round(w[idx, k], 2)):
-                sel = idx[np.round(w[idx, k], 2) == wv]
-                g.add(sel.tolist(), float(wv), "REPLACE")
+        for k in range(4):
+            idx = np.nonzero((top[:, k] == j) & (tw[:, k] > 0.0))[0]
+            if len(idx) == 0:
+                continue
+            q = np.round(tw[idx, k], 2)
+            for wv in np.unique(q):
+                g.add(idx[q == wv].tolist(), float(wv), "REPLACE")
     mesh.parent = rig
     am = mesh.modifiers.new("rig", "ARMATURE")
     am.object = rig
 
 
-def key(rig, frame, poses):
-    """poses: {кость: (rx, ry, rz) в градусах, локально}; остальные кости — в покое на этом кадре."""
+# --- Позы в осях тела ---------------------------------------------------------------------------
+# Поза кости: (наклон, разведение, поворот) в градусах, в осях тела существа, а не в локальных осях кости
+# (у костей Pixal3D-скелетов крен случайный, локальные углы двигали крылья «к камере»).
+#   наклон > 0 — вперёд/вниз (поклон; свисающая лапа уходит назад), < 0 — назад/вверх (лапа вперёд);
+#   разведение > 0 — боковая кость поднимается/отводится наружу (крыло вверх, рука в сторону),
+#                    у осевых (хребет, хвост) — крен;
+#   поворот > 0 — боковая кость выносится вперёд, у осевых — поворот вбок.
+# .R зеркалит .L сам (знак берётся по стороне кости), асимметрию задают явной .R.
+
+
+def body_frame(rig):
+    """Оси тела: F — взгляд (по горизонтали от таза к голове), U — вверх, S = F×U — вбок."""
+    bones = rig.data.bones
+    head = next((bones[n] for n in ("head", "neck3", "neck") if n in bones), bones[-1])
+    base = bones["hips"] if "hips" in bones else bones[0]
+    f = (head.tail_local - base.head_local)
+    f.z = 0.0
+    f.normalize()
+    u = Vector((0.0, 0.0, 1.0))
+    return f, u, f.cross(u), bones["root"].head_local if "root" in bones else base.head_local
+
+
+def _local_quat(bone, frame, pose):
+    from mathutils import Matrix
+    f, u, s, center = frame
+    pitch, spread, twist = (math.radians(a) for a in pose)
+    side = 1.0
+    if bone.name.endswith((".L", ".R")):
+        mid = (bone.head_local + bone.tail_local) * 0.5 - center
+        side = 1.0 if mid.dot(s) >= 0.0 else -1.0
+    w = (Matrix.Rotation(-pitch, 3, s) @ Matrix.Rotation(-side * spread, 3, f)
+         @ Matrix.Rotation(side * twist, 3, u))
+    r = bone.matrix_local.to_3x3().normalized()
+    q = (r.inverted() @ w @ r).to_quaternion()
+    if q.w < 0.0:
+        q.negate()
+    return q
+
+
+def key(rig, frame, poses, bframe):
+    """poses: {кость: (наклон, разведение, поворот)}; остальные кости — в покое на этом кадре."""
     for pb in rig.pose.bones:
-        pb.rotation_mode = "XYZ"
-        r = poses.get(pb.name, (0, 0, 0))
-        pb.rotation_euler = Euler([math.radians(a) for a in r])
-        pb.keyframe_insert("rotation_euler", frame=frame)
+        pb.rotation_mode = "QUATERNION"
+        pb.rotation_quaternion = _local_quat(pb.bone, bframe, poses.get(pb.name, (0, 0, 0)))
+        pb.keyframe_insert("rotation_quaternion", frame=frame)
 
 
 def mirror(d):
-    """Симметричная поза: значения для .L копируются в .R с отражением Y/Z-поворотов."""
+    """.L копируется в .R (зеркальность даёт знак стороны в _local_quat)."""
     out = dict(d)
-    for k, (x, y, z) in d.items():
+    for k, v in d.items():
         if k.endswith(".L"):
-            out.setdefault(k[:-2] + ".R", (x, -y, -z))
+            out.setdefault(k[:-2] + ".R", v)
     return out
 
 
-def clips_dragnar():
-    rest = {}
-    breathe = mirror({"chest": (-3, 0, 0), "neck": (-2, 0, 0), "wing.L": (0, 0, -8), "wingtip.L": (0, 0, -6),
-                      "tail2": (0, 0, 6), "tail3": (0, 0, 8), "tail4": (0, 0, 8)})
-    breathe2 = mirror({"chest": (2, 0, 0), "neck": (2, 0, 0), "wing.L": (0, 0, 6), "wingtip.L": (0, 0, 5),
-                       "tail2": (0, 0, -6), "tail3": (0, 0, -8), "tail4": (0, 0, -8)})
-    roar = mirror({"chest": (-12, 0, 0), "neck": (-22, 0, 0), "head": (-18, 0, 0), "wing.L": (0, 0, 18),
-                   "wingtip.L": (0, 0, 14), "arm.L": (0, 0, 15), "tail3": (12, 0, 0)})
-    windup = mirror({"chest": (-10, 0, 0), "neck": (-8, 0, 0), "wing.L": (0, 0, 12), "arm.L": (0, 0, 10)})
-    strike = dict(mirror({"chest": (22, 0, 0), "neck": (14, 0, 0), "head": (8, 0, 0), "wing.L": (0, 0, -10),
-                          "tail2": (-8, 0, 0)}), **{"arm.R": (-35, 0, -20), "forearm.R": (-25, 0, 0)})
-    hit = mirror({"hips": (-6, 0, 0), "chest": (-16, 0, 0), "neck": (-14, 0, 0), "head": (-10, 0, 8),
-                  "wing.L": (0, 0, -14), "wingtip.L": (0, 0, -10), "tail2": (8, 0, 0)})
+def add(*poses):
+    """Сумма поз (наклоны и развороты складываются покостно)."""
+    out = {}
+    for p in poses:
+        for k, v in p.items():
+            o = out.get(k, (0, 0, 0))
+            out[k] = tuple(a + b for a, b in zip(o, v))
+    return out
+
+
+def mul(p, k):
+    return {b: tuple(a * k for a in v) for b, v in p.items()}
+
+
+def clips_generic(strike="R"):
+    """Прямоходящие и крылатые: стойка, дыхание, выход из сферы, рёв, удар лапой strike, отдача."""
+    o = "L" if strike == "R" else "R"
+    guard = mirror({"hips": (4, 0, 0), "chest": (6, 0, 0), "neck": (-4, 0, 0), "head": (2, 0, 0),
+                    "arm.L": (-22, 12, 10), "forearm.L": (-28, 0, 0), "thigh.L": (-6, 0, 0), "shin.L": (8, 0, 0),
+                    "wing.L": (0, 10, 0), "wingtip.L": (0, 6, 0), "tail1": (-4, 0, 0), "tail2": (-4, 0, 0),
+                    "cape1": (-2, 0, 0)})
+    inhale = mirror({"chest": (-3, 0, 0), "neck": (-2, 0, 0), "arm.L": (0, 3, 0), "wing.L": (0, 6, 0),
+                     "wingtip.L": (0, 4, 0), "tail2": (0, 0, 6), "tail3": (0, 0, 8), "tail4": (0, 0, 8),
+                     "cape1": (-2, 0, 0), "cape2": (-3, 0, 0)})
+    exhale = mirror({"chest": (2, 0, 0), "neck": (1, 0, 0), "arm.L": (0, -2, 0), "wing.L": (0, -4, 0),
+                     "wingtip.L": (0, -3, 0), "tail2": (0, 0, -6), "tail3": (0, 0, -8), "tail4": (0, 0, -8),
+                     "cape1": (2, 0, 0), "cape2": (3, 0, 0)})
+    look_l = {"neck": (0, 0, 5), "head": (0, 0, 5)}
+    look_r = {"neck": (0, 0, -4), "head": (0, 0, -5)}
+    # выход из сферы: сжат в комок → распрямляется с рёвом во весь размах → встаёт в стойку
+    coil = mirror({"hips": (12, 0, 0), "chest": (24, 0, 0), "neck": (16, 0, 0), "head": (10, 0, 0),
+                   "arm.L": (10, -8, 25), "forearm.L": (-45, 0, 0), "thigh.L": (-14, 0, 0), "shin.L": (18, 0, 0),
+                   "wing.L": (0, -18, 0), "wingtip.L": (0, -14, 0), "tail1": (6, 0, 0), "tail2": (8, 0, 0),
+                   "cape1": (6, 0, 0)})
+    burst = mirror({"hips": (-4, 0, 0), "chest": (-14, 0, 0), "neck": (-16, 0, 0), "head": (-18, 0, 0),
+                    "arm.L": (-35, 38, -5), "forearm.L": (-15, 0, 0), "wing.L": (0, 32, 0), "wingtip.L": (0, 22, 0),
+                    "tail1": (-10, 0, 0), "tail2": (-12, 0, 0), "tail3": (-8, 0, 0), "cape1": (-14, 0, 0),
+                    "cape2": (-10, 0, 0)})
+    burst2 = add(burst, {"head": (-3, 0, 5), "neck": (0, 0, 3)})
+    roar = mirror({"chest": (-12, 0, 0), "neck": (-14, 0, 0), "head": (-16, 0, 0), "arm.L": (-10, 26, 0),
+                   "forearm.L": (-10, 0, 0), "wing.L": (0, 26, 0), "wingtip.L": (0, 18, 0), "tail2": (-10, 0, 0),
+                   "tail3": (-8, 0, 0), "cape1": (-10, 0, 0)})
+    windup = mirror({"chest": (-10, 0, 0), "neck": (-4, 0, 0), "wing.L": (0, 22, 0), "wingtip.L": (0, 14, 0),
+                     "tail1": (-6, 0, 0), "cape1": (-8, 0, 0)})
+    windup.update({f"arm.{strike}": (-60, 30, -25), f"forearm.{strike}": (-40, 0, 0),
+                   f"arm.{o}": (-30, 10, 20), "chest": (-10, 0, -14)})
+    hit_to = mirror({"chest": (20, 0, 0), "neck": (10, 0, 0), "head": (6, 0, 0), "wing.L": (0, -10, 0),
+                     "tail1": (8, 0, 0), "tail2": (6, 0, 0), "cape1": (-18, 0, 0), "cape2": (-10, 0, 0)})
+    hit_to.update({f"arm.{strike}": (-80, 6, 30), f"forearm.{strike}": (-5, 0, 0),
+                   f"arm.{o}": (-10, 20, -10), "chest": (20, 0, 16)})
+    recoil = mirror({"hips": (-6, 0, 0), "chest": (-18, 0, 0), "neck": (-12, 0, 0), "head": (-12, 0, 10),
+                     "arm.L": (14, 24, -10), "wing.L": (0, -14, 0), "wingtip.L": (0, -8, 0), "tail1": (10, 0, 0),
+                     "cape1": (12, 0, 0)})
+    g = guard
     return {
-        "idle": [(1, rest), (13, breathe), (37, breathe2), (49, rest)],
-        "roar": [(1, rest), (8, windup), (14, roar), (26, roar), (34, rest)],
-        "attack": [(1, rest), (7, windup), (12, strike), (20, strike), (28, rest)],
-        "hit": [(1, rest), (4, hit), (12, hit), (22, rest)],
+        "idle": [(1, g), (13, add(g, inhale, look_l)), (25, add(g, mul(inhale, 0.3))),
+                 (37, add(g, exhale, look_r)), (49, g)],
+        "stance": [(1, coil), (8, add(coil, {"chest": (4, 0, 0)})), (14, burst), (22, burst2), (27, burst),
+                   (34, add(g, {"chest": (3, 0, 0), "head": (2, 0, 0)})), (40, g)],
+        "roar": [(1, g), (6, add(g, {"chest": (8, 0, 0), "head": (6, 0, 0)})), (11, roar),
+                 (16, add(roar, {"head": (-2, 0, 5)})), (21, add(roar, {"head": (-2, 0, -5)})), (25, roar), (34, g)],
+        "attack": [(1, g), (7, add(g, windup)), (10, add(g, hit_to)), (16, add(g, mul(hit_to, 0.85))), (28, g)],
+        "hit": [(1, g), (3, add(g, recoil)), (9, add(g, mul(recoil, 0.6))), (22, g)],
     }
 
 
-def clips_biped(sword=False):
-    """Прямоходящие (Колоссар, Ратник, Горгул, Грифалон): как у Драгнара, без лишних костей."""
-    c = clips_dragnar()
-    breathe = mirror({"chest": (-3, 0, 0), "neck": (-2, 0, 0), "arm.L": (0, 0, 4), "wing.L": (0, 0, -8),
-                      "wingtip.L": (0, 0, -6), "tail1": (0, 0, 6), "tail2": (0, 0, 8), "cape1": (-3, 0, 0),
-                      "cape2": (-4, 0, 0)})
-    breathe2 = mirror({"chest": (2, 0, 0), "neck": (2, 0, 0), "arm.L": (0, 0, -3), "wing.L": (0, 0, 6),
-                       "wingtip.L": (0, 0, 5), "tail1": (0, 0, -6), "tail2": (0, 0, -8), "cape1": (3, 0, 0),
-                       "cape2": (4, 0, 0)})
-    c["idle"] = [(1, {}), (13, breathe), (37, breathe2), (49, {})]
-    if sword:  # удар мечом сверху вниз рукой .L, плащ отлетает назад
-        windup = mirror({"chest": (-8, 0, 0), "cape1": (-10, 0, 0)})
-        windup.update({"arm.L": (-70, 0, 0), "forearm.L": (-30, 0, 0)})
-        strike = mirror({"chest": (16, 0, 0), "neck": (6, 0, 0), "cape1": (-20, 0, 0), "cape2": (-12, 0, 0)})
-        strike.update({"arm.L": (30, 0, 0), "forearm.L": (10, 0, 0)})
-        c["attack"] = [(1, {}), (8, windup), (13, strike), (20, strike), (28, {})]
-    return c
-
-
 def scaled(clips, k):
-    """Умножить повороты костей на k: {кость-префикс: коэффициент}."""
+    """Умножить позы костей на k: {кость-префикс: коэффициент}."""
     def f(name, r):
         m = next((v for pre, v in k.items() if name.startswith(pre)), 1.0)
         return tuple(a * m for a in r)
     return {c: [(fr, {b: f(b, r) for b, r in p.items()}) for fr, p in keys] for c, keys in clips.items()}
 
 
+def remap(clips, table):
+    """Перенести позы обобщённых костей на кости вида: {кость: [(кость вида, доля), ...]}."""
+    def f(p):
+        out = {}
+        for b, v in p.items():
+            for nb_, k in table.get(b, [(b, 1.0)]):
+                o = out.get(nb_, (0, 0, 0))
+                out[nb_] = tuple(x + y * k for x, y in zip(o, v))
+        return out
+    return {c: [(fr, f(p)) for fr, p in keys] for c, keys in clips.items()}
+
+
 def clips_quadruped():
-    """Клыкарь: дыхание и хвост, рёв с задранной головой, бросок с укусом, отдача."""
-    breathe = mirror({"chest": (-2, 0, 0), "neck": (-3, 0, 0), "wing.L": (0, 0, -6), "tail2": (0, 0, 8),
-                      "tail3": (0, 0, 10)})
-    breathe2 = mirror({"chest": (1, 0, 0), "neck": (2, 0, 0), "wing.L": (0, 0, 5), "tail2": (0, 0, -8),
-                       "tail3": (0, 0, -10)})
-    roar = mirror({"hips": (-4, 0, 0), "chest": (-6, 0, 0), "neck": (-22, 0, 0), "head": (-14, 0, 0),
-                   "wing.L": (0, 0, 16), "tail1": (12, 0, 0), "tail2": (10, 0, 0)})
-    windup = mirror({"hips": (3, 0, 0), "neck": (8, 0, 0), "head": (6, 0, 0), "thigh.L": (-10, 0, 0),
-                     "arm.L": (10, 0, 0), "tail1": (-6, 0, 0)})
-    strike = mirror({"hips": (-6, 0, 0), "chest": (6, 0, 0), "neck": (14, 0, 0), "head": (16, 0, 0),
-                     "arm.L": (-30, 0, 0), "forearm.L": (20, 0, 0), "thigh.L": (14, 0, 0), "tail1": (10, 0, 0)})
-    hit = mirror({"hips": (6, 0, 0), "chest": (-10, 0, 0), "neck": (-16, 0, 0), "head": (-8, 0, 10),
-                  "wing.L": (0, 0, -12), "tail1": (-14, 0, 0)})
-    return {
-        "idle": [(1, {}), (13, breathe), (37, breathe2), (49, {})],
-        "roar": [(1, {}), (8, windup), (14, roar), (26, roar), (34, {})],
-        "attack": [(1, {}), (7, windup), (12, strike), (20, strike), (28, {})],
-        "hit": [(1, {}), (4, hit), (12, hit), (22, {})],
-    }
+    """Клыкарь: лапы стоят, работают хребет, шея, хвост; удар — бросок с укусом и замахом правой лапы."""
+    c = scaled(clips_generic(), {"arm": 0.0, "forearm": 0.0, "thigh": 0.0, "shin": 0.0, "wing": 0.6})
+    lowered = {"chest": (8, 0, 0), "neck": (10, 0, 0), "head": (4, 0, 0), "tail1": (-8, 0, 0)}
+    pounce = mirror({"hips": (-6, 0, 0), "chest": (-4, 0, 0), "neck": (-12, 0, 0), "head": (-4, 0, 0),
+                     "tail1": (-14, 0, 0), "tail2": (-10, 0, 0), "wing.L": (0, 18, 0)})
+    pounce.update({"arm.R": (-35, 0, 0), "forearm.R": (25, 0, 0)})
+    bite = {"chest": (10, 0, 0), "neck": (18, 0, 0), "head": (14, 0, 0), "tail1": (10, 0, 0),
+            "arm.R": (-20, 0, 0), "forearm.R": (10, 0, 0)}
+    g = c["idle"][0][1]
+    c["attack"] = [(1, g), (7, add(g, pounce)), (10, add(g, bite)), (16, add(g, mul(bite, 0.8))), (28, g)]
+    c["idle"] = [(fr, add(p, mul(lowered, 0.5))) for fr, p in c["idle"]]
+    return c
 
 
 def clips_beetle():
-    """Рогожук: панцирь приоткрывается, рог поддевает снизу вверх."""
-    breathe = mirror({"shell": (-3, 0, 0), "head": (2, 0, 0), "arm.L": (0, 0, 3)})
-    breathe2 = mirror({"shell": (2, 0, 0), "head": (-2, 0, 0), "arm.L": (0, 0, -3)})
-    roar = mirror({"chest": (-8, 0, 0), "head": (-18, 0, 0), "shell": (-14, 0, 0), "arm.L": (-15, 0, 0)})
-    windup = mirror({"chest": (8, 0, 0), "head": (14, 0, 0), "hips": (-4, 0, 0), "thigh.L": (-8, 0, 0)})
-    strike = mirror({"chest": (-10, 0, 0), "head": (-26, 0, 0), "shell": (-10, 0, 0), "arm.L": (-20, 0, 0),
-                     "thigh.L": (12, 0, 0)})
-    hit = mirror({"chest": (-6, 0, 0), "head": (-12, 0, 8), "shell": (6, 0, 0), "hips": (4, 0, 0)})
-    return {
-        "idle": [(1, {}), (13, breathe), (37, breathe2), (49, {})],
-        "roar": [(1, {}), (8, windup), (14, roar), (26, roar), (34, {})],
-        "attack": [(1, {}), (7, windup), (12, strike), (20, strike), (28, {})],
-        "hit": [(1, {}), (4, hit), (12, hit), (22, {})],
-    }
+    """Рогожук: панцирь приподнимается, рог поддевает снизу вверх."""
+    c = scaled(clips_generic(), {"thigh": 0.3, "shin": 0.3, "arm": 0.6, "neck": 1.0})
+    shell_open = {"shell": (-16, 0, 0)}
+    for name in ("stance", "roar"):  # на пике (без первых и последних двух ключей) панцирь раскрыт
+        c[name] = [(fr, add(p, shell_open) if 1 < i < len(c[name]) - 2 else p)
+                   for i, (fr, p) in enumerate(c[name])]
+    g = c["idle"][0][1]
+    dip = {"chest": (10, 0, 0), "head": (16, 0, 0), "horn": (6, 0, 0)}
+    toss = {"chest": (-10, 0, 0), "head": (-26, 0, 0), "shell": (-8, 0, 0), "horn": (-6, 0, 0)}
+    c["attack"] = [(1, g), (7, add(g, dip)), (10, add(g, toss)), (16, add(g, mul(toss, 0.8))), (28, g)]
+    return c
 
 
 def clips_serpent():
-    """Левиан: шея-волна, кольцо почти неподвижно, хвост покачивается."""
-    breathe = mirror({"neck1": (-3, 0, 0), "neck2": (4, 0, 0), "neck3": (-4, 0, 0), "wing.L": (0, 0, -8),
-                      "wingtip.L": (0, 0, -6), "tail": (0, 0, 10)})
-    breathe2 = mirror({"neck1": (3, 0, 0), "neck2": (-4, 0, 0), "neck3": (4, 0, 0), "wing.L": (0, 0, 6),
-                       "wingtip.L": (0, 0, 5), "tail": (0, 0, -10)})
-    roar = mirror({"neck1": (-8, 0, 0), "neck2": (-10, 0, 0), "neck3": (-16, 0, 0), "head": (-14, 0, 0),
-                   "wing.L": (0, 0, 18), "wingtip.L": (0, 0, 12), "tail": (14, 0, 0)})
-    windup = mirror({"neck1": (-10, 0, 0), "neck2": (-12, 0, 0), "neck3": (-8, 0, 0), "wing.L": (0, 0, 10)})
-    strike = mirror({"neck1": (14, 0, 0), "neck2": (16, 0, 0), "neck3": (14, 0, 0), "head": (10, 0, 0),
-                     "wing.L": (0, 0, -10)})
-    hit = mirror({"neck1": (-8, 0, 0), "neck2": (-12, 0, 0), "neck3": (-10, 0, 10), "head": (-8, 0, 0),
-                  "wing.L": (0, 0, -14), "tail": (-10, 0, 0)})
-    return {
-        "idle": [(1, {}), (13, breathe), (37, breathe2), (49, {})],
-        "roar": [(1, {}), (8, windup), (14, roar), (26, roar), (34, {})],
-        "attack": [(1, {}), (7, windup), (12, strike), (20, strike), (28, {})],
-        "hit": [(1, {}), (4, hit), (12, hit), (22, {})],
-    }
+    """Левиан: шея-волна (обобщённые chest/neck/head раскладываются на neck1..3), кольцо на земле."""
+    c = remap(clips_generic(), {"chest": [("neck1", 0.5)], "neck": [("neck2", 0.7), ("neck3", 0.6)],
+                                "tail1": [("tail", 1.0)], "hips": [], "arm.L": [], "arm.R": [],
+                                "forearm.L": [], "forearm.R": []})
+    g = c["idle"][0][1]
+    rear = {"neck1": (-10, 0, 0), "neck2": (-14, 0, 0), "neck3": (-6, 0, 0), "head": (8, 0, 0)}
+    strike = {"neck1": (16, 0, 0), "neck2": (16, 0, 0), "neck3": (10, 0, 0), "head": (4, 0, 0)}
+    c["attack"] = [(1, g), (7, add(g, rear)), (10, add(g, strike)), (16, add(g, mul(strike, 0.8))), (28, g)]
+    sway = [{"neck2": (0, 0, 6), "neck3": (0, 0, -6)}, {"neck2": (0, 0, -6), "neck3": (0, 0, 6)}]
+    c["idle"] = [(fr, add(p, sway[i % 2]) if 0 < i < len(c["idle"]) - 1 else p)
+                 for i, (fr, p) in enumerate(c["idle"])]
+    return c
 
 
-CLIPS = {"dragnar": clips_dragnar, "klykar": clips_quadruped,
+CLIPS = {"dragnar": clips_generic, "klykar": clips_quadruped,
          # у Грифалона крылья сложены вдоль тела — большой взмах проводит их сквозь грудь
-         "grifalon": lambda: scaled(clips_biped(), {"wing": 0.35}),
+         "grifalon": lambda: scaled(clips_generic(), {"wing": 0.35}),
          # Колоссар тяжёлый: корпус почти не гнётся, работают руки
-         "kolossar": lambda: scaled(clips_biped(), {"chest": 0.5, "neck": 0.4, "head": 0.5, "arm": 1.3}),
-         "ratnik": lambda: clips_biped(sword=True), "gorgul": clips_biped, "rogozhuk": clips_beetle,
+         "kolossar": lambda: scaled(clips_generic(), {"chest": 0.6, "neck": 0.5, "head": 0.6, "arm": 1.2}),
+         # Ратник бьёт мечом в левой руке, плащ отлетает назад
+         "ratnik": lambda: clips_generic(strike="L"), "gorgul": clips_generic, "rogozhuk": clips_beetle,
          "levian": clips_serpent}
 
 
 def make_actions(rig, species):
     rig.animation_data_create()
+    bframe = body_frame(rig)
     for name, keys in CLIPS[species]().items():
         act = bpy.data.actions.new(name)
         rig.animation_data.action = act
         for frame, poses in keys:
-            key(rig, frame, poses)
+            key(rig, frame, poses, bframe)
         track = rig.animation_data.nla_tracks.new()
         track.name = name
         strip = track.strips.new(name, 1, act)
@@ -453,9 +624,9 @@ def preview(rig, prefix):
     sc.camera = cam
     cam.data.type = "ORTHO"
     cam.data.ortho_scale = 1.15
-    shots = {"rest": None, "idle": 13, "roar": 20, "attack": 14, "hit": 8}
+    shots = {"rest": None, "idle": 13, "stance": 1, "stance2": 14, "roar": 11, "windup": 7, "attack": 10, "hit": 3}
     for clip, frame in shots.items():
-        act = bpy.data.actions.get(clip) if frame else None
+        act = bpy.data.actions.get({"stance2": "stance", "windup": "attack"}.get(clip, clip)) if frame else None
         rig.animation_data.action = act
         if act is not None and act.slots:
             rig.animation_data.action_slot = act.slots[0]
@@ -464,7 +635,7 @@ def preview(rig, prefix):
         sc.frame_set(frame or 1)
         if not frame:
             for pb in rig.pose.bones:
-                pb.rotation_euler = (0, 0, 0)
+                pb.rotation_quaternion = (1, 0, 0, 0)
         for view, (loc, rot) in {"front": ((0.02, -2, 0), (90, 0, 0)), "side": ((2, -0.06, 0), (90, 0, 90))}.items():
             cam.location = loc
             cam.rotation_euler = Euler([math.radians(a) for a in rot])
