@@ -84,6 +84,7 @@ func _initialize() -> void:
 	_test_revive()
 	_test_marks()
 	_test_recall_and_returns()
+	_test_recharge()
 	_test_silence_and_lockout()
 	_test_momentum()
 	_test_final_round()
@@ -404,7 +405,7 @@ func _test_element_abilities() -> void:
 	_add_creature(st, 4, LU, 0, 5)
 	var r: BattleResult = _calc(st, &"ability_fire_ash")
 	_check(r.marks == [[2, {"src": &"ability_fire_ash", "delta": -50}]], "Пепельный дождь метит стоящих соперников, кроме Пламени: %s" % str(r.marks))
-	_expect("Попутный шквал в бою +150", ZH, VI, &"", &"ability_gale_leap", &"", 550, 300)
+	_expect("Попутный шквал в бою +100", ZH, VI, &"", &"ability_gale_leap", &"", 500, 300)
 	var rv: BattleResult = _expect("Возрождение", ZH, VI, &"", &"ability_light_revive", &"", 430, 300)
 	_check(rv.revive == [true, false], "Возрождение помечено у атакующего")
 	_expect("Очищающий луч: ворота соперника не действуют", ZH, VI, &"arena_field_gale", &"ability_light_purge", &"", 450, 300)
@@ -445,10 +446,10 @@ func _test_ladder() -> void:
 	_expect("Жаркий натиск в атаке", ZH, VI, &"", &"ability_fire_assault", &"", 500, 300)
 	_expect("Жаркий натиск в защите — 0", ZH, VI, &"", &"", &"ability_fire_assault", 400, 300)
 	_expect("Светлый страж в защите", ZH, VI, &"", &"", &"ability_light_guard", 400, 400)
-	_expect("Порыв +100 и +200 против бьющей стихии", ZH, VI, &"", &"", &"ability_gale_gust", 400, 600)
-	_expect("Встречный вихрь: соперник сильнее по БС", ZH, VI, &"", &"", &"ability_gale_counter", 400, 450)
+	_expect("Порыв +80 и +170 против бьющей стихии", ZH, VI, &"", &"", &"ability_gale_gust", 400, 550)
+	_expect("Встречный вихрь: соперник сильнее по БС", ZH, VI, &"", &"", &"ability_gale_counter", 400, 420)
 	_expect("Встречный вихрь: соперник слабее — 0", ZH, VI, &"", &"ability_gale_counter", &"", 400, 300)
-	_expect("Порыв без бьющей стихии +100", VI, LU, &"", &"ability_gale_gust", &"", 460, 330)
+	_expect("Порыв без бьющей стихии +80", VI, LU, &"", &"ability_gale_gust", &"", 440, 330)
 	_check(CardEffects.boost_cond_ok(CardDB.card(&"ability_gale_counter"), {"my_base": 300, "foe_base": 300, "foe_beats": true}),
 		"Встречный вихрь: стихия соперника бьёт твою")
 	_check(not CardEffects.boost_cond_ok(CardDB.card(&"ability_gale_counter"), {"my_base": 300, "foe_base": 300, "foe_beats": false}),
@@ -648,7 +649,7 @@ func _test_gust() -> void:
 	_check(_has_event(ctrl, "creature_relocated(0, 0, 5)") and _has_event(ctrl, "battle_started(5, 0, 5)"), "перелёт к слабейшему (Левиан 320) и бой")
 	_check(ctrl.get_phase() == MatchController.Phase.ABILITY_WINDOW and ctrl.state.slots[0].occupant_uid == -1, "бой идёт, прежние ворота свободны")
 	var pre: BattleResult = ctrl.get_battle_preview()
-	_check(pre.powers[0] == 450 and pre.powers[1] == 320, "шквал даёт +150 в этом бою: %s" % pre.to_log_string())
+	_check(pre.powers[0] == 400 and pre.powers[1] == 320, "шквал даёт +100 в этом бою: %s" % pre.to_log_string())
 	var c2: MatchController = _ctrl([VI, LU, GR], [&"ability_gale_leap", PLUS, MINUS], [ZH, SU, MA], [PLUS, MINUS, SHIELD], 132, true)
 	_throw(c2, 0, 0, 0)
 	c2.play_ability(0, &"ability_gale_leap")
@@ -808,6 +809,50 @@ func _test_recall_and_returns() -> void:
 	_check(c2.get_battle_preview().powers[0] == pre0.powers[0] + 200, "Последний костёр +200 последнему существу")
 	_pass_windows(c2)
 	_check(c2.state.players[0].ability_hand.has(&"ability_fire_last"), "карта камбэка снова в руке")
+
+
+## Перезарядка: три карты в одном бою, отдых RECHARGE_BATTLES боёв, у последнего существа — сразу (кроме «Отлива»).
+func _test_recharge() -> void:
+	var ab3: Array = [PLUS, MINUS, &"ability_fire_spark"]
+	var ctrl: MatchController = _battle_ctrl(ab3, [SHIELD, MINUS, PLUS], NEUTRAL, 0, 0, 231)
+	var back: Array = []
+	ctrl.abilities_recharged.connect(func(p: int, ids: Array) -> void: back.append([p, ids]))
+	ctrl.play_ability(0, PLUS)
+	ctrl.play_ability(1, SHIELD)
+	ctrl.play_ability(0, MINUS)
+	ctrl.pass_ability(1)
+	_check(ctrl.get_phase() == MatchController.Phase.ABILITY_WINDOW and ctrl.legal_abilities(0).size() == 1, "после паса соперника третья карта доступна")
+	ctrl.play_ability(0, &"ability_fire_spark")
+	_check(ctrl.get_phase() != MatchController.Phase.ABILITY_WINDOW, "три карты в одном бою сыграны")
+	var ps: PlayerState = ctrl.state.players[0]
+	_check(ps.ability_hand.is_empty() and ps.abilities_used.size() == 3, "после боя руки нет: %s" % str(ps.ability_hand))
+	_check(int(ps.ability_cooldown.get(PLUS, 0)) == MatchController.RECHARGE_BATTLES, "карта отдыхает %d боя: %s" % [MatchController.RECHARGE_BATTLES, str(ps.ability_cooldown)])
+	_check(back.is_empty(), "в бою розыгрыша карты не возвращаются")
+	for i in range(MatchController.RECHARGE_BATTLES - 1):
+		ctrl._recharge_abilities()
+	_check(ps.ability_hand.is_empty(), "до конца отдыха рука пуста")
+	ctrl._recharge_abilities()
+	ctrl._flush()
+	_check(ps.ability_hand.size() == 3 and ps.abilities_used.is_empty() and ps.ability_cooldown.is_empty(), "после отдыха карты в руке: %s" % str(ps.ability_hand))
+	_check(back.size() == 2 and int(back[0][0]) == 0 and (back[0][1] as Array).size() == 3, "сигнал перезарядки: %s" % str(back))
+	# у последнего существа карты возвращаются сразу, «Отлив» отдыхает полный срок
+	var c2: MatchController = _battle_ctrl(ab3, [SHIELD, MINUS, PLUS], NEUTRAL, 0, 0, 232)
+	var p2: PlayerState = c2.state.players[0]
+	for id in [PLUS, &"ability_tide_ebb"]:
+		p2.ability_hand.erase(id)
+		p2.abilities_used.append(id)
+	c2.state.creatures[1].alive = false
+	c2.state.creatures[2].alive = false
+	c2._recharge_abilities()
+	_check(p2.ability_hand.has(PLUS) and not p2.ability_hand.has(&"ability_tide_ebb") and p2.ability_cooldown.has(&"ability_tide_ebb"), "последнее существо: карта сразу в руке, Отлив отдыхает: %s" % str(p2.ability_hand))
+	# прикреплённая к живому существу карта не отдыхает (ещё не сыграла)
+	var c3: MatchController = _battle_ctrl(ab3, [SHIELD, MINUS, PLUS], NEUTRAL, -1, 0, 233)
+	var p3: PlayerState = c3.state.players[0]
+	p3.ability_hand.erase(PLUS)
+	p3.abilities_used.append(PLUS)
+	c3.state.creatures[2].attached.append([0, PLUS])
+	c3._recharge_abilities()
+	_check(not p3.ability_cooldown.has(PLUS) and p3.abilities_used.has(PLUS), "прикреплённая карта ждёт своего боя")
 
 
 ## «Глубинная тишь» запрещает сопернику способности; «Кольца глубин» — своей стороне.

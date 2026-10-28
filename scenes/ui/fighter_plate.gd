@@ -3,6 +3,8 @@ extends PanelContainer
 ## Плашка бойца в углу экрана: имя, шарики существ (выбитые гаснут), захваченные ворота, огоньки «Натиска».
 ## side 0 — слева (вы), 1 — справа (соперник); плашка скошена наружу, активный боец подсвечен.
 
+const ElementIcon := preload("res://scenes/element_icon.gd")
+
 var _side := 0
 var _name: Label
 var _gates: Label
@@ -64,9 +66,10 @@ func _apply_style(active: bool) -> void:
 	add_theme_stylebox_override("panel", sb)
 
 
-## Цвета стихий существ бойца (порядок — порядок шариков).
-func set_team(colors: Array) -> void:
+## Цвета стихий существ бойца (порядок — порядок шариков); elems — стихии (значок на шарике), можно пусто.
+func set_team(colors: Array, elems: Array = []) -> void:
 	_pips.colors = colors
+	_pips.elems = elems
 	_pips.dead.clear()
 	for _i in colors.size():
 		_pips.dead.append(false)
@@ -135,6 +138,7 @@ func _pop(c: Control) -> void:
 
 class _Pips extends Control:
 	var colors: Array = []
+	var elems: Array = []
 	var dead: Array = []
 	var rtl := false
 	var flash := 0.0
@@ -163,6 +167,11 @@ class _Pips extends Control:
 				for j in range(5):
 					var t: float = float(j) / 4.0
 					draw_circle(c + Vector2(-3, -3) * t, lerpf(12.0, 3.0, t), col.darkened(0.55).lerp(col.lightened(0.5), t))
+				# знак стихии поверх шарика: тёмная тень и светлый знак
+				if i < elems.size() and int(elems[i]) >= 0:
+					var g: Texture2D = ElementIcon.glyph(int(elems[i]))
+					draw_texture_rect(g, Rect2(c - Vector2(10, 9), Vector2(20, 20)), false, Color(0, 0, 0, 0.55))
+					draw_texture_rect(g, Rect2(c - Vector2(10, 10), Vector2(20, 20)), false, Color(1.0, 0.98, 0.92, 0.95))
 				draw_arc(c, 12.0, 0.0, TAU, 24, UiTheme.GOLD_DIM, 1.5, true)
 
 

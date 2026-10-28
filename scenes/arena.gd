@@ -7,22 +7,31 @@ extends Node3D
 
 ## Масштаб мира относительно шара: карты и поле огромные, шар маленький (как в Бакуганах).
 const WORLD := 3.5
-## Увеличение карт ворот и сетки на бескрайнем поле (существа растут вместе с картой: 0.85–1.0 её длины).
-## Ближний край ворот (z ≈ 18) остаётся перед точкой броска main.THROW_Z = 20.65.
+## Масштаб существ на бескрайнем поле (существа 0.85–1.0 длины FIG_H).
 const CARD_SCALE := 1.25
-## Единица узоров зоны ворот (круг призыва, рисунок карт): WORLD с учётом увеличения карт.
+## Единица узоров зоны ворот (рисунок карт) и масштаба существ.
 const UNIT := WORLD * CARD_SCALE
-const STEP_X := 3.7 * UNIT
-const STEP_Z := 4.7 * UNIT
+## Масштаб существ: прежний размер карты ворот. От него считаются модели (CreatureModels), эффекты шара
+## и расстановка двух существ в бою — сферы и фигуры не растут вместе с картами.
+const FIG_W := 2.5 * UNIT
+const FIG_H := 3.5 * UNIT
+## Карты ворот почти вдвое больше существ (по стороне): поле — огромные плиты, существа и сферы прежние.
+const GATE_SCALE := 1.9
 ## Зона попадания = карта: прямоугольник CARD_W x CARD_H. Между картами просторно (~1.2·UNIT).
-const CARD_W := 2.5 * UNIT
-const CARD_H := 3.5 * UNIT
+const CARD_W := FIG_W * GATE_SCALE
+const CARD_H := FIG_H * GATE_SCALE
+const GAP := 1.2 * UNIT
+const STEP_X := CARD_W + GAP
+const STEP_Z := CARD_H + GAP
+## Единица узора пола (круг призыва, плиты, освещённая зона): раздвинута под крупную сетку ворот.
+## Ближний край ворот (z ≈ 31.7) остаётся перед точкой броска main.THROW_Z.
+const FIELD := UNIT * 1.8
 ## Размер освещённой зоны ворот (бывший пол-коробка): по нему считаются частицы и подсветка центра.
-const FLOOR_SIZE := Vector3(13.4 * UNIT, 0.2, 13.6 * UNIT)
+const FLOOR_SIZE := Vector3(13.4 * FIELD, 0.2, 13.6 * FIELD)
 ## Видимый пол: огромная плоскость, края тонут в тумане.
 const GROUND_SIZE := 5000.0
 ## Физический пол и невидимый бортик далеко за слотами: промах укатывается в даль, но не бесконечно.
-const PHYS_HALF := 90.0
+const PHYS_HALF := 130.0
 const WALL_HEIGHT := 6.0
 
 var _decor: Node3D
@@ -33,8 +42,15 @@ var _motes: GPUParticles3D
 var _crystal_lights: Array[OmniLight3D] = []
 var _floaters_on := true
 
+signal slot_clicked(slot: int)
+
 var markers: Array[Marker3D] = []
+## Силуэты мест под ворота (по слоту), видны только при выборе места.
 var _highlights: Array[MeshInstance3D] = []
+var _ghost_tw: Array = []
+var _lit: Array = []
+var _hover := -1
+var _pick := false
 var _built := false
 
 
@@ -108,41 +124,20 @@ func _build() -> void:
 	var fsm := ShaderMaterial.new()
 	fsm.shader = Shader.new()
 	fsm.shader.code = FLOOR_SHADER
-	fsm.set_shader_parameter("world", UNIT)
+	fsm.set_shader_parameter("world", FIELD)
 	fmesh.material_override = fsm
 	fmesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(fmesh)
 
-	# Маркеры слотов, рамки и подсветка
+	# Маркеры слотов и скрытые места под ворота: пустые слоты не видны, контур-силуэт карты
+	# проявляется только при выборе места (set_highlight) и ярче — под курсором (set_hover)
 	for i in range(6):
 		var m := Marker3D.new()
 		m.name = "Slot%d" % i
 		m.position = _local_slot_pos(i)
 		add_child(m)
 		markers.append(m)
-
-		var frame := MeshInstance3D.new()
-		var fb := PlaneMesh.new()
-		fb.size = Vector2(CARD_W, CARD_H)
-		frame.mesh = fb
-		frame.material_override = _frame_material(i)
-		frame.position = m.position + Vector3(0, 0.006, 0)
-		frame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(frame)
-
-		var hl := MeshInstance3D.new()
-		var hb := BoxMesh.new()
-		hb.size = Vector3(CARD_W, 0.02, CARD_H)
-		hl.mesh = hb
-		var hm := StandardMaterial3D.new()
-		hm.albedo_color = Color(1.0, 0.9, 0.2, 0.35)
-		hm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		hm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		hl.material_override = hm
-		hl.position = m.position + Vector3(0, 0.02, 0)
-		hl.visible = false
-		add_child(hl)
-		_highlights.append(hl)
+		_highlights.append(_make_ghost(i, m.position))
 	_build_decor()
 	_build_motes()
 
@@ -180,10 +175,93 @@ func slot_at(world_pos: Vector3) -> int:
 	return best
 
 
-func set_highlight(slots: Array) -> void:
+## Подсветить места slots (пустые — полупрозрачный светящийся силуэт карты, занятые — контур вокруг карты).
+## pick — места выбираются мышью прямо на поле (наведение подсвечивает, щелчок → slot_clicked).
+func set_highlight(slots: Array, pick: bool = false) -> void:
 	_build()
+	_lit = slots.duplicate()
+	_pick = pick and not slots.is_empty()
+	if not _lit.has(_hover):
+		_hover = -1
 	for i in range(_highlights.size()):
-		_highlights[i].visible = slots.has(i)
+		_fade_ghost(i)
+
+
+## Место под курсором (из панели выбора или мыши над полем): контур ярче. -1 — ни одного.
+func set_hover(slot: int) -> void:
+	_build()
+	slot = slot if _lit.has(slot) else -1
+	if slot == _hover:
+		return
+	_hover = slot
+	for i in range(_highlights.size()):
+		_fade_ghost(i)
+
+
+## Видна ли подсветка места (для подсказок и снимков).
+func is_highlighted(slot: int) -> bool:
+	return _lit.has(slot)
+
+
+func _fade_ghost(i: int) -> void:
+	var g: MeshInstance3D = _highlights[i]
+	var sm := g.material_override as ShaderMaterial
+	var on: bool = _lit.has(i)
+	var hv: float = 1.0 if i == _hover else 0.0
+	if _ghost_tw.size() > i and _ghost_tw[i] != null and _ghost_tw[i].is_valid():
+		_ghost_tw[i].kill()
+	if on:
+		g.visible = true
+	if not is_inside_tree():
+		_ghost_vis(1.0 if on else 0.0, g)
+		sm.set_shader_parameter("hover", hv)
+		g.visible = on
+		return
+	var tw := create_tween().set_parallel(true)
+	tw.tween_method(_ghost_vis.bind(g), float(sm.get_shader_parameter("vis")), 1.0 if on else 0.0, 0.25 if on else 0.35)
+	tw.tween_method(func(v: float) -> void: sm.set_shader_parameter("hover", v), float(sm.get_shader_parameter("hover")), hv, 0.15)
+	if not on:
+		tw.chain().tween_callback(func() -> void: g.visible = _lit.has(i))
+	while _ghost_tw.size() <= i:
+		_ghost_tw.append(null)
+	_ghost_tw[i] = tw
+
+
+func _ghost_vis(v: float, g: MeshInstance3D) -> void:
+	(g.material_override as ShaderMaterial).set_shader_parameter("vis", v)
+	var n := g.get_child(0) as Label3D
+	n.modulate.a = 0.45 * v
+
+
+## Выбор места мышью прямо на поле, пока места подсвечены для выбора.
+func _unhandled_input(event: InputEvent) -> void:
+	if not _pick:
+		return
+	if event is InputEventMouseMotion:
+		set_hover(_slot_under_mouse((event as InputEventMouseMotion).position))
+	elif event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+			var s := _slot_under_mouse(mb.position)
+			if _lit.has(s):
+				get_viewport().set_input_as_handled()
+				slot_clicked.emit(s)
+
+
+## Подсвеченный слот под точкой экрана (луч камеры до пола), -1 — мимо.
+func _slot_under_mouse(mp: Vector2) -> int:
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if cam == null:
+		return -1
+	var o := cam.project_ray_origin(mp)
+	var d := cam.project_ray_normal(mp)
+	if absf(d.y) < 0.0001:
+		return -1
+	var t := (global_position.y - o.y) / d.y
+	if t <= 0.0:
+		return -1
+	var s := slot_at(o + d * t)
+	return s if _lit.has(s) else -1
 
 
 # ------------------------------------------------------------ оформление
@@ -334,46 +412,90 @@ void fragment() {
 }
 """
 
-const FRAME_SHADER := """
+## Место под карту ворот: светящийся контур со скруглёнными углами чуть шире карты, уголки-скобы,
+## полупрозрачный силуэт карты внутри и бегущий по контуру блик. vis — проявление, hover — под курсором.
+## Занятое место: силуэт закрыт самой картой, виден только контур вокруг неё.
+const GHOST_SHADER := """
 shader_type spatial;
-render_mode cull_disabled;
-uniform vec4 col : source_color = vec4(1.0, 0.8, 0.3, 1.0);
-uniform vec2 dims = vec2(2.0, 2.1);
+render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled, fog_disabled;
+uniform vec4 col : source_color = vec4(0.45, 0.85, 1.0, 1.0);
+uniform vec4 hover_col : source_color = vec4(1.0, 0.85, 0.4, 1.0);
+uniform vec2 size = vec2(24.0, 32.0);   // размер плоскости (м)
+uniform vec2 card = vec2(20.8, 29.1);   // размер карты (м)
+uniform float vis = 0.0;
+uniform float hover = 0.0;
+uniform float seed = 0.0;
+
+float sd_box(vec2 p, vec2 b, float r) {
+	vec2 q = abs(p) - b + r;
+	return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+
 void fragment() {
-	vec2 p = (UV - 0.5) * dims;
-	vec2 q = dims * 0.5 - abs(p);          // расстояние до краёв
-	float d = min(q.x, q.y);
-	float edge = smoothstep(0.07, 0.04, d) * step(0.0, d);
-	// рунические штрихи вдоль границы
-	float along = (q.x < q.y) ? p.y : p.x;
-	float dash = step(0.45, fract(along * 2.2)) ;
-	float runes = smoothstep(0.17, 0.14, abs(d - 0.12)) * dash * step(0.16, min(q.x, q.y) + 0.0) ;
-	runes *= 0.8;
-	// уголки
-	float corner = step(max(q.x, q.y), 0.34) * smoothstep(0.1, 0.06, d) ;
-	float inner = smoothstep(0.35, 0.0, d) * 0.05;
-	// тёмная гладкая плита под карту (без синусоидных пятен: на большом поле они выглядели как грязные тени)
-	vec3 stone = vec3(0.075, 0.08, 0.10) + 0.025 * smoothstep(1.2, 0.0, length(p));
-	float g = clamp(edge + runes * 0.7 + corner, 0.0, 1.0);
-	// пустое место под карту ворот: приглушённая гравировка (ярко светится только подсветка выбора)
-	ALBEDO = mix(stone, col.rgb * 0.7, g * 0.8);
-	EMISSION = col.rgb * (g * 1.0 + inner * 0.9);
-	ROUGHNESS = 0.85;
+	vec2 p = (UV - 0.5) * size;
+	float d = sd_box(p, card * 0.5 + 0.35, 1.1);          // контур чуть шире карты
+	float w = 0.16 + 0.1 * hover;
+	float line = 1.0 - smoothstep(w, w + fwidth(d) * 1.5 + 0.02, abs(d));
+	float glow = exp(-abs(d) * (1.4 - 0.5 * hover)) * step(0.0, d) * 0.55;
+	// уголки-скобы снаружи контура
+	vec2 q = card * 0.5 + 0.95 - abs(p);
+	float brk = (1.0 - smoothstep(0.12, 0.2, abs(min(q.x, q.y)))) * step(max(q.x, q.y), 3.2) * step(-0.2, min(q.x, q.y));
+	// силуэт карты: лёгкая заливка, внутренняя рамка и окно эмблемы
+	float inside = 1.0 - smoothstep(-0.05, 0.05, d);
+	float di = sd_box(p, card * 0.5 - 1.2, 0.7);
+	float inner = 1.0 - smoothstep(0.06, 0.06 + fwidth(di) * 1.5 + 0.02, abs(di));
+	float win = abs(length(p - vec2(0.0, card.y * 0.06)) - card.x * 0.26);
+	float wline = 1.0 - smoothstep(0.08, 0.1 + fwidth(win) * 1.5, win);
+	float t = TIME + seed;
+	float breathe = 0.75 + 0.25 * sin(t * 2.4);
+	// блик бежит по периметру
+	float ang = atan(p.y * card.x / card.y, p.x) / 6.28318 + 0.5;
+	float run = pow(0.5 + 0.5 * sin((ang - t * 0.22) * 6.28318 * 2.0), 16.0);
+	vec3 c = mix(col.rgb, hover_col.rgb, hover);
+	float a = line * (0.75 + 0.25 * hover) * breathe + line * run * 0.6 + glow * (0.5 + 0.6 * hover) + brk * (0.6 + 0.4 * hover)
+		+ inside * (0.07 + 0.13 * hover + inner * (0.22 + 0.25 * hover) + wline * (0.14 + 0.2 * hover));
+	ALBEDO = c * (1.2 + 1.3 * hover) + vec3(run * line * 0.6);
+	ALPHA = clamp(a * vis, 0.0, 1.0);
 }
 """
 
-var _frame_shader: Shader
+var _ghost_shader: Shader
 
 
-func _frame_material(i: int) -> ShaderMaterial:
-	if _frame_shader == null:
-		_frame_shader = Shader.new()
-		_frame_shader.code = FRAME_SHADER
+func _make_ghost(i: int, pos: Vector3) -> MeshInstance3D:
+	if _ghost_shader == null:
+		_ghost_shader = Shader.new()
+		_ghost_shader.code = GHOST_SHADER
+	var pad := 3.0
+	var g := MeshInstance3D.new()
+	g.name = "Ghost%d" % i
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(CARD_W + pad * 2.0, CARD_H + pad * 2.0)
+	g.mesh = pm
 	var sm := ShaderMaterial.new()
-	sm.shader = _frame_shader
-	sm.set_shader_parameter("col", Color(1.0, 0.78, 0.35))
-	sm.set_shader_parameter("dims", Vector2(CARD_W, CARD_H) / UNIT)
-	return sm
+	sm.shader = _ghost_shader
+	sm.set_shader_parameter("size", pm.size)
+	sm.set_shader_parameter("card", Vector2(CARD_W, CARD_H))
+	sm.set_shader_parameter("seed", float(i) * 1.7)
+	sm.set_shader_parameter("vis", 0.0)
+	g.material_override = sm
+	g.position = pos + Vector3(0, 0.015, 0)
+	g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	g.visible = false
+	add_child(g)
+	# номер места (как на кнопках панели выбора) в центре силуэта
+	var n := Label3D.new()
+	n.text = str(i + 1)
+	n.font_size = 160
+	n.outline_size = 0
+	n.pixel_size = CARD_W * 0.0016
+	n.rotation_degrees = Vector3(-90, 0, 0)
+	n.position = Vector3(0, 0.01, CARD_H * 0.06)
+	n.modulate = Color(0.75, 0.92, 1.0, 0.5)
+	n.shaded = false
+	n.double_sided = false
+	g.add_child(n)
+	return g
 
 
 func _glow_mat(c: Color, energy: float) -> StandardMaterial3D:
@@ -512,10 +634,10 @@ func _build_decor() -> void:
 
 	# Свет над зоной ворот: центр — освещённая «сцена», даль тонет в полутьме
 	var spot := SpotLight3D.new()
-	spot.position = Vector3(0, 70.0, 6.0)
+	spot.position = Vector3(0, 95.0, 6.0)
 	spot.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
-	spot.spot_range = 110.0
-	spot.spot_angle = 26.0
+	spot.spot_range = 150.0
+	spot.spot_angle = 32.0
 	spot.spot_angle_attenuation = 1.6
 	spot.light_energy = 1.4
 	spot.light_color = Color(1.0, 0.9, 0.78)
@@ -524,7 +646,7 @@ func _build_decor() -> void:
 	# Кристаллы стихий — средний план вокруг ворот (дают масштаб существам и шару)
 	for k in range(6):
 		var a: float = TAU * (k + 0.5) / 6.0
-		var r: float = 40.0 + 4.0 * (k % 2)
+		var r: float = 72.0 + 6.0 * (k % 2)
 		_crystal(Vector3(cos(a) * r, 0.0, sin(a) * r), VisualUtil.attr_color(k).lightened(0.1), 1.8 + 0.3 * (k % 3), 100 + k, true)
 
 	# Руины: обломки колонн и арок группами на дальнем плане
@@ -537,7 +659,7 @@ func _build_decor() -> void:
 	var block := BoxMesh.new()
 	for g in range(7):
 		var ga: float = TAU * g / 7.0 + rng.randf_range(-0.2, 0.2)
-		var gr: float = rng.randf_range(80.0, 150.0)
+		var gr: float = rng.randf_range(125.0, 200.0)
 		var gc := Vector3(cos(ga) * gr, 0.0, sin(ga) * gr)
 		var s: float = rng.randf_range(2.2, 3.4)
 		for c in range(rng.randi_range(3, 5)):
@@ -574,7 +696,7 @@ func _build_decor() -> void:
 	shard.rings = 1
 	for k in range(9):
 		var a: float = rng.randf() * TAU
-		var r: float = rng.randf_range(110.0, 320.0)
+		var r: float = rng.randf_range(150.0, 340.0)
 		var y: float = rng.randf_range(25.0, 75.0) * (r / 200.0)
 		var isl := Node3D.new()
 		isl.position = Vector3(cos(a) * r, y, sin(a) * r)
@@ -593,7 +715,7 @@ func _build_decor() -> void:
 		_floaters.append([isl, y, rng.randf() * TAU, rng.randf_range(-0.03, 0.03)])
 	for k in range(26):
 		var a: float = rng.randf() * TAU
-		var r: float = rng.randf_range(55.0, 200.0)
+		var r: float = rng.randf_range(85.0, 230.0)
 		var y: float = rng.randf_range(12.0, 55.0)
 		var n := Node3D.new()
 		n.position = Vector3(cos(a) * r, y, sin(a) * r)

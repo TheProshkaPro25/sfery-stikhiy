@@ -22,6 +22,10 @@ const WIN_CAPTURES: int = 3
 const NUM_SLOTS: int = 6
 ## Предел карт способностей одного игрока в одном бою (прикреплённые к бойцу заранее тоже считаются).
 const MAX_BATTLE_ABILITIES: int = 3
+## Перезарядка: сколько боёв после розыгрыша карта способности отдыхает, прежде чем вернуться в руку.
+const RECHARGE_BATTLES: int = 2
+## Карты, которые и у последнего существа отдыхают полный срок (см. _recharge_abilities).
+const RESCUE_EFFECTS: Array[String] = ["ebb", "doom"]
 
 signal phase_changed(phase: int, active_player: int)
 signal setup_requested(player: int)
@@ -71,6 +75,8 @@ signal gates_swapped(slot_a: int, slot_b: int)
 signal gate_discarded(slot: int, card_id: StringName)
 ## «Второе дыхание»: сыгранные способности игрока вернулись в руку.
 signal abilities_recalled(player: int, card_ids: Array)
+## Перезарядка: карты, отдыхавшие один бой, вернулись в руку игрока.
+signal abilities_recharged(player: int, card_ids: Array)
 
 ## Полное (нескрытое) состояние. Внешний код читает только через get_view().
 var state: MatchState
@@ -886,6 +892,7 @@ func _resolve() -> void:
 				ps2.abilities_used.erase(id)
 				ps2.ability_hand.append(id)
 			_ev(&"abilities_recalled", [owners[side], back2])
+	_recharge_abilities()
 	for pair in r.marks:
 		var mc: CreatureState = state.creatures.get(int(pair[0]))
 		if mc != null and mc.alive:
@@ -896,6 +903,42 @@ func _resolve() -> void:
 	if not _check_victory():
 		_check_final_round()
 		_begin_turn(next_player)
+
+
+## Перезарядка способностей (как в аниме — карты не сгорают навсегда): после каждого боя у сыгранных карт
+## (не прикреплённых к живому существу) убывает отдых; отдохнувшие RECHARGE_BATTLES боёв возвращаются в руку.
+## Бой, в котором карту сыграли, в отдых не входит. Карты «возвращается в руку» и «Второе дыхание» возвращаются
+## раньше — без отдыха. У кого осталось одно существо, тому карты возвращаются сразу (последний рывок).
+func _recharge_abilities() -> void:
+	for p in range(2):
+		var ps: PlayerState = state.players[p]
+		var attached: Array = []
+		for u in ps.creature_uids:
+			var c: CreatureState = state.creatures[u]
+			if c.alive:
+				for a in c.attached:
+					attached.append(StringName(a[1]))
+		var last_one: bool = state.alive_count(p) == 1
+		var back: Array = []
+		for id in ps.abilities_used.duplicate():
+			if attached.has(id):
+				attached.erase(id)
+				continue
+			var left: int = int(ps.ability_cooldown.get(id, RECHARGE_BATTLES + 1)) - 1
+			# карты-«спасатели» («Отлив», «Общая бездна») отдыхают всегда: иначе последнее существо уходило бы
+			# от боя каждый ход или сводило матч к ничьей
+			if left <= 0 or (last_one and not RESCUE_EFFECTS.has(String(CardDB.card(id).effect_id))):
+				ps.ability_cooldown.erase(id)
+				ps.abilities_used.erase(id)
+				ps.ability_hand.append(id)
+				back.append(id)
+			else:
+				ps.ability_cooldown[id] = left
+		for id in ps.ability_cooldown.keys():
+			if not ps.abilities_used.has(id):
+				ps.ability_cooldown.erase(id)  # вернулась иначе («Второе дыхание», «возвращается в руку»)
+		if not back.is_empty():
+			_ev(&"abilities_recharged", [p, back])
 
 
 ## Проигравший выбывает (с поля, если стоял).

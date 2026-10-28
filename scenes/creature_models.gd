@@ -4,11 +4,12 @@ extends RefCounted
 ## Модели генерирует tools/blender/make_creatures.py в assets/creatures/<архетип>.glb
 ## (высота 1.0, основание на y=0, лицом к +Z). Имена материалов: Primary, Secondary, Metal, Glow, Eye, Dark.
 
-## Размер: длина/ширина фигуры = треть длины карты (в бою два существа + треть пустоты между ними), высота не больше MAX_HEIGHT.
-const FOOTPRINT := Arena.CARD_H / 3.0
-## Великаны над воротами: существо 0.85–1.0 длины карты (шар рядом с ним — горошина).
-const MAX_HEIGHT := Arena.CARD_H * 1.0
-const MIN_HEIGHT := Arena.CARD_H * 0.85
+## Размер: длина/ширина фигуры = треть масштаба существ Arena.FIG_H (в бою два существа + треть пустоты между ними),
+## высота не больше MAX_HEIGHT. Карты ворот крупнее (Arena.GATE_SCALE), существа от них не зависят.
+const FOOTPRINT := Arena.FIG_H / 3.0
+## Великаны над воротами: существо 0.85–1.0 FIG_H (шар рядом с ним — горошина).
+const MAX_HEIGHT := Arena.FIG_H * 1.0
+const MIN_HEIGHT := Arena.FIG_H * 0.85
 ## Предел длины вдоль карты (в третях карты) и ширины (в ширинах карты): в бою двое не пересекаются.
 const MAX_LEN := 1.75
 const MAX_WIDTH := 1.3
@@ -84,7 +85,7 @@ static func build(d: CreatureDef) -> Node3D:
 		# длина вдоль карты (модели смотрят вдоль Z) = треть карты; но не ниже MIN_HEIGHT,
 		# не длиннее MAX_LEN трети, не шире MAX_WIDTH карты и не выше MAX_HEIGHT
 		k = maxf(FOOTPRINT / sz, MIN_HEIGHT / sy)
-		k = minf(k, minf(FOOTPRINT * MAX_LEN / sz, minf(Arena.CARD_W * MAX_WIDTH / sx, MAX_HEIGHT / sy)))
+		k = minf(k, minf(FOOTPRINT * MAX_LEN / sz, minf(Arena.FIG_W * MAX_WIDTH / sx, MAX_HEIGHT / sy)))
 	model.scale = Vector3.ONE * k
 	# основание на y=0, центр по XZ
 	model.position = Vector3(-(box.position.x + box.size.x * 0.5) * k, -box.position.y * k, -(box.position.z + box.size.z * 0.5) * k)

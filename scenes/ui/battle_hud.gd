@@ -11,6 +11,7 @@ var _plates: Array[PanelContainer] = []
 var _names: Array[Label] = []
 var _attrs: Array[Label] = []
 var _powers: Array[Label] = []
+var _counts: Array[Label] = []        # «СПОСОБНОСТИ ●●○ 2/3» под силой (лимит карт на бой)
 var _shown: Array[float] = [0.0, 0.0]
 var _vs: Label
 var _target: Array[int] = [0, 0]     # последние заданные силы (для всплывающих +/−)
@@ -42,9 +43,13 @@ func _build() -> void:
 		var pw := VisualUtil.label("0", 46)
 		pw.add_theme_color_override("font_color", UiTheme.GOLD)
 		pw.add_theme_constant_override("outline_size", 10)
-		for l in [n, a, pw]:
+		var cn := VisualUtil.label("", 15)
+		cn.add_theme_color_override("font_color", UiTheme.TEXT_DIM)
+		cn.custom_minimum_size = Vector2(300, 0)  # ширина не скачет от «ПАС»/«▶»
+		for l in [n, a, pw, cn]:
 			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if side == 0 else HORIZONTAL_ALIGNMENT_RIGHT
 			vb.add_child(l)
+		_counts.append(cn)
 		add_child(p)
 		_plates.append(p)
 		_names.append(n)
@@ -173,17 +178,46 @@ func _float_number(side: int, delta: int) -> void:
 
 
 ## Лента карт боя по порядку (прикреплённые — первыми): plays — [[сторона, card_id], ...], passed — кто спасовал.
-func set_chain(plays: Array, passed: Array) -> void:
+## Лента карт боя и счётчики «Способности N/3» на плашках. turn — чья очередь обмена (сторона, -1 — ничья).
+func set_chain(plays: Array, passed: Array, turn: int = -1) -> void:
 	_build()
 	VisualUtil.clear_children(_chain)
+	var used: Array[int] = [0, 0]
 	for pl in plays:
 		var side: int = int(pl[0])
+		used[side] += 1
 		var c: CardDef = CardDB.card(StringName(pl[1]))
 		_chain.add_child(_chip(c.display_name if c != null else str(pl[1]), side))
 	for side in range(2):
 		if side < passed.size() and bool(passed[side]):
 			_chain.add_child(_chip("ПАС", side, true))
 	_chain.visible = _open and _chain.get_child_count() > 0
+	for side in range(2):
+		_set_count(side, used[side], side < passed.size() and bool(passed[side]), side == turn)
+
+
+## Счётчик карт стороны: закрашенные кружки — сыгранные (с прикреплёнными), «ПАС» — сторона вышла из обмена.
+func _set_count(side: int, used: int, passed: bool, turn: bool) -> void:
+	var cap: int = MatchController.MAX_BATTLE_ABILITIES
+	var dots := ""
+	for i in range(cap):
+		dots += "●" if i < used else "○"
+	var t := "СПОСОБНОСТИ %s %d/%d" % [dots, mini(used, cap), cap]
+	if passed:
+		t += "  ·  ПАС"
+	elif turn:
+		t = ("▶ " + t) if side == 0 else (t + " ◀")
+	var l: Label = _counts[side]
+	var was: String = l.text
+	l.text = t
+	var c: Color = UiTheme.TEXT_DIM
+	if turn and not passed:
+		c = UiTheme.GOLD
+	elif used >= cap:
+		c = Color(1.0, 0.75, 0.45)
+	l.add_theme_color_override("font_color", c)
+	if was != "" and was != t and _open:
+		_pulse(l, Color(1.4, 1.3, 1.0))
 
 
 func _chip(text: String, side: int, dim: bool = false) -> Control:

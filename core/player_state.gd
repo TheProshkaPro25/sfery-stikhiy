@@ -7,6 +7,8 @@ var creature_uids: Array[int] = []
 var arena_hand: Array[StringName] = []
 var ability_hand: Array[StringName] = []
 var abilities_used: Array[StringName] = []
+## Перезарядка: сыгранная карта (из abilities_used) -> сколько боёв ей ещё отдыхать до возврата в руку. Видно обоим.
+var ability_cooldown: Dictionary = {}
 var captured: Array[StringName] = []
 ## «Натиск»: число побед в боях подряд (0..PowerCalc.MOMENTUM_MAX), поражение сбрасывает. Видно обоим.
 var momentum: int = 0
@@ -21,6 +23,7 @@ func clone(hide_hands: bool) -> PlayerState:
 	var p: PlayerState = PlayerState.new(index)
 	p.creature_uids.assign(creature_uids)
 	p.abilities_used.assign(abilities_used)
+	p.ability_cooldown = ability_cooldown.duplicate()
 	p.captured.assign(captured)
 	p.momentum = momentum
 	if hide_hands:

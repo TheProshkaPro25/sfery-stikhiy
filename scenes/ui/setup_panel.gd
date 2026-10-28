@@ -5,6 +5,8 @@ extends Control
 signal placed(card_id: StringName, slot: int)
 signal placed_throw(card_id: StringName, slot: int)  # «ворота + бросок»: сразу бросить существо на эту карту
 signal skipped
+## Наведение на кнопку места (-1 — ушли): место на поле подсвечивается ярче.
+signal slot_hovered(slot: int)
 
 var _panel: PanelContainer
 var _title: Label
@@ -62,6 +64,8 @@ func _build() -> void:
 		b.custom_minimum_size = Vector2(64, 52)
 		b.tooltip_text = "Место %d: %s ряд поля. Карта ляжет рубашкой вверх." % [i + 1, "дальний" if i < 3 else "ближний"]
 		b.pressed.connect(_on_slot_pressed.bind(i))
+		b.mouse_entered.connect(func() -> void: slot_hovered.emit(i if not b.disabled else -1))
+		b.mouse_exited.connect(func() -> void: slot_hovered.emit(-1))
 		_grid.add_child(b)
 		_slot_buttons.append(b)
 	_skip_btn = Button.new()
@@ -97,7 +101,7 @@ func begin(cards: Array, legal_slots: Array, can_skip: bool = false, can_throw: 
 		b.pressed.connect(_on_card_pressed.bind(cid))
 		_cards_box.add_child(b)
 		_card_buttons[cid] = b
-	_title.text = "Карта ворот: выберите карту, затем место (рубашкой вверх)"
+	_title.text = "Карта ворот: выберите карту, затем место — кнопкой или щелчком по полю"
 	if can_throw:
 		_title.text += ".\nВключите «Ворота + бросок», чтобы сразу бросить существо на неё"
 	_skip_btn.visible = can_skip
@@ -125,6 +129,19 @@ func _on_card_pressed(cid: StringName) -> void:
 func _refresh_slots() -> void:
 	for i in range(_slot_buttons.size()):
 		_slot_buttons[i].disabled = (_selected == &"") or not _legal.has(i)
+
+
+## Место выбрано щелчком по полю (Arena.slot_clicked). Без выбранной карты: единственная карта берётся сама,
+## иначе заголовок просит сначала выбрать карту.
+func pick_slot(slot: int) -> void:
+	if not _panel.visible or not _legal.has(slot):
+		return
+	if _selected == &"" and _card_buttons.size() == 1:
+		_on_card_pressed(_card_buttons.keys()[0])
+	if _selected == &"":
+		_title.text = "Сначала выберите карту ворот, затем место %d" % (slot + 1)
+		return
+	_on_slot_pressed(slot)
 
 
 func _on_slot_pressed(slot: int) -> void:

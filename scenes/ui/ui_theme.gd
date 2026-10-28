@@ -2,6 +2,8 @@ class_name UiTheme
 extends RefCounted
 ## Общая тема интерфейса: тёмные полупрозрачные панели с золотой каймой, кнопки в том же стиле.
 
+const ElementIcon := preload("res://scenes/element_icon.gd")
+
 const GOLD := Color(0.95, 0.80, 0.45)
 const GOLD_DIM := Color(0.62, 0.50, 0.28)
 const INK := Color(0.07, 0.07, 0.12, 0.88)
@@ -249,7 +251,7 @@ const CLASS_HELP := {
 	&"blue": ["Усиление", "Лесенка силы своей стихии: +30 нельзя отменить, +100 при условии, большие числа — для отстающих (такие карты возвращаются в руку)."],
 	&"green": ["Видовая способность", "Играет только существо своего вида любой стихии: отмена, сброс силы, перекачка бонусов, «нельзя отменить»."],
 }
-const ABILITY_WHEN := "Играется в бою (обмен по очереди, до 3 карт на бой; «Пас» окончателен), до броска или после приземления — тогда карта прикрепляется к существу. Каждая карта — один раз за игру, если не сказано иное."
+const ABILITY_WHEN := "Играется в бою (обмен по очереди, до 3 карт на бой; «Пас» окончателен), до броска или после приземления — тогда карта прикрепляется к существу. Сыгранная карта отдыхает 2 боя и возвращается в руку (у последнего существа — сразу)."
 const FUSION_WHEN := "Слияние: кладётся поверх своей способности в том же бою и усиливает её."
 const GATE_WHEN := "В начале хода можно положить одну карту ворот: ближе к сопернику, рядом с другими картами. Можно сразу бросить на неё существо («Ворота + бросок»)."
 
@@ -289,7 +291,7 @@ static func creature_help(d: CreatureDef) -> Array:
 	return [d.display_name, "Существо · стихия %s" % VisualUtil.attr_name(d.attribute), VisualUtil.attr_color(d.attribute).lightened(0.3),
 		"Сила G (базовая): %d. В бою к ней прибавляются ворота, преимущество стихии и способности." % d.base_power,
 		"Бьёт стихию %s (+60 к силе), уступает стихии %s." % [VisualUtil.attr_name(beats), VisualUtil.attr_name(weak)],
-		"Бросается на карту ворот. Проиграв бой, выбывает; победив — уходит в зону использованных.", ""]
+		"Бросается на карту ворот. Проиграв бой, выбывает; победив — уходит в зону использованных.", "", d.attribute]
 
 
 ## Панель подсказки (используется в CardView._make_custom_tooltip).
@@ -302,7 +304,21 @@ static func help_panel(lines: Array) -> Control:
 	p.add_child(vb)
 	var t := VisualUtil.label(str(lines[0]), 20)
 	t.add_theme_color_override("font_color", Color(1.0, 0.88, 0.4))
-	vb.add_child(t)
+	if lines.size() > 7 and typeof(lines[7]) == TYPE_INT and int(lines[7]) >= 0:
+		# существо: значок стихии перед именем
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var ic := TextureRect.new()
+		ic.texture = ElementIcon.badge(int(lines[7]))
+		ic.custom_minimum_size = Vector2(30, 30)
+		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(ic)
+		row.add_child(t)
+		vb.add_child(row)
+	else:
+		vb.add_child(t)
 	var k := VisualUtil.label(str(lines[1]).to_upper(), 12)
 	k.add_theme_color_override("font_color", lines[2])
 	vb.add_child(k)

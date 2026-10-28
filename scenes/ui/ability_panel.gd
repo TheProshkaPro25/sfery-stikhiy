@@ -163,14 +163,14 @@ func show_options(entries: Array, header: String = "Окно способнос�
 ## Счётчик карт: сыгранные закрашены, оставшиеся — пустые кружки (лимит 3 на бой).
 func _fill_pips(used: int) -> void:
 	VisualUtil.clear_children(_pips)
-	var cap := VisualUtil.label("Карт сыграно:", 14)
+	var cap := VisualUtil.label("Способности в бою:", 14)
 	cap.add_theme_color_override("font_color", UiTheme.TEXT_DIM)
 	_pips.add_child(cap)
 	for i in range(MAX_CARDS):
 		var l := VisualUtil.label("●" if i < used else "○", 20)
 		l.add_theme_color_override("font_color", UiTheme.GOLD if i < used else UiTheme.TEXT_DIM)
 		_pips.add_child(l)
-	var cnt := VisualUtil.label("%d из %d" % [used, MAX_CARDS], 14)
+	var cnt := VisualUtil.label("%d/%d" % [mini(used, MAX_CARDS), MAX_CARDS], 14)
 	cnt.add_theme_color_override("font_color", UiTheme.TEXT_DIM)
 	_pips.add_child(cnt)
 

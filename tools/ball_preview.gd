@@ -197,7 +197,7 @@ func _sheet() -> void:
 		_ball.face_toward(fpos + Vector3(0, 0, -1))
 		var h := _ball.figure_height()
 		_rig.reveal_orbit(_arena.slot_position(slot), h, Vector3(0, 0, -1), _ball.figure_size())
-		VisualUtil.ring_wave(_world, _arena.slot_position(slot) + Vector3(0, 0.08, 0), VisualUtil.attr_color(el), Arena.CARD_W * 0.7, 0.55)
+		VisualUtil.ring_wave(_world, _arena.slot_position(slot) + Vector3(0, 0.08, 0), VisualUtil.attr_color(el), Arena.FIG_W * 0.7, 0.55)
 		_ball.open_animated()
 		# лепестки и знак на карте — крупно; затем кадр с облёта камеры игры
 		_close.make_current()

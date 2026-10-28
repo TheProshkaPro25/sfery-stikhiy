@@ -6,7 +6,9 @@ extends Node3D
 
 const SIZE := Vector3(Arena.CARD_W, 0.05, Arena.CARD_H)
 const OWNER_COLORS = [Color(0.18, 0.30, 0.55), Color(0.55, 0.20, 0.20)]
-const TRAY_X := 8.4 * Arena.UNIT
+## Лоток захваченных карт — справа за полем (карты уменьшаются до TRAY_SCALE).
+const TRAY_X := Arena.STEP_X + Arena.CARD_W * 0.75 + Arena.GAP
+const TRAY_SCALE := 0.4
 const SHADER: Shader = preload("res://scenes/shaders/card_arena.gdshader")
 ## Виртуальная ширина карты в пикселях для подбора кегля (как у 2D-карты шириной VIRT px).
 const VIRT := 300.0
@@ -190,11 +192,11 @@ func reveal(def: CardDef) -> void:
 
 ## Движение в "лоток" захваченных карт игрока; возвращает сигнал завершения твина.
 func play_capture(to_player: int) -> Signal:
-	var z := 2.6 * Arena.UNIT if to_player == 0 else -2.6 * Arena.UNIT
+	var z := Arena.CARD_H * 0.4 if to_player == 0 else -Arena.CARD_H * 0.4
 	z += (-tray_offset if to_player == 0 else tray_offset)
 	var target := Vector3(TRAY_X, 0.15, z)
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(self, "position", target, 0.8)
-	tw.tween_property(self, "scale", Vector3(0.5, 0.5, 0.5), 0.8)
+	tw.tween_property(self, "scale", Vector3.ONE * TRAY_SCALE, 0.8)
 	return tw.finished

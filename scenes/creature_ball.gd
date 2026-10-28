@@ -7,7 +7,9 @@ extends RigidBody3D
 
 signal settled(ball: CreatureBall, world_pos: Vector3)
 
-const RADIUS := 0.35  # ~1/17 длины карты
+const ElementIcon := preload("res://scenes/element_icon.gd")
+
+const RADIUS := 0.35  # ~1/17 масштаба существ Arena.FIG_H
 const SLOW_SPEED := 0.15
 const SLOW_ANG := 1.0
 const SLOW_TIME := 0.15
@@ -16,6 +18,40 @@ const TIMEOUT := 9.0
 const VIS_SCALE := 2.2
 ## Цвет кольца владельца: игрок (бросает от +Z), соперник.
 const OWNER_GLOW := [Color(0.35, 0.62, 1.0), Color(1.0, 0.32, 0.28)]
+## Ободок раскрытого существа по владельцу (next_pass материалов модели): свои — мягкий синий, чужие — красный.
+const RIM_STRENGTH := [0.55, 1.25]
+## Ободок: аддитивный френель по силуэту (вспышки CreatureAnim идут через material_overlay и его не трогают).
+const RIM_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, cull_back, shadows_disabled, fog_disabled;
+uniform vec4 col : source_color = vec4(1.0, 0.3, 0.25, 1.0);
+uniform float strength = 1.0;
+void fragment() {
+	float f = pow(1.0 - clamp(abs(dot(NORMAL, VIEW)), 0.0, 1.0), 2.6);
+	ALBEDO = col.rgb * strength;
+	ALPHA = clamp(f * (0.85 + 0.15 * sin(TIME * 2.2)), 0.0, 1.0);
+}
+"""
+## Кольцо владельца на полу под раскрытым существом: мягкое свечение с бегущими штрихами.
+const FOOT_RING_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled, fog_disabled;
+uniform vec4 col : source_color = vec4(1.0, 0.3, 0.25, 1.0);
+uniform float strength = 1.0;
+void fragment() {
+	vec2 p = (UV - 0.5) * 2.0;
+	float r = length(p);
+	float ring = smoothstep(0.075, 0.0, abs(r - 0.86));
+	float halo = smoothstep(1.0, 0.86, r) * smoothstep(0.55, 0.86, r) * 0.35;
+	float ang = atan(p.y, p.x);
+	float dash = smoothstep(0.3, 0.6, sin(ang * 18.0 - TIME * 1.5)) * smoothstep(0.03, 0.0, abs(r - 0.95));
+	float inner = smoothstep(0.86, 0.0, r) * 0.12;
+	ALBEDO = col.rgb * strength;
+	ALPHA = clamp(ring * 0.9 + halo + dash * 0.6 + inner, 0.0, 1.0);
+}
+"""
+static var _rim_mats: Array = []
+static var _ring_mats: Array = []
 
 var uid: int = -1
 var def: CreatureDef = null
@@ -30,6 +66,8 @@ var _core: MeshInstance3D
 var _figure: Node3D
 var _anim: CreatureAnim
 var _label: Label3D
+var _icon: Sprite3D             ## значок стихии слева от подписи (дочерний подписи: прячется вместе с ней)
+var _foot_ring: MeshInstance3D  ## кольцо владельца на полу под раскрытым существом
 var _open := false
 var _prev_vel := Vector3.ZERO
 var _label_allowed := true
@@ -130,6 +168,25 @@ func _ensure_built() -> void:
 	_label.visible = false
 	_visual.add_child(_label)
 
+	_icon = Sprite3D.new()
+	_icon.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_icon.no_depth_test = true
+	_icon.shaded = false
+	_icon.double_sided = false
+	_icon.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	_icon.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_icon.pixel_size = _label.pixel_size * 1.05
+	_icon.render_priority = 1
+	_label.add_child(_icon)
+
+	_foot_ring = MeshInstance3D.new()
+	var rq := PlaneMesh.new()
+	rq.size = Vector2.ONE * 2.0
+	_foot_ring.mesh = rq
+	_foot_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_foot_ring.position = Vector3(0, -RADIUS + 0.035, 0)
+	_figure.add_child(_foot_ring)
+
 
 static func _shell_r() -> float:
 	return RADIUS * VIS_SCALE
@@ -160,6 +217,65 @@ func setup(d: CreatureDef, u: int) -> void:
 	else:
 		_anim = null
 	_label.text = txt
+	_icon.texture = ElementIcon.badge(_el) if _el >= 0 else null
+	_sync_icon()
+	var rr: float = clampf((_anim.get_extent() if _anim != null else Arena.FIG_W) * 0.55, Arena.FIG_W * 0.35, Arena.FIG_H / 3.0 * 0.95)
+	_foot_ring.scale = Vector3(rr, 1.0, rr)
+
+
+## Значок стихии слева от текста подписи, с тем же сдвигом подписи на экране (set_label_shift).
+func _sync_icon() -> void:
+	if _icon == null or _icon.texture == null:
+		return
+	var font: Font = _label.font if _label.font != null else ThemeDB.fallback_font
+	var w := 0.0
+	for line in _label.text.split("\n"):
+		w = maxf(w, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, _label.font_size).x)
+	var k: float = _label.pixel_size / _icon.pixel_size  # пиксели подписи → пиксели значка
+	var half: float = ElementIcon.SIZE * 0.5
+	_icon.offset = Vector2((_label.offset.x - w * 0.5 - _label.outline_size - 10.0) * k - half, _label.offset.y * k)
+
+
+## Метки владельца раскрытого существа: ободок по силуэту модели и кольцо на полу (синие — свои, красные — чужие).
+func _apply_owner_marks() -> void:
+	var side: int = 1 if _home_set and _home.z < 0.0 else 0
+	if _rim_mats.is_empty():
+		var sh := Shader.new()
+		sh.code = RIM_SHADER
+		var rs := Shader.new()
+		rs.code = FOOT_RING_SHADER
+		for k in range(2):
+			var m := ShaderMaterial.new()
+			m.shader = sh
+			m.set_shader_parameter("col", OWNER_GLOW[k])
+			m.set_shader_parameter("strength", RIM_STRENGTH[k])
+			_rim_mats.append(m)
+			var rm := ShaderMaterial.new()
+			rm.shader = rs
+			rm.set_shader_parameter("col", OWNER_GLOW[k])
+			rm.set_shader_parameter("strength", 1.0 if k == 1 else 0.7)
+			_ring_mats.append(rm)
+	_foot_ring.material_override = _ring_mats[side]
+	if _anim != null:
+		_set_rim(_anim, _rim_mats[side])
+
+
+## next_pass на материалы модели (материалы у каждого экземпляра свои — CreatureModels дублирует их).
+static func _set_rim(n: Node, rim: Material) -> void:
+	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+		var mi := n as MeshInstance3D
+		for i in range(mi.mesh.get_surface_count()):
+			var m := mi.get_surface_override_material(i)
+			if m == null:
+				var src := mi.get_active_material(i)
+				if src == null:
+					continue
+				m = src.duplicate()
+				mi.set_surface_override_material(i, m)
+			if m.next_pass != rim:
+				m.next_pass = rim
+	for c in n.get_children():
+		_set_rim(c, rim)
 
 
 ## Яркий цвет стихии (оболочка, сердцевина, частицы).
@@ -220,6 +336,7 @@ func face_toward(target: Vector3) -> void:
 ## Сдвиг подписи на экране (в пикселях шрифта), чтобы в бою подписи двух существ не накладывались.
 func set_label_shift(px: float) -> void:
 	_label.offset = Vector2(px, 0.0)
+	_sync_icon()
 
 
 ## След летящего шара: лента цвета стихии и частицы стихии; при первом броске — ещё и наземные эффекты.
@@ -324,14 +441,14 @@ static func _streak_ramp(c: Color) -> Gradient:
 func figure_height() -> float:
 	if _anim != null:
 		return _anim.get_height()
-	return Arena.CARD_H * 0.8
+	return Arena.FIG_H * 0.8
 
 
 ## Масштаб кадра для камеры: наибольшее из роста и размера по полу (длинные и широкие существа).
 func figure_size() -> float:
 	if _anim != null:
 		return maxf(_anim.get_height(), _anim.get_extent())
-	return Arena.CARD_H * 0.8
+	return Arena.FIG_H * 0.8
 
 
 func launch(impulse: Vector3) -> void:
@@ -397,19 +514,20 @@ func open_animated(pose: bool = true) -> Signal:
 	_drive = false
 	var pc := _ecol()
 	var el := maxi(_el, 0)
-	VisualUtil.light_pillar(self, Vector3(0, -RADIUS, 0), pc, Arena.CARD_H * 2.0, Arena.CARD_W * 0.16, 0.9)
+	VisualUtil.light_pillar(self, Vector3(0, -RADIUS, 0), pc, Arena.FIG_H * 2.0, Arena.FIG_W * 0.16, 0.9)
 	if is_inside_tree():
 		var w := _fx_parent()
 		var fp := Vector3(global_position.x, 0.07, global_position.z)
-		BallFx.sigil_flash(w, fp, el, Arena.CARD_W * 0.85, 1.2)
+		BallFx.sigil_flash(w, fp, el, Arena.FIG_W * 0.85, 1.2)
 		BallFx.flash(w, _shell_center(), pc, _shell_r() * 4.5, 0.35)
-		BallFx.light_flash(w, fp + Vector3(0, Arena.CARD_W * 0.35, 0), pc, 1.5, Arena.CARD_W * 1.4, 0.5)
-		BallFx.one_shot(w, fp, el, "open", Arena.CARD_W * 0.24)
+		BallFx.light_flash(w, fp + Vector3(0, Arena.FIG_W * 0.35, 0), pc, 1.5, Arena.FIG_W * 1.4, 0.5)
+		BallFx.one_shot(w, fp, el, "open", Arena.FIG_W * 0.24)
 	_ball_mesh.visible = false
 	_shell.visible = true
 	_figure.visible = true
 	_figure.scale = Vector3(0.01, 0.01, 0.01)
 	_label.visible = false
+	_apply_owner_marks()
 	_make_halves()
 	_pose_halves(0.0)
 	var tw := create_tween()
@@ -511,6 +629,7 @@ func freeze_at(pos: Vector3) -> void:
 		_home_set = true
 		_shell_param("owner_col", _owner_color())
 	_label.offset = Vector2.ZERO
+	_sync_icon()
 	collision_layer = 0
 	collision_mask = 0
 	_launched = false
@@ -618,7 +737,7 @@ func vanish(knockout: bool = false) -> Signal:
 	if _open and _figure.visible:
 		_open = false
 		# существо втягивается в свет
-		VisualUtil.light_pillar(self, Vector3(0, -RADIUS, 0), pc.lightened(0.4), figure_height() * 1.3, Arena.CARD_W * 0.14, 0.6)
+		VisualUtil.light_pillar(self, Vector3(0, -RADIUS, 0), pc.lightened(0.4), figure_height() * 1.3, Arena.FIG_W * 0.14, 0.6)
 		_make_halves()
 		_pose_halves(1.0)
 		_shell.visible = true

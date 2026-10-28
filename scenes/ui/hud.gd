@@ -134,11 +134,11 @@ func _build() -> void:
 	vb.add_child(_cancel_btn)
 
 
-## Имена и цвета стихий существ бойцов: colors0/colors1 — по существу в порядке колоды.
-func setup_plates(colors0: Array, colors1: Array) -> void:
+## Имена и цвета стихий существ бойцов: colors0/colors1 — по существу в порядке колоды; elems — их стихии (значки).
+func setup_plates(colors0: Array, colors1: Array, elems: Array = [[], []]) -> void:
 	_build()
-	_plates[0].set_team(colors0)
-	_plates[1].set_team(colors1)
+	_plates[0].set_team(colors0, elems[0])
+	_plates[1].set_team(colors1, elems[1])
 	for p in _plates:
 		p.visible = true
 

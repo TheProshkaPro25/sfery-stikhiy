@@ -3,10 +3,13 @@ extends Node
 ## Drag-to-aim (рогатка): тянем мышь назад от шара, отпускаем - бросок в противоположную сторону.
 
 signal throw_committed(impulse: Vector3)
+## Точка остановки по текущему прицелу (on = false — прицела нет): по ней подсвечиваются ворота-цель.
+signal aim_point(pos: Vector3, on: bool)
 
 const MAX_PULL_PX := 220.0
 const MIN_PULL_PX := 24.0
-const MAX_SPEED := 18.0 * Arena.WORLD
+## Дотягивается до дальнего края крупных ворот (Arena.GATE_SCALE) по диагонали с запасом.
+const MAX_SPEED := 29.0 * Arena.WORLD
 ## Начальная скорость на единицу желаемой дистанции (при linear_damp = 1.0 шара; подбирается на тесте).
 const SPEED_PER_DIST := 1.34
 const ANGLE_SIGMA := 0.2
@@ -59,6 +62,7 @@ func disable() -> void:
 	_dragging = false
 	_ball = null
 	_clear_line()
+	aim_point.emit(Vector3.ZERO, false)
 
 
 func is_enabled() -> bool:
@@ -82,9 +86,11 @@ func _unhandled_input(event: InputEvent) -> void:
 					throw_committed.emit(imp)
 				else:
 					_clear_line()
+					aim_point.emit(Vector3.ZERO, false)
 		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
 			_dragging = false
 			_clear_line()
+			aim_point.emit(Vector3.ZERO, false)
 	elif event is InputEventMouseMotion and _dragging:
 		var mm := event as InputEventMouseMotion
 		_update_line(_impulse_from(mm.position))
@@ -170,6 +176,7 @@ func _update_line(impulse: Vector3) -> void:
 	_power_label.modulate = pc
 	_power_label.global_position = start + Vector3(0.0, 0.55 * Arena.WORLD, 0.0)
 	_power_label.visible = true
+	aim_point.emit(end, true)
 
 
 func _tri(a: Vector3, b: Vector3, c: Vector3, col: Color) -> void:
