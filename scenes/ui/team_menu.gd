@@ -105,14 +105,20 @@ func _build() -> void:
 	_summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	drow.add_child(_summary)
 
+	# два ряда, чтобы кнопки помещались и на 1366×768: настройки матча, затем навигация
 	var bottom := HBoxContainer.new()
 	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
-	bottom.add_theme_constant_override("separation", 14)
+	bottom.add_theme_constant_override("separation", 12)
 	vb.add_child(bottom)
+	var nav := HBoxContainer.new()
+	nav.alignment = BoxContainer.ALIGNMENT_END
+	nav.add_theme_constant_override("separation", 12)
+	vb.add_child(nav)
 	_error = VisualUtil.label("", 15)
 	_error.add_theme_color_override("font_color", Color(1.0, 0.5, 0.45))
 	_error.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bottom.add_child(_error)
+	_error.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	nav.add_child(_error)
 	var dl2 := VisualUtil.label("Соперник:", 16)
 	bottom.add_child(dl2)
 	var grp := ButtonGroup.new()
@@ -143,16 +149,16 @@ func _build() -> void:
 	bottom.add_child(fps)
 	var rnd := _button("Случайная колода", 190)
 	rnd.pressed.connect(pick_random)
-	bottom.add_child(rnd)
+	nav.add_child(rnd)
 	_back_btn = _button("Назад", 120)
 	_back_btn.pressed.connect(func() -> void: _show_step(_step - 1))
-	bottom.add_child(_back_btn)
+	nav.add_child(_back_btn)
 	_next_btn = _button("Далее", 140)
 	_next_btn.pressed.connect(func() -> void: _show_step(_step + 1))
-	bottom.add_child(_next_btn)
+	nav.add_child(_next_btn)
 	_go_btn = _button("В бой", 160)
 	_go_btn.pressed.connect(_on_go)
-	bottom.add_child(_go_btn)
+	nav.add_child(_go_btn)
 
 	if last_deck.is_empty():
 		pick_random()
@@ -219,7 +225,7 @@ func _build_creatures_page() -> void:
 	row.add_theme_constant_override("v_separation", 12)
 	center.add_child(row)
 	for id in CardDB.creatures_of(_element):
-		var cv := CardView.new().for_creature(CardDB.creature(id), -1, "", Vector2(150, 210))
+		var cv := CardView.new().for_creature(CardDB.creature(id), -1, "", _card_size(Vector2(150, 210), 2))
 		cv.toggle_mode = true
 		cv.button_pressed = _team.has(id)
 		if _team.size() >= MAX_TEAM and not _team.has(id):
@@ -250,13 +256,20 @@ func _build_cards_page(kind: int, classes: Array[StringName]) -> void:
 		grid.add_theme_constant_override("v_separation", 10)
 		col.add_child(grid)
 		for id in ids:
-			var cv := CardView.new().for_card(CardDB.card(id), Vector2(116, 162))
+			var cv := CardView.new().for_card(CardDB.card(id), _card_size(Vector2(116, 162), 2))
 			cv.toggle_mode = true
 			cv.button_pressed = _pick.get(cls, &"") == id
 			if _pick.has(cls) and _pick[cls] != id:
 				cv.modulate = Color(1, 1, 1, 0.45)
 			cv.pressed.connect(_on_card.bind(cls, id))
 			grid.add_child(cv)
+
+
+## Размер карты под высоту окна: rows рядов должны поместиться над колодой и двумя рядами кнопок.
+func _card_size(base: Vector2, rows: int) -> Vector2:
+	var free := get_viewport_rect().size.y - 340.0  # шапка, вкладки, колода, два ряда кнопок, отступы
+	var k := clampf(free / (rows * (base.y + 14.0)), 0.6, 1.0)
+	return (base * k).round()
 
 
 # ---------------------------------------------------------------- выбор
