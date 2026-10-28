@@ -11,6 +11,9 @@ var slot: int = -1
 var used: bool = false
 ## Слот, из которого существо отозвано в текущем ходу (туда приземлиться нельзя), иначе -1.
 var recalled_from: int = -1
+## Прикреплённые способности (сыграны до броска или после приземления): [[метка времени, card_id], ...].
+## Срабатывают в следующем бою существа (первыми, по метке) и снимаются после него. Видны обоим игрокам.
+var attached: Array = []
 
 
 func _init(p_uid: int = -1, p_def_id: StringName = &"", p_owner: int = 0) -> void:
@@ -25,4 +28,5 @@ func clone() -> CreatureState:
 	c.slot = slot
 	c.used = used
 	c.recalled_from = recalled_from
+	c.attached = attached.duplicate(true)
 	return c

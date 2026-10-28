@@ -51,6 +51,14 @@ func _initialize() -> void:
 	_test_abilities()
 	_test_new_abilities()
 	_test_fusion_window()
+	_test_exchange()
+	_test_attach_moments()
+	_test_gate_throw()
+	_test_gate_bonus()
+	_test_gate_traps()
+	_test_momentum()
+	_test_final_round()
+	_test_ai_levels()
 	_test_shield_and_silencer_interplay()
 	_test_hidden_info()
 	_test_used_zone_refill()
@@ -193,7 +201,7 @@ func _test_card_db() -> void:
 		var rd: DeckDef = CardDB.random_deck(rng)
 		var ids: Array = rd.creatures.map(func(d): return d.id)
 		_check(CardDB.team_power(ids) <= CardDB.team_power_limit(), "случайная колода в лимите БС")
-	_check(CardDB.arena_ids().size() == 12, "12 карт арены")
+	_check(CardDB.arena_ids().size() == 16, "16 карт ворот (12 + Престол + 3 ловушки)")
 	_check(CardDB.ability_ids().size() == 20, "20 карт способностей")
 	for i in range(2):
 		var d: DeckDef = CardDB.preset_deck(i)
@@ -234,17 +242,17 @@ func _test_tie_goes_to_defender() -> void:
 func _test_arena_cards() -> void:
 	# Жаровик (Пламя 340) атакует Вихрекрыла (Буря 300): Пламя бьёт Бурю -> база 400:300
 	_expect("без карты", ZH, VI, &"", &"", &"", 400, 300)
-	_expect("Поле Пламени", ZH, VI, &"arena_field_fire", &"", &"", 500, 330)
-	_expect("Поле Бури", ZH, VI, &"arena_field_gale", &"", &"", 430, 400)
-	_expect("Поле Света (мимо)", ZH, VI, &"arena_field_light", &"", &"", 430, 330)
-	_expect("Поле Камня (мимо)", ZH, VI, &"arena_field_stone", &"", &"", 430, 330)
-	_expect("Поле Тени (мимо)", ZH, VI, &"arena_field_shadow", &"", &"", 430, 330)
-	_expect("Поле Прилива (мимо)", ZH, VI, &"arena_field_tide", &"", &"", 430, 330)
-	_expect("Низина", ZH, VI, &"arena_lowland", &"", &"", 400, 420)
+	_expect("Поле Пламени", ZH, VI, &"arena_field_fire", &"", &"", 550, 300)
+	_expect("Поле Бури", ZH, VI, &"arena_field_gale", &"", &"", 400, 450)
+	_expect("Поле Света (мимо)", ZH, VI, &"arena_field_light", &"", &"", 400, 300)
+	_expect("Поле Камня (мимо)", ZH, VI, &"arena_field_stone", &"", &"", 400, 300)
+	_expect("Поле Тени (мимо)", ZH, VI, &"arena_field_shadow", &"", &"", 400, 300)
+	_expect("Поле Прилива (мимо)", ZH, VI, &"arena_field_tide", &"", &"", 400, 300)
+	_expect("Низина", ZH, VI, &"arena_lowland", &"", &"", 400, 450)
 	_expect("Пустота", ZH, VI, &"arena_void", &"", &"", 340, 300)
 	_expect("Перевес", ZH, VI, &"arena_overweight", &"", &"", 460, 300)
-	_expect("Ловушка", ZH, VI, &"arena_trap", &"", &"", 320, 300)
-	_expect("Бастион", ZH, VI, &"arena_bastion", &"", &"", 400, 380)
+	_expect("Ловушка", ZH, VI, &"arena_trap", &"", &"", 300, 300)
+	_expect("Бастион", ZH, VI, &"arena_bastion", &"", &"", 400, 400)
 	_expect("Сумерки (мимо)", ZH, VI, &"arena_twilight", &"", &"", 400, 300)
 	# Люминар (Свет 330) vs Сумрачник (Тень 350): преимущества нет
 	_expect("Свет/Тень без карты", LU, SU, &"", &"", &"", 330, 350)
@@ -261,7 +269,7 @@ func _test_abilities() -> void:
 	_expect("Перелив защитника", ZH, VI, &"", &"", &"ability_overflow", 340, 360)
 	_expect("Перелив атакующего (уже бьёт)", ZH, VI, &"", &"ability_overflow", &"", 400, 300)
 	# Перелив происходит до карты арены: Прилив получает Поле Прилива
-	_expect("Перелив + Поле Прилива", ZH, VI, &"arena_field_tide", &"", &"ability_overflow", 370, 460)
+	_expect("Перелив + Поле Прилива", ZH, VI, &"arena_field_tide", &"", &"ability_overflow", 340, 510)
 	_expect("Глушитель атакующего", ZH, VI, &"arena_field_fire", &"ability_silencer", &"", 400, 300)
 	_expect("Глушитель защитника", ZH, VI, &"arena_field_fire", &"", &"ability_silencer", 400, 300)
 	_expect("Щит против Рывка", ZH, VI, &"", &"ability_surge", &"ability_shield", 400, 300)
@@ -269,7 +277,7 @@ func _test_abilities() -> void:
 	_expect("Два Щита", ZH, VI, &"", &"ability_shield", &"ability_shield", 400, 300)
 	_expect("Ва-банк", ZH, VI, &"", &"ability_allin", &"", 530, 300)
 	_expect("Родная стихия без поля", ZH, VI, &"", &"ability_homeland", &"", 400, 300)
-	_expect("Родная стихия + Поле Пламени", ZH, VI, &"arena_field_fire", &"ability_homeland", &"", 600, 330)
+	_expect("Родная стихия + Поле Пламени", ZH, VI, &"arena_field_fire", &"ability_homeland", &"", 650, 300)
 	_expect("Родная стихия + Глушитель", ZH, VI, &"arena_field_fire", &"ability_homeland", &"ability_silencer", 400, 300)
 	# Наследие: +40 за каждое выбывшее своё существо
 	var st: MatchState = _mk_state(ZH, VI, &"")
@@ -294,7 +302,7 @@ func _test_abilities() -> void:
 
 func _test_shield_and_silencer_interplay() -> void:
 	# Щит атакующего отменяет Глушитель защитника -> арена действует
-	_expect("Щит отменяет Глушитель", ZH, VI, &"arena_field_fire", &"ability_shield", &"ability_silencer", 500, 330)
+	_expect("Щит отменяет Глушитель", ZH, VI, &"arena_field_fire", &"ability_shield", &"ability_silencer", 550, 300)
 	var st: MatchState = _mk_state(ZH, VI, &"arena_field_fire")
 	var r: BattleResult = _calc(st, &"ability_shield", &"ability_silencer")
 	_check(r.def_cancelled and not r.atk_cancelled, "Щит: флаги отмены")
@@ -442,8 +450,8 @@ func _test_win_by_three_captures() -> void:
 	for k in range(3):
 		_check(ctrl.get_phase() == MatchController.Phase.AWAIT_THROW and ctrl.get_active_player() == 0, "ходит P0 — победитель прошлого боя (k=%d)" % k)
 		_throw(ctrl, 0, plan[k][0], plan[k][1])
-		_check(ctrl.get_phase() == MatchController.Phase.ABILITY_WINDOW, "окно способностей до открытия ворот (k=%d)" % k)
-		_check(not ctrl.state.slots[plan[k][1]].revealed, "ворота ещё закрыты (k=%d)" % k)
+		_check(ctrl.get_phase() == MatchController.Phase.ABILITY_WINDOW, "окно способностей (k=%d)" % k)
+		_check(ctrl.state.slots[plan[k][1]].revealed, "ворота открыты в начале боя (k=%d)" % k)
 		_pass_windows(ctrl)
 		_check(ctrl.state.players[0].captured.size() == k + 1, "захвачено %d" % (k + 1))
 	_check(ctrl.get_phase() == MatchController.Phase.GAME_OVER, "матч окончен")
@@ -473,6 +481,7 @@ func _test_all_in_loss() -> void:
 	var pre: BattleResult = ctrl.get_battle_preview()
 	_check(pre != null and pre.atk_ability == &"ability_allin", "предпросмотр учитывает сыгранное")
 	_check(ctrl.pass_ability(1) == OK, "защитник пасует")
+	_pass_windows(ctrl)  # атакующий может доиграть — пасует
 	_check(not ctrl.state.creatures[0].alive, "проигравший Мареолит выбыл")
 	_check(ctrl.state.creatures[3].used and ctrl.state.creatures[3].slot == -1, "Гранитрог тоже в зоне использованных")
 	_check(ctrl.state.players[0].ability_hand.size() == 1, "после Ва-банка и потери в руке 1 карта, а не %d" % ctrl.state.players[0].ability_hand.size())
@@ -490,6 +499,8 @@ func _test_all_in_loss() -> void:
 	_throw(ctrl2, 0, 0, 1)
 	ctrl2.play_ability(0, &"ability_allin")
 	ctrl2.play_ability(1, &"ability_shield")
+	_check(ctrl2.get_ability_moment() == &"battle" and ctrl2.get_active_player() == 0, "после Щита защитника черёд атакующего")
+	_pass_windows(ctrl2)
 	_check(_cancel_events == 1, "ability_cancelled эмитнут один раз")
 	_check(ctrl2.state.players[0].ability_hand.size() == 2, "отменённый Ва-банк не отнимает карту")
 
@@ -580,6 +591,7 @@ func _run_match(seed_value: int) -> Dictionary:
 	var deck0: DeckDef = CardDB.random_deck(rng)
 	var deck1: DeckDef = CardDB.random_deck(rng)
 	var ctrl: MatchController = MatchController.new(deck0, deck1, seed_value)
+	ctrl.landing_window = true
 	var ais: Array[AIPlayer] = [AIPlayer.new(0, seed_value + 1), AIPlayer.new(1, seed_value + 2)]
 	ctrl.start()
 	var steps: int = 0
@@ -599,8 +611,15 @@ func _run_match(seed_value: int) -> Dictionary:
 				var ch: Dictionary = ais[p].choose_setup(ctrl.get_view(p), ctrl.legal_setup_slots(), ctrl.can_skip_gate())
 				if ch.is_empty():
 					err = ctrl.skip_gate(p)
+				elif ch.has("throw_uid"):
+					pending_uid = int(ch["throw_uid"])
+					pending_target = int(ch["slot"])
+					err = ctrl.throw_with_gate(p, ch["card_id"], ch["slot"], pending_uid)
 				else:
 					err = ctrl.place_arena_card(p, ch["card_id"], ch["slot"])
+			MatchController.Phase.AFTER_LANDING:
+				var at: StringName = ais[p].choose_attach(ctrl.get_view(p), ctrl.get_landed_uid(), ctrl.legal_abilities(p))
+				err = ctrl.pass_ability(p) if at == &"" else ctrl.play_ability(p, at)
 			MatchController.Phase.AWAIT_THROW:
 				var th: Dictionary = ais[p].choose_throw(ctrl.get_view(p))
 				pending_uid = th["uid"]
@@ -675,7 +694,7 @@ func _test_new_abilities() -> void:
 	_expect("Поглощение половины бонусов", ZH, SU, &"", &"ability_surge", &"ability_absorb", 380, 390)
 	_expect("Водоворот меняет стихии", ZH, MA, &"", &"", &"ability_whirlpool", 400, 350)
 	_expect("Обмен сутью", ZH, VI, &"", &"", &"ability_essence", 360, 340)
-	_expect("Перехват поля", ZH, VI, &"arena_field_fire", &"", &"ability_intercept", 400, 430)
+	_expect("Перехват поля", ZH, VI, &"arena_field_fire", &"", &"ability_intercept", 400, 450)
 	_expect("Щит против Огненного смерча", ZH, VI, &"", &"ability_firestorm", &"ability_shield", 400, 300)
 	_fx("Резонанс удваивает Рывок", ZH, VI, &"", &"ability_surge", &"", &"ability_resonance", &"", 560, 300)
 	_fx("Резонанс + Смерч", ZH, VI, &"", &"ability_firestorm", &"", &"ability_resonance", &"", 540, 160)
@@ -686,34 +705,321 @@ func _test_new_abilities() -> void:
 	_check(r.def_rescue and not r.atk_rescue, "Спасение помечено у защитника")
 
 
-## Окно слияния и стихийный замок в контроллере; «Спасение» возвращает проигравшего в резерв.
+## Слияние в обмене способностями и стихийный замок; «Спасение» возвращает проигравшего в резерв.
 func _test_fusion_window() -> void:
 	var deck0: DeckDef = _mk_deck([ZH, LU, GR], ["arena_void", "arena_void", "arena_void"], ["ability_surge", "ability_resonance", "ability_headwind"])
 	var deck1: DeckDef = _mk_deck([VI, SU, MA], ["arena_void", "arena_void", "arena_void"], ["ability_rescue", "ability_shield", "ability_legacy"])
 	var ctrl: MatchController = MatchController.new(deck0, deck1, 5)
 	_setup_controller(ctrl)
-	var zh: int = ctrl.state.players[0].creature_uids[0]
+	for i in range(6):
+		_set_card(ctrl, i, &"arena_void", i % 2)
+	var lu: int = ctrl.state.players[0].creature_uids[1]
 	var vi: int = ctrl.state.players[1].creature_uids[0]
-	ctrl.select_creature(0, zh)
-	ctrl.report_landing(zh, 1)
-	ctrl.select_creature(1, vi)
-	ctrl.report_landing(vi, 0)
-	ctrl.select_creature(0, ctrl.state.players[0].creature_uids[1])
-	# ход 3: Жаровик уже стоит в 1; выбираем Люминара и бросаем в слот 0 (там Вихрекрыл)
-	ctrl.report_landing(ctrl.state.players[0].creature_uids[1], 0)
-	_check(ctrl.get_phase() == MatchController.Phase.ABILITY_WINDOW, "бой начался")
+	_stand(ctrl, vi, 0)
+	_throw(ctrl, 0, lu, 0)
+	_check(ctrl.get_phase() == MatchController.Phase.ABILITY_WINDOW and ctrl.get_active_player() == 0, "бой: обмен начинает игрок, чей ход")
 	var legal: Array[StringName] = ctrl.legal_abilities(0)
 	_check(legal.has(&"ability_surge") and not legal.has(&"ability_resonance") and not legal.has(&"ability_headwind"),
-		"слияние и чужая стихия недоступны в основном окне: %s" % str(legal))
+		"слияние без основной карты и чужая стихия недоступны: %s" % str(legal))
 	_check(ctrl.play_ability(0, &"ability_resonance") != OK, "слияние нельзя сыграть первым")
 	_check(ctrl.play_ability(0, &"ability_surge") == OK, "основная карта сыграна")
-	_check(ctrl.get_active_player() == 0 and ctrl.legal_abilities(0) == [&"ability_resonance"], "открыто окно слияния")
+	_check(ctrl.get_active_player() == 1, "черёд защитника")
+	_check(ctrl.play_ability(1, &"ability_rescue") == OK, "Спасение сыграно")
+	_check(ctrl.get_active_player() == 0 and ctrl.legal_abilities(0) == [&"ability_resonance"], "атакующему доступно слияние поверх Рывка")
 	_check(ctrl.play_ability(0, &"ability_resonance") == OK, "слияние сыграно")
 	var pre: BattleResult = ctrl.get_battle_preview()
-	_check(pre != null and pre.atk_fusion == &"ability_resonance" and pre.powers[0] == 330 + 160, "предпросмотр со слиянием: %s" % (pre.to_log_string() if pre else "null"))
-	var lu: int = ctrl.state.players[0].creature_uids[1]
-	_check(ctrl.get_active_player() == 1, "окно защитника")
-	_check(ctrl.play_ability(1, &"ability_rescue") == OK, "Спасение сыграно")
+	_check(pre != null and pre.powers[0] == 330 + 160 and pre.powers[1] == 320, "предпросмотр со слиянием: %s" % (pre.to_log_string() if pre else "null"))
+	_check(ctrl.pass_ability(1) == OK, "защитник пасует")
+	_check(ctrl.get_phase() != MatchController.Phase.ABILITY_WINDOW, "атакующему нечего доиграть — бой решён")
 	_check(ctrl.state.creatures[vi].alive and ctrl.state.creatures[vi].used, "Спасение: Вихрекрыл не выбыл, а в зоне использованных")
 	_check(ctrl.state.players[0].captured.size() == 1, "карта ворот у победителя")
 	_check(ctrl.state.creatures[lu].used, "победитель в зоне использованных")
+
+
+# ---------------------------------------------------------------- механики «Боя как в аниме»
+
+## Бой P0 (uid atk) против стоящего P1 (uid dfn) на воротах card в слоте 1; остальные ворота — Пустота.
+func _battle_ctrl(abil0: Array, abil1: Array, card: StringName, atk_idx: int, def_idx: int, rng_seed: int, landing: bool = false) -> MatchController:
+	var deck0: DeckDef = _mk_deck([ZH, LU, GR], ["arena_void", "arena_void", "arena_void"], abil0)
+	var deck1: DeckDef = _mk_deck([VI, SU, MA], ["arena_void", "arena_void", "arena_void"], abil1)
+	var ctrl: MatchController = MatchController.new(deck0, deck1, rng_seed)
+	ctrl.landing_window = landing
+	_setup_controller(ctrl)
+	for i in range(6):
+		_set_card(ctrl, i, &"arena_void", i % 2)
+	_set_card(ctrl, 1, card, 1)
+	if atk_idx >= 0:
+		_stand(ctrl, ctrl.state.players[1].creature_uids[def_idx], 1)
+		_throw(ctrl, 0, ctrl.state.players[0].creature_uids[atk_idx], 1)
+	return ctrl
+
+
+## Обмен способностями: поочерёдно, пас окончателен, второй доигрывает, не больше 3 карт на игрока за бой.
+func _test_exchange() -> void:
+	var ab3: Array = ["ability_surge", "ability_hamstring", "ability_allin"]
+	var ctrl: MatchController = _battle_ctrl(ab3, ["ability_surge", "ability_hamstring", "ability_legacy"], &"arena_void", 0, 0, 61)
+	var log: Array = []
+	ctrl.ability_window.connect(func(p: int, _o: Array) -> void: log.append(p))
+	_check(ctrl.get_ability_moment() == &"battle" and ctrl.abilities_left(0) == 3, "в бою 3 карты на игрока")
+	_check(ctrl.state.slots[1].revealed, "ворота открыты до обмена способностями")
+	_check(ctrl.play_ability(1, &"ability_surge") != OK, "не черёд защитника")
+	ctrl.play_ability(0, &"ability_surge")
+	ctrl.play_ability(1, &"ability_surge")
+	ctrl.pass_ability(0)
+	_check(ctrl.get_active_player() == 1 and ctrl.get_phase() == MatchController.Phase.ABILITY_WINDOW, "после паса атакующего защитник доигрывает")
+	ctrl.play_ability(1, &"ability_hamstring")
+	_check(ctrl.get_active_player() == 1, "спасовавший больше не получает окон")
+	_check(ctrl.play_ability(0, &"ability_hamstring") != OK, "пас окончателен")
+	ctrl.play_ability(1, &"ability_legacy")
+	_check(ctrl.get_phase() != MatchController.Phase.ABILITY_WINDOW, "у защитника 3 карты — обмен окончен")
+	_check(log == [1, 0, 1, 1], "порядок окон после первого: %s" % str(log))
+	# лимит 3 карты: атакующий играет все три подряд, защитник пасует
+	var c2: MatchController = _battle_ctrl(ab3, ["ability_legacy", "ability_shield", "ability_hamstring"], &"arena_void", 0, 0, 62)
+	c2.play_ability(0, &"ability_surge")
+	c2.pass_ability(1)
+	c2.play_ability(0, &"ability_hamstring")
+	_check(c2.abilities_left(0) == 1, "осталась одна карта из трёх")
+	c2.play_ability(0, &"ability_allin")
+	_check(c2.get_phase() != MatchController.Phase.ABILITY_WINDOW, "после третьей карты бой решён")
+	# Щиты в цепочке: Щит отменяет последнюю основную карту соперника до него, иначе следующую
+	_expect("Рывок, Щит, Щит: второй Щит отменяет первый", ZH, VI, &"", &"", &"", 400, 300)
+	var st: MatchState = _mk_state(ZH, VI, &"")
+	var r1: BattleResult = PowerCalc.compute_seq(st, 0, 1, 0, [[0, &"ability_surge"], [1, &"ability_shield"], [0, &"ability_shield"]])
+	_check(r1.powers[0] == 480 and r1.def_cancelled and r1.cancelled_plays == [[1, &"ability_shield"]], "Щит на Щит возвращает Рывок: %s" % r1.to_log_string())
+	var r2: BattleResult = PowerCalc.compute_seq(st, 0, 1, 0, [[0, &"ability_surge"], [1, &"ability_shield"], [0, &"ability_hamstring"]])
+	_check(r2.powers[0] == 400 and r2.powers[1] == 220, "Рывок отменён, Подсечка после Щита действует: %d:%d" % [r2.powers[0], r2.powers[1]])
+	var r3: BattleResult = PowerCalc.compute_seq(st, 0, 1, 0, [[0, &"ability_surge"], [0, &"ability_hamstring"], [1, &"ability_shield"]])
+	_check(r3.powers[0] == 480 and r3.powers[1] == 300, "Щит отменяет только последнюю карту (Подсечку): %d:%d" % [r3.powers[0], r3.powers[1]])
+	var r4: BattleResult = PowerCalc.compute_seq(st, 0, 1, 0, [[0, &"ability_surge"], [0, &"ability_surge"]])
+	_check(r4.powers[0] == 560, "две основные карты складываются: %d" % r4.powers[0])
+
+
+## Способности вне боя: до броска и после приземления карта прикрепляется к существу и срабатывает в его бою.
+func _test_attach_moments() -> void:
+	var deck0: DeckDef = _mk_deck([ZH, LU, GR], ["arena_void", "arena_void", "arena_void"], ["ability_surge", "ability_hamstring", "ability_allin"])
+	var deck1: DeckDef = _mk_deck([VI, SU, MA], ["arena_void", "arena_void", "arena_void"], ["ability_granite", "ability_shield", "ability_legacy"])
+	var ctrl: MatchController = MatchController.new(deck0, deck1, 71)
+	ctrl.landing_window = true
+	_setup_controller(ctrl)
+	for i in range(6):
+		_set_card(ctrl, i, &"arena_void", i % 2)
+	var att: Array = []
+	ctrl.ability_attached.connect(func(p: int, u: int, c: StringName) -> void: att.append([p, u, c]))
+	var zh: int = ctrl.state.players[0].creature_uids[0]
+	_check(ctrl.select_creature(0, zh) == OK, "существо выбрано")
+	_check(ctrl.get_ability_moment() == &"pre_throw" and ctrl.legal_abilities(0).size() == 3, "до броска можно сыграть способность")
+	_check(ctrl.play_ability(0, &"ability_surge") == OK, "Рывок до броска")
+	_check(att == [[0, zh, &"ability_surge"]] and ctrl.state.creatures[zh].attached.size() == 1, "Рывок прикреплён к существу")
+	_check(ctrl.get_phase() == MatchController.Phase.AWAIT_LANDING, "фаза броска не меняется")
+	var wins: Array = []
+	ctrl.attach_window.connect(func(p: int, u: int, _o: Array) -> void: wins.append([p, u]))
+	ctrl.report_landing(zh, 0)
+	_check(ctrl.get_phase() == MatchController.Phase.AFTER_LANDING and wins == [[0, zh]], "окно после приземления")
+	_check(ctrl.get_landed_uid() == zh and ctrl.get_ability_moment() == &"after_landing", "запросы окна после приземления")
+	_check(ctrl.pass_ability(0) == OK and ctrl.get_active_player() == 1, "пас — ход сопернику")
+	# соперник атакует: Рывок срабатывает в бою, считается в лимит
+	var su: int = ctrl.state.players[1].creature_uids[1]
+	_throw(ctrl, 1, su, 0)
+	_check(ctrl.get_phase() == MatchController.Phase.ABILITY_WINDOW and ctrl.get_active_player() == 1, "бой: начинает игрок, чей ход (атакующий P1)")
+	var pre: BattleResult = ctrl.get_battle_preview()
+	_check(pre.powers[1] == 340 + 80 and pre.plays.size() == 1, "прикреплённый Рывок действует в бою: %s" % pre.to_log_string())
+	ctrl.pass_ability(1)
+	_check(ctrl.abilities_left(0) == 2, "прикреплённая карта занимает место в лимите")
+	ctrl.pass_ability(0)
+	_check(ctrl.state.creatures[zh].attached.is_empty(), "после боя прикреплённые карты сняты")
+	_check(ctrl.state.players[0].captured.size() == 1, "Жаровик (420) отбился от Сумрачника (350)")
+	# без landing_window окна после приземления нет
+	var c2: MatchController = MatchController.new(deck0, deck1, 72)
+	_setup_controller(c2)
+	_throw(c2, 0, 0, 0)
+	_check(c2.get_active_player() == 1, "окно после приземления выключено по умолчанию")
+	# стихийный замок для прикрепления: Гранитная стена только Камню
+	var c3: MatchController = MatchController.new(deck1, deck0, 73)
+	_setup_controller(c3)
+	c3.select_creature(0, c3.state.players[0].creature_uids[0])
+	_check(not c3.legal_abilities(0).has(&"ability_granite"), "чужая стихия не прикрепляется")
+
+
+## «Ворота + бросок»: карта ворот ложится в момент броска, цель — эта карта.
+func _test_gate_throw() -> void:
+	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 81)
+	ctrl.start()
+	var ev: Array = []
+	ctrl.gate_thrown.connect(func(p: int, sl: int, u: int) -> void: ev.append([p, sl, u]))
+	var card: StringName = ctrl.state.players[0].arena_hand[0]
+	_check(ctrl.throw_with_gate(0, card, 4, 0) != OK, "слот вне правил выкладки отвергается")
+	_check(ctrl.throw_with_gate(0, card, 1, 3) != OK, "чужое существо отвергается")
+	_check(ctrl.throw_with_gate(0, card, 1, 0) == OK, "ворота + бросок")
+	_check(ev == [[0, 1, 0]] and ctrl.get_throw_gate_slot() == 1, "событие и цель броска")
+	_check(ctrl.get_phase() == MatchController.Phase.AWAIT_LANDING and ctrl.get_selected_uid() == 0, "сразу фаза приземления")
+	_check(ctrl.state.slots[1].has_card and ctrl.state.slots[1].card_owner == 0 and not ctrl.state.players[0].arena_hand.has(card), "карта на поле")
+	ctrl.report_landing(0, 1)
+	_check(ctrl.state.creatures[0].slot == 1 and ctrl.get_active_player() == 1, "существо встало на свою карту, ход сопернику")
+	_check(ctrl.get_view(1).slots[1].card_id == &"", "соперник не видит карту")
+	# промах с обычной погрешностью
+	var c2: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 82)
+	c2.start()
+	c2.throw_with_gate(0, c2.state.players[0].arena_hand[0], 0, 1)
+	c2.report_landing(1, -1)
+	_check(c2.state.creatures[1].used and c2.state.slots[0].has_card, "промах: карта лежит, существо в зоне использованных")
+
+
+## Бонус ворот только своей стихии; «Престол стихии».
+func _test_gate_bonus() -> void:
+	var g: Array = CardDB.card(&"arena_field_fire").params["g"]
+	_check(g == [150, 0, 0, 0, 0, 0], "Поле Пламени даёт G только Пламени: %s" % str(g))
+	for id in CardDB.arena_ids():
+		var c: CardDef = CardDB.card(id)
+		var amt: int = absi(int(c.params.get("amount", 0)))
+		_check(amt == 0 or (amt >= 50 and amt <= 500), "бонус ворот %s в рамках 50–500" % id)
+	_check(CardDB.card_class(CardDB.card(&"arena_throne")) == &"gold", "Престол — золотые ворота")
+	# Престол владельца P1 (стихия команды — Буря у VI): защитник Буря +500, атакующий не получает
+	var st: MatchState = _mk_state(ZH, VI, &"arena_throne")
+	var r: BattleResult = _calc(st)
+	_check(r.powers[0] == 400 and r.powers[1] == 800, "Престол: защитник своей стихии +500: %d:%d" % [r.powers[0], r.powers[1]])
+	st.slots[0].card_owner = 0
+	r = _calc(st)
+	_check(r.powers[1] == 300, "Престол чужой стихии не помогает защитнику")
+
+
+## Ловушки ворот: открываются в начале боя.
+func _test_gate_traps() -> void:
+	_check(CardEffects.is_gate_trap(CardDB.card(&"arena_seal")) and not CardEffects.is_gate_trap(CardDB.card(&"arena_trap")), "флаг ловушки")
+	for id in [&"arena_seal", &"arena_mirror", &"arena_backflow"]:
+		_check(CardDB.card_class(CardDB.card(id)) == &"bronze", "ловушка %s — бронзовая" % id)
+	# Печать тишины: способности не играются, прикреплённые сгорают
+	var ctrl: MatchController = _battle_ctrl(["ability_surge", "ability_shield", "ability_homeland"], ["ability_surge", "ability_shield", "ability_legacy"], &"arena_seal", -1, 0, 91)
+	var traps: Array = []
+	ctrl.gate_trap_triggered.connect(func(sl: int, c: StringName, e: StringName) -> void: traps.append([sl, c, e]))
+	var cancels: Array = []
+	ctrl.ability_cancelled.connect(func(p: int, c: StringName) -> void: cancels.append([p, c]))
+	_stand(ctrl, 3, 1)
+	ctrl.select_creature(0, 2)
+	ctrl.play_ability(0, &"ability_surge")  # Рывок до броска
+	ctrl.report_landing(2, 1)
+	_check(traps == [[1, &"arena_seal", &"seal"]], "событие ловушки при открытии: %s" % str(traps))
+	_check(ctrl.get_phase() != MatchController.Phase.ABILITY_WINDOW, "Печать тишины: окон способностей нет")
+	_check(cancels == [[0, &"ability_surge"]], "прикреплённый Рывок сгорел: %s" % str(cancels))
+	_check(ctrl.state.players[0].captured.size() == 1, "Гранитрог 370 > Вихрекрыл 300 без способностей")
+	# Зеркало: силы меняются; Глушитель отменяет ловушку
+	_expect("Зеркало", ZH, VI, &"arena_mirror", &"", &"", 300, 400)
+	_check(_calc(_mk_state(ZH, VI, &"arena_mirror")).mirrored, "флаг Зеркала")
+	_expect("Зеркало + Глушитель", ZH, VI, &"arena_mirror", &"", &"ability_silencer", 400, 300)
+	_expect("Зеркало + Рывок вредит", ZH, VI, &"arena_mirror", &"ability_surge", &"", 300, 480)
+	# Обратный ток: преимущество у того, кого бьют
+	_expect("Обратный ток", ZH, VI, &"arena_backflow", &"", &"", 340, 360)
+	_expect("Обратный ток без связи стихий", LU, SU, &"arena_backflow", &"", &"", 330, 350)
+	_check(_calc(_mk_state(ZH, VI, &"arena_backflow")).trap_id == &"arena_backflow", "trap_id Обратного тока")
+	_check(_calc(_mk_state(ZH, VI, &"arena_backflow"), &"", &"ability_silencer").trap_id == &"", "Глушитель гасит Обратный ток")
+
+
+## «Натиск»: серия побед даёт +40 за победу (до 2), поражение сбрасывает.
+func _test_momentum() -> void:
+	var ctrl: MatchController = _battle_ctrl(["ability_surge", "ability_shield", "ability_homeland"], ["ability_surge", "ability_shield", "ability_legacy"], &"arena_void", -1, 0, 101)
+	var mom: Array = []
+	ctrl.momentum_changed.connect(func(p: int, v: int) -> void: mom.append([p, v]))
+	_stand(ctrl, 3, 1)
+	_stand(ctrl, 4, 3)
+	_stand(ctrl, 5, 5)
+	_throw(ctrl, 0, 2, 3)  # Гранитрог 370 > Сумрачник 350
+	_pass_windows(ctrl)
+	_check(mom == [[0, 1]] and ctrl.get_momentum(0) == 1, "первая победа: натиск 1: %s" % str(mom))
+	_throw(ctrl, 0, 0, 1)  # Жаровик 340 + натиск 40 против Вихрекрыла 300 (Пустота)
+	var pre: BattleResult = ctrl.get_battle_preview()
+	_check(pre.momentum[0] == 40 and pre.powers[0] == 380, "натиск в расчёте: %s" % pre.to_log_string())
+	_pass_windows(ctrl)
+	_check(ctrl.get_momentum(0) == 2, "вторая победа: натиск 2")
+	var st: MatchState = _mk_state(ZH, VI, &"")
+	st.players[0].momentum = 5
+	_check(_calc(st).powers[0] == 400 + PowerCalc.MOMENTUM_STEP * PowerCalc.MOMENTUM_MAX, "натиск не выше предела")
+	st.players[0].momentum = 0
+	st.players[1].momentum = 2
+	_check(_calc(st).powers[1] == 380, "натиск защитника")
+	# поражение сбрасывает
+	var c2: MatchController = _battle_ctrl(["ability_surge", "ability_shield", "ability_homeland"], ["ability_surge", "ability_shield", "ability_legacy"], &"arena_void", -1, 0, 102)
+	c2.state.players[0].momentum = 2
+	_stand(c2, 4, 1)
+	var m2: Array = []
+	c2.momentum_changed.connect(func(p: int, v: int) -> void: m2.append([p, v]))
+	_throw(c2, 0, 1, 1)  # Люминар 330 + 80 = 410 > Сумрачник 350: победа, натиск остаётся 2
+	_pass_windows(c2)
+	_check(c2.get_momentum(0) == 2 and m2.is_empty(), "на пределе натиск не растёт")
+
+
+## Финальный раунд: у кого-то осталось одно существо — объявление и преимущество стихии ×2.
+func _test_final_round() -> void:
+	var ctrl: MatchController = _battle_ctrl(["ability_surge", "ability_shield", "ability_homeland"], ["ability_surge", "ability_shield", "ability_legacy"], &"arena_void", -1, 0, 111)
+	var fin: Array = []
+	ctrl.final_round_started.connect(func(p: int) -> void: fin.append(p))
+	ctrl.state.creatures[3].alive = false  # у P1 осталось два
+	_stand(ctrl, 4, 3)
+	_throw(ctrl, 0, 2, 3)  # Гранитрог выбивает Сумрачника
+	_pass_windows(ctrl)
+	_check(fin == [1] and ctrl.is_final_round() and ctrl.get_view(1).final_round, "финальный раунд объявлен для P1: %s" % str(fin))
+	var st: MatchState = _mk_state(ZH, VI, &"")
+	st.final_round = true
+	var r: BattleResult = _calc(st)
+	_check(r.powers[0] == 340 + 120 and r.final_round, "финальный раунд: преимущество ×2: %d" % r.powers[0])
+	st.slots[0].card_id = &"arena_overweight"
+	st.slots[0].has_card = true
+	_check(_calc(st).powers[0] == 340 + 240, "Перевес в финале ×4")
+	_check(ctrl.get_active_player() == 0, "ходит победитель")
+	_throw(ctrl, 0, 0, -1)
+	_check(fin.size() == 1, "объявление один раз")
+
+
+## Уровни сложности ИИ: детерминизм, приманка на «Зеркале», прикрепление защиты, пара карт у мастера.
+func _test_ai_levels() -> void:
+	_check(AIPlayer.new(1, 1).difficulty == AIPlayer.Difficulty.NORMAL and is_equal_approx(AIPlayer.new(1, 1).get_aim_error(), 0.42), "по умолчанию — Боец")
+	_check(AIPlayer.new(1, 1, -1.0, AIPlayer.Difficulty.EASY).get_aim_error() > AIPlayer.new(1, 1, -1.0, AIPlayer.Difficulty.HARD).get_aim_error(), "мастер точнее новичка")
+	_check(AIPlayer.difficulty_name(2) == "Мастер", "имя уровня")
+	# приманка: на своё «Зеркало» Боец ставит слабейшее существо
+	var deck1: DeckDef = _mk_deck([VI, SU, MA], ["arena_mirror", "arena_void", "arena_void"], ["ability_surge", "ability_shield", "ability_legacy"])
+	var ctrl: MatchController = MatchController.new(_test_deck(0), deck1, 121)
+	_setup_controller(ctrl)
+	for i in range(6):
+		_set_card(ctrl, i, &"arena_void", i % 2)
+	for i in range(6):
+		ctrl.state.slots[i].has_card = false
+		ctrl.state.slots[i].card_id = &""
+	_set_card(ctrl, 3, &"arena_mirror", 1)
+	_p0_idle(ctrl)
+	var ai := AIPlayer.new(1, 5, -1.0, AIPlayer.Difficulty.NORMAL)
+	var th: Dictionary = ai.choose_throw(ctrl.get_view(1))
+	_check(th["target_slot"] == 3 and th["uid"] == 3, "на Зеркало — слабейший Вихрекрыл (300): %s" % str(th))
+	# мастер разыгрывает пару, если одной карты мало: Мареолит 320 против Гранитрога 370 на Пустоте
+	var c2: MatchController = _battle_ctrl(["ability_surge", "ability_shield", "ability_homeland"], ["ability_surge", "ability_hamstring", "ability_legacy"], &"arena_void", -1, 0, 122)
+	_set_card(c2, 3, &"arena_bastion", 0)
+	_stand(c2, 2, 3)
+	_p0_idle(c2)
+	_throw(c2, 1, 5, 3)
+	var hard := AIPlayer.new(1, 7, -1.0, AIPlayer.Difficulty.HARD)
+	var normal := AIPlayer.new(1, 7, -1.0, AIPlayer.Difficulty.NORMAL)
+	var pre: BattleResult = c2.get_battle_preview()
+	_check(c2.get_active_player() == 1 and pre.powers[1] > pre.powers[0], "Мареолит атакует и проигрывает без карт")
+	var hc: StringName = hard.choose_ability(c2.get_view(1), pre, c2.legal_abilities(1))
+	var nc: StringName = normal.choose_ability(c2.get_view(1), pre, c2.legal_abilities(1))
+	_check(hc != &"" and nc == &"", "мастер начинает пару карт, боец пасует: %s / %s" % [hc, nc])
+	# прикрепление защиты после приземления
+	var deck_g: DeckDef = _mk_deck([GR, ZH, LU], ["arena_void", "arena_void", "arena_void"], ["ability_granite", "ability_surge", "ability_legacy"])
+	var c3: MatchController = MatchController.new(deck_g, _test_deck(1), 123)
+	c3.landing_window = true
+	_setup_controller(c3)
+	for i in range(6):
+		_set_card(c3, i, &"arena_void", i % 2)
+	_throw(c3, 0, 1, 0)  # Жаровик (340) встаёт; Сумрачник (350) его перебьёт
+	_check(c3.get_phase() == MatchController.Phase.AFTER_LANDING, "окно после приземления")
+	var a0 := AIPlayer.new(0, 9, -1.0, AIPlayer.Difficulty.NORMAL)
+	var pick: StringName = a0.choose_attach(c3.get_view(0), c3.get_landed_uid(), c3.legal_abilities(0))
+	_check(pick == &"ability_surge", "Боец прикрепляет Рывок для защиты: %s" % pick)
+	_check(AIPlayer.new(0, 9, -1.0, AIPlayer.Difficulty.EASY).choose_attach(c3.get_view(0), c3.get_landed_uid(), c3.legal_abilities(0)) == &"", "Новичок не прикрепляет")
+	# детерминизм по seed с разными уровнями
+	var d1: Dictionary = _run_match(4242)
+	var d2: Dictionary = _run_match(4242)
+	_check(d1["log_hash"] == d2["log_hash"], "детерминизм с новыми механиками")
+
+
+## Ход P0 без последствий: промах.
+func _p0_idle(ctrl: MatchController) -> void:
+	var legal: Array[int] = ctrl.legal_creatures(0)
+	_throw(ctrl, 0, legal[0], -1)

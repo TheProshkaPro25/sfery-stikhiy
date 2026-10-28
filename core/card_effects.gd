@@ -56,19 +56,23 @@ static func field_attr(card: CardDef) -> int:
 	return -1
 
 
-## Плоский бонус/штраф карты арены для одной стороны.
-static func arena_delta(card: CardDef, is_attacker: bool, attr: int, my_base: int, foe_base: int) -> int:
+## Плоский бонус/штраф карты ворот для одной стороны. owner_attr — стихия владельца ворот (для «Престола»).
+static func arena_delta(card: CardDef, is_attacker: bool, attr: int, my_base: int, foe_base: int, owner_attr: int = -1) -> int:
 	if card == null:
 		return 0
 	var amount: int = int(card.params.get("amount", 0))
-	# G ворот по стихии бойца
+	# G ворот по стихии бойца (бонус только своей стихии)
 	var g: Array = card.params.get("g", [])
 	var gv: int = int(g[attr]) if attr >= 0 and attr < g.size() else 0
-	return gv + _arena_effect(card, is_attacker, attr, my_base, foe_base, amount)
+	return gv + _arena_effect(card, is_attacker, attr, my_base, foe_base, amount, owner_attr)
 
 
-static func _arena_effect(card: CardDef, is_attacker: bool, attr: int, my_base: int, foe_base: int, amount: int) -> int:
+static func _arena_effect(card: CardDef, is_attacker: bool, attr: int, my_base: int, foe_base: int, amount: int, owner_attr: int = -1) -> int:
 	match String(card.effect_id):
+		"throne":
+			if not is_attacker and attr >= 0 and attr == owner_attr:
+				return amount
+			return 0
 		"underdog":
 			if my_base < foe_base:
 				return amount
@@ -125,3 +129,17 @@ static func ability_delta(card: CardDef, my_attr: int, field_attribute: int, dea
 				return Vector2i(int(card.params.get("amount_def", amount)), 0)
 			return Vector2i(amount, 0)
 	return Vector2i.ZERO
+
+
+# --- Ловушки ворот (срабатывают при открытии в бою) ---
+
+## Ловушка ворот: «Печать тишины», «Зеркало», «Обратный ток» (params.hidden_trap).
+static func is_gate_trap(card: CardDef) -> bool:
+	return card != null and card.kind == CardDef.Kind.ARENA and bool(card.params.get("hidden_trap", false))
+
+
+# --- Отмена ---
+
+## Карта, которая отменяет другие (для ИИ: опасный ответ соперника).
+static func is_counter_card(card: CardDef) -> bool:
+	return card != null and card.kind == CardDef.Kind.ABILITY and card.effect_id == &"shield"

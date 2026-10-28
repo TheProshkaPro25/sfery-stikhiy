@@ -8,6 +8,10 @@ var creatures: Dictionary = {}  # uid(int) -> CreatureState
 var turn: int = 0
 var phase: int = 0
 var active_player: int = 0
+## Финальный бой: у кого-то осталось одно живое существо (преимущество стихии ×2 до конца матча).
+var final_round: bool = false
+## Счётчик розыгрышей способностей (метка времени для порядка прикреплённых карт).
+var play_stamp: int = 0
 
 
 func _init() -> void:
@@ -51,6 +55,8 @@ func duplicate_view(for_player: int) -> MatchState:
 	v.turn = turn
 	v.phase = phase
 	v.active_player = active_player
+	v.final_round = final_round
+	v.play_stamp = play_stamp
 	for i in range(2):
 		v.players[i] = players[i].clone(i != for_player)
 	for i in range(slots.size()):

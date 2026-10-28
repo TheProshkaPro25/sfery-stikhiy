@@ -2,6 +2,22 @@ class_name AIPlayer
 extends RefCounted
 ## ИИ-игрок. Видит только MatchState из MatchController.get_view(player) (чужие закрытые карты пусты).
 ## Не мутирует состояние; все решения детерминированы по rng_seed.
+##
+## Уровни сложности (Difficulty):
+## - EASY («Новичок»): большой разброс броска, шумная оценка целей, часто пасует, карты выбирает наугад.
+## - NORMAL («Боец»): бой с перевесом, своя подходящая карта, самая дешёвая выигрышная способность, в обмене держит
+##   запас перевеса 80 против ответа соперника; «ворота + бросок» под подходящее существо; ставит слабое существо
+##   на своё «Зеркало» (приманка); после приземления прикрепляет защитную карту, если ворота под угрозой.
+## - HARD («Мастер»): плюс блеф (ловушку кладёт первой и сажает на неё приманку), оценка риска ловушки на чужих
+##   закрытых воротах (по уже раскрытым картам соперника), оценка ворот соперника под его существом (скорее всего
+##   «Поле» его стихии), риск ответа в обмене (запас перевеса растёт с числом карт, которыми соперник ещё может
+##   ответить), розыгрыш пары карт, если одной мало.
+
+enum Difficulty { EASY, NORMAL, HARD }
+
+const DIFFICULTY_NAMES: Array[String] = ["Новичок", "Боец", "Мастер"]
+## Разброс броска (для физики в main.gd) по уровню сложности.
+const AIM_ERROR: Array[float] = [0.62, 0.42, 0.30]
 
 const WIN_MARGIN: float = 40.0
 ## Порядок «дешевизны» способностей (по effect_id): от наименее ценных к самым рискованным.
@@ -10,25 +26,41 @@ const ABILITY_COST_ORDER: Array[String] = [
 	"swap_attr", "steal_advantage", "rescue", "stone_wall", "nullify_arena", "overflow", "drain",
 	"absorb", "fusion_double", "swap_base", "strip", "shield", "all_in",
 ]
+## Доля ловушек среди бронзовых ворот (3 из 5): априорная вероятность, что бронзовая карта соперника — ловушка.
+const TRAP_SHARE: float = 0.6
+## Штраф оценки броска в бой на чужие закрытые ворота за вероятность ловушки (HARD).
+const TRAP_RISK_PENALTY: float = 300.0
 
 var player: int = 1
+var difficulty: int = Difficulty.NORMAL
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _aim_error: float = 0.42
+## Свои карты ворот на начало матча (чтобы отличать раскрытые карты соперника среди захваченных).
+var _my_gates: Dictionary = {}
+var _gates_known: bool = false
 
 
-func _init(p_player: int = 1, rng_seed: int = 0, aim_error: float = 0.42) -> void:
+## aim_error < 0 — разброс по уровню сложности (AIM_ERROR).
+func _init(p_player: int = 1, rng_seed: int = 0, aim_error: float = -1.0, p_difficulty: int = Difficulty.NORMAL) -> void:
 	player = p_player
 	_rng.seed = rng_seed
-	_aim_error = aim_error
+	difficulty = clampi(p_difficulty, Difficulty.EASY, Difficulty.HARD)
+	_aim_error = aim_error if aim_error >= 0.0 else AIM_ERROR[difficulty]
 
 
 func get_aim_error() -> float:
 	return _aim_error
 
 
-## legal — MatchController.legal_setup_slots(). -> {card_id, slot}; {} = не класть (если можно пропустить).
+static func difficulty_name(d: int) -> String:
+	return DIFFICULTY_NAMES[clampi(d, 0, DIFFICULTY_NAMES.size() - 1)]
+
+
+## legal — MatchController.legal_setup_slots(). -> {card_id, slot[, throw_uid]}; {} = не класть (если можно пропустить).
+## throw_uid — «ворота + бросок»: вызвать ctrl.throw_with_gate(p, card_id, slot, throw_uid) и бросать в slot.
 ## Кладёт карту, если ворот на поле мало (или с вероятностью), выбирая карту под стихии своих существ.
 func choose_setup(view: MatchState, legal: Array = [], can_skip: bool = false) -> Dictionary:
+	_remember_gates(view)
 	var ps: PlayerState = view.players[player]
 	var slots: Array = legal
 	if slots.is_empty():
@@ -48,15 +80,46 @@ func choose_setup(view: MatchState, legal: Array = [], can_skip: bool = false) -
 	for id in ps.arena_hand:
 		var fit: int = 0
 		var card: CardDef = CardDB.card(id)
-		for uid in ps_uids(view):
-			if _fits(card, CardDB.creature(view.creatures[uid].def_id).attribute):
-				fit += 1
-		fit = fit * 10 + _rng.randi_range(0, 5)
+		if difficulty == Difficulty.EASY:
+			fit = _rng.randi_range(0, 9)
+		else:
+			for uid in ps_uids(view):
+				if _fits(card, CardDB.creature(view.creatures[uid].def_id).attribute):
+					fit += 1
+			# блеф: ловушка ложится первой, пока соперник не знает, где она
+			if difficulty == Difficulty.HARD and CardEffects.is_gate_trap(card) and _rng.randf() < 0.7:
+				fit = 5
+			fit = fit * 10 + _rng.randi_range(0, 5)
 		if fit > best_fit:
 			best_fit = fit
 			best = id
 	var slot: int = int(slots[_rng.randi_range(0, slots.size() - 1)])
-	return {"card_id": best, "slot": slot}
+	var out: Dictionary = {"card_id": best, "slot": slot}
+	# «Ворота + бросок»: сразу бросить под карту подходящее существо, если выгодной атаки нет
+	if difficulty != Difficulty.EASY:
+		var bcard: CardDef = CardDB.card(best)
+		var pick: int = -1
+		var attack: bool = false
+		for uid in _ready(view):
+			if pick < 0 and (_fits(bcard, CardDB.creature(view.creatures[uid].def_id).attribute) or CardEffects.is_effect(bcard, &"throne")):
+				pick = uid
+			for i in range(view.slots.size()):
+				var occ: int = view.slots[i].occupant_uid
+				if view.slots[i].has_card and occ >= 0 and view.creatures[occ].owner != player and _score(view, uid, i) >= 900.0:
+					attack = true
+		if pick >= 0 and not attack:
+			out["throw_uid"] = pick
+	return out
+
+
+## Существа в руке (можно бросить).
+func _ready(view: MatchState) -> Array[int]:
+	var out: Array[int] = []
+	for uid in view.players[player].creature_uids:
+		var c: CreatureState = view.creatures[uid]
+		if c.alive and c.slot < 0 and not c.used:
+			out.append(uid)
+	return out
 
 
 func ps_uids(view: MatchState) -> Array[int]:
@@ -65,16 +128,18 @@ func ps_uids(view: MatchState) -> Array[int]:
 
 ## -> {uid: int, target_slot: int}
 func choose_throw(view: MatchState) -> Dictionary:
+	_remember_gates(view)
 	var cands: Array[int] = _candidates(view)
 	var best_uid: int = -1
 	var best_slot: int = -1
 	var best_score: float = -INF
+	var noise: float = 250.0 if difficulty == Difficulty.EASY else 2.0
 	for uid in cands:
 		for slot in range(view.slots.size()):
 			var score: float = _score(view, uid, slot)
 			if score <= -500.0:
 				continue
-			score += _rng.randf() * 2.0
+			score += _rng.randf() * noise
 			if score > best_score:
 				best_score = score
 				best_uid = uid
@@ -88,52 +153,127 @@ func choose_throw(view: MatchState) -> Dictionary:
 	return {"uid": best_uid, "target_slot": best_slot}
 
 
-## preview — MatchController.get_battle_preview(). &"" = пас.
-## Берёт самую «дешёвую» карту из руки, после которой выигрывает; если уже выигрывает или не может — пас.
+## preview — MatchController.get_battle_preview(). &"" = пас (в бою пас окончателен).
 ## legal: карты, разрешённые контроллером сейчас (ctrl.legal_abilities); пусто — вся рука.
+## Обмен способностями: проигрываю — самая дешёвая карта, после которой выигрываю (HARD ищет и пару карт);
+## выигрываю — пас, если соперник уже не может ответить или запас перевеса достаточен, иначе карта «про запас».
 func choose_ability(view: MatchState, preview: BattleResult, legal: Array = []) -> StringName:
 	if preview == null:
 		return &""
-	var atk: CreatureState = view.creatures[preview.attacker_uid]
-	var me_is_atk: bool = atk.owner == player
-	var hand: Array[StringName] = view.players[player].ability_hand
-	if hand.is_empty():
-		return &""
-	if _wins(preview, me_is_atk):
-		return &""
-	var sorted_hand: Array[StringName] = []
-	for id in (legal if not legal.is_empty() else hand):
+	var side: int = 0 if view.creatures[preview.attacker_uid].owner == player else 1
+	var cards: Array[StringName] = []
+	for id in (legal if not legal.is_empty() else view.players[player].ability_hand):
 		if id != &"":
-			sorted_hand.append(StringName(id))
-	sorted_hand.sort_custom(_cheaper)
-	for id in sorted_hand:
-		var a: StringName = preview.atk_ability
-		var d: StringName = preview.def_ability
-		var af: StringName = preview.atk_fusion
-		var df: StringName = preview.def_fusion
-		var fusion: bool = CardEffects.is_fusion(CardDB.card(id))
-		if me_is_atk:
-			if fusion:
-				af = id
-			else:
-				a = id
-		elif fusion:
-			df = id
-		else:
-			d = id
-		var r: BattleResult = PowerCalc.compute(view, preview.attacker_uid, preview.defender_uid, preview.slot, a, d, af, df)
-		if _wins(r, me_is_atk):
+			cards.append(StringName(id))
+	if cards.is_empty():
+		return &""
+	var foe_can: int = _foe_plays_left(view, preview, side)
+	var margin: float = _margin(preview, side)
+	if difficulty == Difficulty.EASY:
+		if margin > 0.0 or _rng.randf() < 0.35:
+			return &""
+		_shuffle(cards)
+		for id in cards:
+			if _margin(_with_card(view, preview, id, side), side) > 0.0:
+				return id
+		return &""
+	cards.sort_custom(_cheaper)
+	# запас перевеса, при котором можно спокойно пасовать: соперник ещё может ответить картами
+	var safe: float = 0.0
+	if foe_can > 0:
+		safe = 80.0 if difficulty == Difficulty.NORMAL else 60.0 + 40.0 * foe_can
+	if margin > 0.0:
+		if margin >= safe:
+			return &""
+		# выигрываю впритык, а соперник ещё ответит: усилиться, если это даёт запас
+		for id in cards:
+			if _margin(_with_card(view, preview, id, side), side) >= safe:
+				return id
+		return &""
+	var best_id: StringName = &""
+	var best_m: float = -INF
+	for id in cards:
+		var m: float = _margin(_with_card(view, preview, id, side), side)
+		if m > 0.0:
+			if difficulty == Difficulty.NORMAL or m >= safe:
+				return id
+			if m > best_m:
+				best_m = m
+				best_id = id
+	if best_id != &"":
+		return best_id
+	# HARD: одной карты мало — начать с пары, которая выигрывает (если лимит позволяет)
+	if difficulty == Difficulty.HARD and cards.size() >= 2 and _my_plays_left(view, preview, side) >= 2:
+		for i in range(cards.size()):
+			for j in range(cards.size()):
+				if i == j:
+					continue
+				var bp: Array = preview.battle_plays.duplicate(true)
+				bp.append([side, cards[i]])
+				bp.append([side, cards[j]])
+				var r: BattleResult = PowerCalc.compute_seq(view, preview.attacker_uid, preview.defender_uid, preview.slot, bp)
+				if _margin(r, side) > 0.0:
+					return cards[i]
+	return &""
+
+
+## Прикрепить способность вне боя: moment &"after_landing" (существо uid встало на пустые ворота) или &"pre_throw".
+## NORMAL/HARD после приземления прикрепляют самую дешёвую карту, которая снимает угрозу атаки на эти ворота.
+## До броска ИИ не играет: в бою та же карта сильнее (видно ворота и ответ соперника). &"" — пас.
+func choose_attach(view: MatchState, uid: int, legal: Array, moment: StringName = &"after_landing") -> StringName:
+	if difficulty == Difficulty.EASY or moment != &"after_landing" or legal.is_empty():
+		return &""
+	var c: CreatureState = view.creatures[uid]
+	if c.slot < 0:
+		return &""
+	if _exposure(view, uid, c.slot) <= 0.0:
+		return &""
+	var cards: Array[StringName] = []
+	for id in legal:
+		cards.append(StringName(id))
+	cards.sort_custom(_cheaper)
+	for id in cards:
+		if _exposure(view, uid, c.slot, id) <= 0.0:
 			return id
 	return &""
 
 
 # ---------------------------------------------------------------- внутреннее
 
-func _wins(r: BattleResult, me_is_atk: bool) -> bool:
-	# при ничьей побеждает защитник — это уже учтено в winner_uid
-	if me_is_atk:
-		return r.winner_uid == r.attacker_uid
-	return r.winner_uid == r.defender_uid
+## Предпросмотр боя, если сторона side сыграет id следующей картой обмена.
+func _with_card(view: MatchState, preview: BattleResult, id: StringName, side: int) -> BattleResult:
+	var bp: Array = preview.battle_plays.duplicate(true)
+	bp.append([side, id])
+	return PowerCalc.compute_seq(view, preview.attacker_uid, preview.defender_uid, preview.slot, bp)
+
+
+## Перевес стороны side (ничья — в пользу защитника: атакующему нужен перевес > 0).
+func _margin(r: BattleResult, side: int) -> float:
+	var m: float = float(r.powers[0] - r.powers[1])
+	if side == 0:
+		return m
+	return -m + 0.5  # защитник выигрывает и при равенстве
+
+
+## Сколько карт ещё может сыграть соперник в этом бою (0, если он спасовал или ворота — «Печать тишины»).
+func _foe_plays_left(view: MatchState, preview: BattleResult, side: int) -> int:
+	var foe: int = 1 - side
+	if preview.passed[foe] or preview.sealed:
+		return 0
+	var used: int = 0
+	for pl in preview.plays:
+		if int(pl[0]) == foe:
+			used += 1
+	var foe_player: int = view.creatures[preview.defender_uid if foe == 1 else preview.attacker_uid].owner
+	return mini(view.players[foe_player].ability_hand.size(), MatchController.MAX_BATTLE_ABILITIES - used)
+
+
+func _my_plays_left(view: MatchState, preview: BattleResult, side: int) -> int:
+	var used: int = 0
+	for pl in preview.plays:
+		if int(pl[0]) == side:
+			used += 1
+	return mini(view.players[player].ability_hand.size(), MatchController.MAX_BATTLE_ABILITIES - used)
 
 
 func _cost_rank(id: StringName) -> int:
@@ -150,6 +290,15 @@ func _cheaper(a: StringName, b: StringName) -> bool:
 	return _cost_rank(a) < _cost_rank(b)
 
 
+## Перемешивание по своему rng (детерминированно).
+func _shuffle(arr: Array[StringName]) -> void:
+	for i in range(arr.size() - 1, 0, -1):
+		var j: int = _rng.randi_range(0, i)
+		var t: StringName = arr[i]
+		arr[i] = arr[j]
+		arr[j] = t
+
+
 func _candidates(view: MatchState) -> Array[int]:
 	var ready: Array[int] = []
 	for uid in view.players[player].creature_uids:
@@ -162,6 +311,36 @@ func _candidates(view: MatchState) -> Array[int]:
 			if c2.alive and c2.slot >= 0:
 				ready.append(uid)
 	return ready
+
+
+## Запомнить свои карты ворот на начало матча (первый вызов, пока рука ворот полная).
+func _remember_gates(view: MatchState) -> void:
+	if _gates_known:
+		return
+	_gates_known = true
+	for id in view.players[player].arena_hand:
+		_my_gates[String(id)] = true
+	for s in view.slots:
+		if s.has_card and s.card_owner == player and s.card_id != &"":
+			_my_gates[String(s.card_id)] = true
+
+
+## Вероятность, что конкретные закрытые ворота соперника — ловушка. Бронзовая карта у соперника одна;
+## если она уже раскрыта (видна среди захваченных), риска нет; иначе она равновероятно любая из неизвестных.
+func _foe_trap_prob(view: MatchState) -> float:
+	var foe: int = 1 - player
+	for p in range(2):
+		for id in view.players[p].captured:
+			var c: CardDef = CardDB.card(id)
+			if c != null and not _my_gates.has(String(id)) and CardDB.card_class(c) == &"bronze":
+				return 0.0
+	var unknown: int = view.players[foe].arena_hand.size()
+	for s in view.slots:
+		if s.has_card and s.card_owner == foe and s.card_id == &"":
+			unknown += 1
+	if unknown <= 0:
+		return 0.0
+	return TRAP_SHARE / float(unknown)
 
 
 ## Оценка цели: больше — лучше; <= -500 — слот бессмыслен.
@@ -194,19 +373,76 @@ func _score(view: MatchState, uid: int, slot: int) -> float:
 			return 400.0
 		return 1500.0
 	if occ >= 0:
-		# чужая закрытая карта в виде пуста = нейтральная арена
+		# чужая закрытая карта в виде пуста = нейтральная арена (своя карта, в том числе ловушка, учтена)
 		var r: BattleResult = PowerCalc.compute(view, uid, occ, slot, &"", &"")
 		var margin: float = float(r.powers[0] - r.powers[1])
+		var risk: float = 0.0
+		if difficulty == Difficulty.HARD and s.card_owner != player and s.card_id == &"":
+			risk = _foe_trap_prob(view) * TRAP_RISK_PENALTY
+			if view.creatures[occ].owner == s.card_owner:
+				# соперник стоит на своих воротах: скорее всего, это «Поле» его стихии
+				margin = 0.5 * margin + 0.5 * _margin_with_card(view, uid, occ, slot, _field_of(view.creatures[occ]))
 		if margin > WIN_MARGIN:
-			return 1000.0 + margin
-		return 300.0 + margin * 0.5
-	if not s.has_card:
-		return -1000.0
+			return 1000.0 + margin - risk
+		return 300.0 + margin * 0.5 - risk
+	var stand: float = 600.0
 	if s.card_owner == player:
-		if _fits(CardDB.card(s.card_id), cdef.attribute):
-			return 800.0
-		return 650.0
-	return 600.0
+		var card: CardDef = CardDB.card(s.card_id)
+		if difficulty != Difficulty.EASY and CardEffects.is_gate_trap(card):
+			return _trap_bait_score(view, uid, card)
+		stand = 800.0 if _fits(card, cdef.attribute) else 650.0
+	if difficulty == Difficulty.HARD:
+		stand -= _exposure(view, uid, slot)
+	return stand
+
+
+## Перевес атакующего, если бы на воротах лежала карта card_id (вид — своя копия, карта возвращается на место).
+func _margin_with_card(view: MatchState, uid: int, occ: int, slot: int, card_id: StringName) -> float:
+	var keep: StringName = view.slots[slot].card_id
+	view.slots[slot].card_id = card_id
+	var r: BattleResult = PowerCalc.compute(view, uid, occ, slot, &"", &"")
+	view.slots[slot].card_id = keep
+	return float(r.powers[0] - r.powers[1])
+
+
+## «Поле» стихии существа.
+func _field_of(c: CreatureState) -> StringName:
+	return StringName("arena_field_" + String(GameData.ATTR_KEYS[CardDB.creature(c.def_id).attribute]))
+
+
+## Угроза для существа, вставшего на ворота: насколько сильнейший готовый к броску боец соперника
+## перебьёт его здесь (без способностей; чужая закрытая карта — нейтральная). 0 — угрозы нет.
+## extra — карта, которую защитник прикрепил бы к себе (для choose_attach).
+func _exposure(view: MatchState, uid: int, slot: int, extra: StringName = &"") -> float:
+	var worst: float = 0.0
+	var bp: Array = [[1, extra]] if extra != &"" else []
+	for fu in view.players[1 - player].creature_uids:
+		var f: CreatureState = view.creatures[fu]
+		if not f.alive or f.slot >= 0 or f.used:
+			continue
+		var r: BattleResult = PowerCalc.compute_seq(view, fu, uid, slot, bp)
+		var m: float = float(r.powers[0] - r.powers[1])
+		if m > 0.0:
+			worst = maxf(worst, 150.0 + m * 0.5)
+	return worst
+
+
+## Своя ловушка без существа: «Зеркало» — приманка для слабейшего (сильный соперник проиграет),
+## «Печать тишины» — когда у соперника больше способностей в руке, «Обратный ток» — нейтрально.
+func _trap_bait_score(view: MatchState, uid: int, card: CardDef) -> float:
+	match String(card.effect_id):
+		"mirror":
+			var rank: int = 0
+			var bp: int = CardDB.creature(view.creatures[uid].def_id).base_power
+			for u in ps_uids(view):
+				var o: CreatureState = view.creatures[u]
+				if o.alive and u != uid and CardDB.creature(o.def_id).base_power < bp:
+					rank += 1
+			return 860.0 - rank * 150.0
+		"seal":
+			var diff: int = view.players[1 - player].ability_hand.size() - view.players[player].ability_hand.size()
+			return 700.0 + diff * 40.0
+	return 640.0
 
 
 func _fits(card: CardDef, attribute: int) -> bool:

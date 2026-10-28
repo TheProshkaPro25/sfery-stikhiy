@@ -23,6 +23,17 @@ var def_fusion: StringName = &""
 var atk_rescue: bool = false  # действует «Спасение»
 var def_rescue: bool = false
 var rescued: bool = false  # проигравший спасён (заполняет контроллер)
+var plays: Array = []  # все карты боя по порядку: [[сторона, card_id], ...] (прикреплённые — первыми)
+var battle_plays: Array = []  # только карты обмена боя (без прикреплённых) — для предпросмотра ИИ
+var passed: Array[bool] = [false, false]  # предпросмотр: стороны, уже вышедшие из обмена (заполняет контроллер)
+var cancelled_plays: Array = []  # отменённые карты: [[сторона, card_id], ...]
+var atk_all_in: bool = false  # действует «Ва-банк»
+var def_all_in: bool = false
+var trap_id: StringName = &""  # сработавшая ловушка ворот (не отменённая Глушителем), иначе пусто
+var sealed: bool = false  # «Печать тишины»: все способности боя сгорели
+var mirrored: bool = false  # «Зеркало»: итоговые силы поменялись местами
+var final_round: bool = false  # бой идёт в финальном раунде (преимущество стихии ×2)
+var momentum: Array[int] = [0, 0]  # бонус «Натиска» сторон
 
 
 func add(side: int, source: String, delta: int) -> void:
@@ -34,6 +45,6 @@ func attacker_won() -> bool:
 
 
 func to_log_string() -> String:
-	return "BR(slot=%d atk=%d def=%d win=%d p=%d:%d a=%s d=%s lost=%s)" % [
+	return "BR(slot=%d atk=%d def=%d win=%d p=%d:%d plays=%s trap=%s lost=%s)" % [
 		slot, attacker_uid, defender_uid, winner_uid, powers[0], powers[1],
-		String(atk_ability), String(def_ability), String(lost_ability)]
+		str(plays), String(trap_id), String(lost_ability)]

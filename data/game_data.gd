@@ -32,19 +32,25 @@ const ATTR_GENITIVE: Array = ["Пламени", "Бури", "Света", "Ка�
 const ATTR_COLORS: Array = ["#e8551f", "#4fb89a", "#f5d76e", "#8a7f72", "#6a48a8", "#2f7fd1"]
 
 const CARDS: Array = [
-	# --- Карты арены (12) ---
-	{"id": &"arena_field_fire", "name": "Поле Пламени", "kind": 0, "effect": &"attr_bonus", "params": {"attr": 0, "amount": 100}, "text": "+100 существу атрибута Пламя."},
-	{"id": &"arena_field_gale", "name": "Поле Бури", "kind": 0, "effect": &"attr_bonus", "params": {"attr": 1, "amount": 100}, "text": "+100 существу атрибута Буря."},
-	{"id": &"arena_field_light", "name": "Поле Света", "kind": 0, "effect": &"attr_bonus", "params": {"attr": 2, "amount": 100}, "text": "+100 существу атрибута Свет."},
-	{"id": &"arena_field_stone", "name": "Поле Камня", "kind": 0, "effect": &"attr_bonus", "params": {"attr": 3, "amount": 100}, "text": "+100 существу атрибута Камень."},
-	{"id": &"arena_field_shadow", "name": "Поле Тени", "kind": 0, "effect": &"attr_bonus", "params": {"attr": 4, "amount": 100}, "text": "+100 существу атрибута Тень."},
-	{"id": &"arena_field_tide", "name": "Поле Прилива", "kind": 0, "effect": &"attr_bonus", "params": {"attr": 5, "amount": 100}, "text": "+100 существу атрибута Прилив."},
-	{"id": &"arena_lowland", "name": "Низина", "kind": 0, "effect": &"underdog", "params": {"amount": 120}, "text": "Существо с меньшей базовой силой получает +120."},
+	# --- Карты ворот (12 + Престол + 3 ловушки) ---
+	{"id": &"arena_field_fire", "name": "Поле Пламени", "kind": 0, "effect": &"attr_bonus", "params": {"attr": 0, "amount": 150}, "text": "+150 существу стихии Пламя (только ей)."},
+	{"id": &"arena_field_gale", "name": "Поле Бури", "kind": 0, "effect": &"attr_bonus", "params": {"attr": 1, "amount": 150}, "text": "+150 существу стихии Буря (только ей)."},
+	{"id": &"arena_field_light", "name": "Поле Света", "kind": 0, "effect": &"attr_bonus", "params": {"attr": 2, "amount": 150}, "text": "+150 существу стихии Свет (только ей)."},
+	{"id": &"arena_field_stone", "name": "Поле Камня", "kind": 0, "effect": &"attr_bonus", "params": {"attr": 3, "amount": 150}, "text": "+150 существу стихии Камень (только ей)."},
+	{"id": &"arena_field_shadow", "name": "Поле Тени", "kind": 0, "effect": &"attr_bonus", "params": {"attr": 4, "amount": 150}, "text": "+150 существу стихии Тень (только ей)."},
+	{"id": &"arena_field_tide", "name": "Поле Прилива", "kind": 0, "effect": &"attr_bonus", "params": {"attr": 5, "amount": 150}, "text": "+150 существу стихии Прилив (только ей)."},
+	{"id": &"arena_lowland", "name": "Низина", "kind": 0, "effect": &"underdog", "params": {"amount": 150}, "text": "Существо с меньшей базовой силой получает +150."},
 	{"id": &"arena_void", "name": "Пустота", "kind": 0, "effect": &"void", "params": {}, "text": "Преимущество атрибутов не учитывается."},
 	{"id": &"arena_overweight", "name": "Перевес", "kind": 0, "effect": &"overweight", "params": {}, "text": "Преимущество атрибута удваивается (+120)."},
-	{"id": &"arena_trap", "name": "Ловушка", "kind": 0, "effect": &"trap", "params": {"amount": -80}, "text": "Атакующий получает -80."},
-	{"id": &"arena_bastion", "name": "Бастион", "kind": 0, "effect": &"bastion", "params": {"amount": 80}, "text": "Защитник получает +80."},
+	{"id": &"arena_trap", "name": "Ловушка", "kind": 0, "effect": &"trap", "params": {"amount": -100}, "text": "Атакующий получает −100."},
+	{"id": &"arena_bastion", "name": "Бастион", "kind": 0, "effect": &"bastion", "params": {"amount": 100}, "text": "Защитник получает +100."},
 	{"id": &"arena_twilight", "name": "Сумерки", "kind": 0, "effect": &"twilight", "params": {"amount": 70}, "text": "Свет и Тень получают +70."},
+	# --- Редкие золотые ворота (1): огромный бонус, но только защитнику стихии владельца ---
+	{"id": &"arena_throne", "name": "Престол стихии", "kind": 0, "effect": &"throne", "params": {"amount": 500}, "text": "+500 защитнику, если его стихия совпадает со стихией владельца ворот."},
+	# --- Ловушки ворот (3, бронзовые): срабатывают при открытии в бою, params.hidden_trap = true ---
+	{"id": &"arena_seal", "name": "Печать тишины", "kind": 0, "effect": &"seal", "params": {"hidden_trap": true}, "text": "Ловушка: при открытии все способности этого боя сгорают у обеих сторон."},
+	{"id": &"arena_mirror", "name": "Зеркало", "kind": 0, "effect": &"mirror", "params": {"hidden_trap": true}, "text": "Ловушка: при открытии итоговые силы бойцов меняются местами."},
+	{"id": &"arena_backflow", "name": "Обратный ток", "kind": 0, "effect": &"backflow", "params": {"hidden_trap": true}, "text": "Ловушка: преимущество стихии получает тот, чью стихию бьют."},
 	# --- Карты способностей: базовые (8) ---
 	{"id": &"ability_surge", "name": "Рывок", "kind": 1, "effect": &"boost_self", "params": {"amount": 80}, "text": "+80 себе."},
 	{"id": &"ability_hamstring", "name": "Подсечка", "kind": 1, "effect": &"weaken_foe", "params": {"amount": 80}, "text": "-80 сопернику."},

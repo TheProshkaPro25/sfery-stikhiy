@@ -51,11 +51,11 @@ static func species_creatures() -> Array[CreatureDef]:
 
 
 ## Сила G карты ворот для каждой из 6 стихий (как столбец значений на картах ворот):
-## «Поле X» даёт amount стихии X и 30 остальным; особые карты работают эффектом, их G = 0.
+## «Поле X» даёт amount только стихии X (как в первом сезоне: бонус ворот получает лишь совпадающая стихия);
+## особые карты работают эффектом, их G = 0.
 static func _gate_table(c: CardDef) -> Array:
 	var g: Array = [0, 0, 0, 0, 0, 0]
 	if c.effect_id == &"attr_bonus":
-		g = [30, 30, 30, 30, 30, 30]
 		g[int(c.params.get("attr", 0))] = int(c.params.get("amount", 100))
 	return g
 
@@ -113,9 +113,10 @@ static func preset_deck(index: int) -> DeckDef:
 ## Ворота: золотые (поля стихий), серебряные (сила G по ситуации), бронзовые (меняют правила боя).
 ## Способности: красные (зависят от стихии), синие (бонус G), зелёные (зависят от ситуации боя).
 const GATE_CLASS := {
-	"attr_bonus": &"gold",
+	"attr_bonus": &"gold", "throne": &"gold",
 	"underdog": &"silver", "trap": &"silver", "bastion": &"silver", "twilight": &"silver",
 	"void": &"bronze", "overweight": &"bronze",
+	"seal": &"bronze", "mirror": &"bronze", "backflow": &"bronze",
 }
 const ABILITY_CLASS := {
 	"drain": &"red", "steal_advantage": &"red", "strip": &"red", "stone_wall": &"red", "absorb": &"red",
