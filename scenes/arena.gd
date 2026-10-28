@@ -7,13 +7,18 @@ extends Node3D
 
 ## Масштаб мира относительно шара: карты и поле огромные, шар маленький (как в Бакуганах).
 const WORLD := 3.5
-const STEP_X := 3.7 * WORLD
-const STEP_Z := 4.7 * WORLD
-## Зона попадания = карта: прямоугольник CARD_W x CARD_H. Между картами просторно (~1.2·WORLD).
-const CARD_W := 2.5 * WORLD
-const CARD_H := 3.5 * WORLD
+## Увеличение карт ворот и сетки на бескрайнем поле (существа растут вместе с картой: 0.85–1.0 её длины).
+## Ближний край ворот (z ≈ 18) остаётся перед точкой броска main.THROW_Z = 20.65.
+const CARD_SCALE := 1.25
+## Единица узоров зоны ворот (круг призыва, рисунок карт): WORLD с учётом увеличения карт.
+const UNIT := WORLD * CARD_SCALE
+const STEP_X := 3.7 * UNIT
+const STEP_Z := 4.7 * UNIT
+## Зона попадания = карта: прямоугольник CARD_W x CARD_H. Между картами просторно (~1.2·UNIT).
+const CARD_W := 2.5 * UNIT
+const CARD_H := 3.5 * UNIT
 ## Размер освещённой зоны ворот (бывший пол-коробка): по нему считаются частицы и подсветка центра.
-const FLOOR_SIZE := Vector3(13.4 * WORLD, 0.2, 13.6 * WORLD)
+const FLOOR_SIZE := Vector3(13.4 * UNIT, 0.2, 13.6 * UNIT)
 ## Видимый пол: огромная плоскость, края тонут в тумане.
 const GROUND_SIZE := 5000.0
 ## Физический пол и невидимый бортик далеко за слотами: промах укатывается в даль, но не бесконечно.
@@ -87,7 +92,7 @@ func _build() -> void:
 	var fsm := ShaderMaterial.new()
 	fsm.shader = Shader.new()
 	fsm.shader.code = FLOOR_SHADER
-	fsm.set_shader_parameter("world", WORLD)
+	fsm.set_shader_parameter("world", UNIT)
 	fmesh.material_override = fsm
 	fmesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(fmesh)
@@ -331,8 +336,8 @@ void fragment() {
 	vec3 stone = vec3(0.075, 0.08, 0.10) + 0.025 * smoothstep(1.2, 0.0, length(p));
 	float g = clamp(edge + runes * 0.7 + corner, 0.0, 1.0);
 	// пустое место под карту ворот: приглушённая гравировка (ярко светится только подсветка выбора)
-	ALBEDO = mix(stone, col.rgb * 0.5, g * 0.6);
-	EMISSION = col.rgb * (g * 0.35 + inner * 0.6);
+	ALBEDO = mix(stone, col.rgb * 0.7, g * 0.8);
+	EMISSION = col.rgb * (g * 1.0 + inner * 0.9);
 	ROUGHNESS = 0.85;
 }
 """
@@ -347,7 +352,7 @@ func _frame_material(i: int) -> ShaderMaterial:
 	var sm := ShaderMaterial.new()
 	sm.shader = _frame_shader
 	sm.set_shader_parameter("col", Color(1.0, 0.78, 0.35))
-	sm.set_shader_parameter("dims", Vector2(CARD_W, CARD_H) / WORLD)
+	sm.set_shader_parameter("dims", Vector2(CARD_W, CARD_H) / UNIT)
 	return sm
 
 

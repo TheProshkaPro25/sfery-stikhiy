@@ -4,7 +4,7 @@ extends Node3D
 
 const SIZE := Vector3(Arena.CARD_W, 0.05, Arena.CARD_H)
 const OWNER_COLORS = [Color(0.18, 0.30, 0.55), Color(0.55, 0.20, 0.20)]
-const TRAY_X := 8.4 * Arena.WORLD
+const TRAY_X := 8.4 * Arena.UNIT
 
 const FACE_SHADER := """
 shader_type spatial;
@@ -43,13 +43,13 @@ void fragment() {
 		col = bg * (1.0 - lattice * 0.35 * fade) + glow.rgb * lattice * 0.25 * fade;
 		float e = border + border2 * 0.6 + emblem + runes * 0.8 + lattice * 0.35 * fade;
 		col = mix(col, glow.rgb, clamp(e, 0.0, 1.0));
-		emit = glow.rgb * (e * (0.8 + 0.5 * shimmer)) + base.rgb * 0.15;
+		emit = glow.rgb * (e * (1.3 + 0.6 * shimmer)) + base.rgb * 0.3;
 	} else {
 		vec3 bg = mix(base.rgb * 1.25, base.rgb * 0.45, smoothstep(0.0, 1.3, r));
 		col = bg;
 		float e = border + border2 * 0.5 + emblem * 0.5 + runes * 0.6;
 		col = mix(col, vec3(1.0, 0.92, 0.65), clamp(border + border2 * 0.5, 0.0, 1.0));
-		emit = vec3(1.0, 0.85, 0.5) * (border * 0.9) + glow.rgb * emblem * 0.35 + base.rgb * 0.2;
+		emit = vec3(1.0, 0.85, 0.5) * (border * 1.4 + border2 * 0.6) + glow.rgb * (emblem * 1.0 + runes * 0.6) + base.rgb * 0.35;
 	}
 	float fl = flash * (0.6 + 0.8 * smoothstep(1.4, 0.0, r));
 	ALBEDO = col;
@@ -102,12 +102,12 @@ func _ensure_built() -> void:
 	sh.code = FACE_SHADER
 	_mat = ShaderMaterial.new()
 	_mat.shader = sh
-	_mat.set_shader_parameter("dims", Vector2(SIZE.x, SIZE.z) / Arena.WORLD)
+	_mat.set_shader_parameter("dims", Vector2(SIZE.x, SIZE.z) / Arena.UNIT)
 	_face.material_override = _mat
 	add_child(_face)
 
 	_label = Label3D.new()
-	_label.pixel_size = 0.005 * Arena.WORLD
+	_label.pixel_size = 0.005 * Arena.UNIT
 	_label.font_size = 36
 	_label.outline_size = 8
 	_label.width = 440.0
@@ -122,7 +122,7 @@ func show_facedown(owner_pl: int, visible_to_owner_def: CardDef) -> void:
 	owner_player = owner_pl
 	var oc: Color = OWNER_COLORS[clampi(owner_pl, 0, 1)]
 	# тёмный металл с гравировкой; цвет владельца только в светящихся линиях
-	_mat.set_shader_parameter("base", Color(0.07, 0.075, 0.09).lerp(oc, 0.12))
+	_mat.set_shader_parameter("base", Color(0.07, 0.075, 0.09).lerp(oc, 0.25))
 	_mat.set_shader_parameter("glow", oc.lightened(0.35))
 	_mat.set_shader_parameter("mode", 0.0)
 	if visible_to_owner_def != null:
@@ -166,7 +166,7 @@ func reveal(def: CardDef) -> void:
 
 ## Движение в "лоток" захваченных карт игрока; возвращает сигнал завершения твина.
 func play_capture(to_player: int) -> Signal:
-	var z := 2.6 * Arena.WORLD if to_player == 0 else -2.6 * Arena.WORLD
+	var z := 2.6 * Arena.UNIT if to_player == 0 else -2.6 * Arena.UNIT
 	z += (-tray_offset if to_player == 0 else tray_offset)
 	var target := Vector3(TRAY_X, 0.15, z)
 	var tw := create_tween()
