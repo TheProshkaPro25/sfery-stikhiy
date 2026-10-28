@@ -50,6 +50,7 @@ func _initialize() -> void:
 			opts[kv[0]] = kv[1]
 	if opts["quality"] != "":
 		GraphicsSettings.force_level(GraphicsSettings.level_from_name(opts["quality"]))
+	GraphicsSettings.max_fps = 60 if opts["mode"] == "cpu" else 0  # без записи в settings.cfg
 	super._initialize()
 	Engine.time_scale = float(opts["speed"])
 	Engine.physics_ticks_per_second = 60
