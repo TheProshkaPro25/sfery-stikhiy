@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "godot": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@coding-solo/godot-mcp@0.1.1"
+      ],
+      "env": {
+        "GODOT_PATH": "/usr/bin/godot"
+      }
+    },
+    "blender": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "mcp-for-blender@2.2.4"
+      ],
+      "env": {
+        "DISABLE_TELEMETRY": "true"
+      }
+    }
+  }
+}

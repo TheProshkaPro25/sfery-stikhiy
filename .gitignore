@@ -1,0 +1,10 @@
+.godot/
+tools/ai_models/meshes*/
+tools/ai_models/rigged/
+tools/ai_models/backup_*/
+tools/ai_models/cmp_*/
+tools/ai_models/_vtest/
+tools/ai_models/concepts/
+tools/blender/inspect/
+*.png
+*.jpg
