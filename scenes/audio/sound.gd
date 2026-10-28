@@ -7,7 +7,12 @@ extends Node
 
 const SFX_DIR := "res://assets/audio/sfx/"
 const CREATURE_DIR := "res://assets/audio/creatures/"
+## Музыка (Suno → tools/audio/prep_music.py: петля, −23 LUFS). Ходы матча — battle.ogg, пока его нет — team.ogg.
+const MUSIC_MENU := "res://assets/audio/music/menu.ogg"
+const MUSIC_TEAM := "res://assets/audio/music/team.ogg"
 const MUSIC_BATTLE := "res://assets/audio/music/battle.ogg"
+const MUSIC_CLASH := "res://assets/audio/music/battle_clash.ogg"
+const MUSIC_XFADE := 2.5
 const POOL := 14
 const MUSIC_DB := -9.0
 const SFX_DB := -2.0
@@ -27,7 +32,10 @@ var _cache: Dictionary = {}
 var _pool: Array[AudioStreamPlayer] = []
 var _next := 0
 var _roll: AudioStreamPlayer
-var _music: AudioStreamPlayer
+var _mus: Array[AudioStreamPlayer] = []  # два плеера: текущий и следующий — для кроссфейда
+var _mus_cur := 0
+var _mus_path := ""
+var _mus_resume: Dictionary = {}           # путь -> позиция: вернувшись к треку, играем дальше, а не сначала
 var _music_tw: Tween
 var _last_play: Dictionary = {}   # имя -> время, чтобы одинаковые звуки не накладывались кашей
 var music_muted := false
@@ -57,9 +65,12 @@ func _init() -> void:
 	_roll.bus = "SFX"
 	_roll.volume_db = -60.0
 	add_child(_roll)
-	_music = AudioStreamPlayer.new()
-	_music.bus = "Music"
-	add_child(_music)
+	for _k in range(2):
+		var m := AudioStreamPlayer.new()
+		m.bus = "Music"
+		m.volume_db = -80.0
+		add_child(m)
+		_mus.append(m)
 	(Engine.get_main_loop() as SceneTree).node_added.connect(_on_node_added)
 
 
@@ -72,7 +83,7 @@ func _ready() -> void:
 ## Выход из игры: останавливаем плееры и отпускаем звуки, иначе при закрытии остаются
 ## «resources still in use» / «ObjectDB instances leaked» (воспроизведения ещё держат потоки).
 func _exit_tree() -> void:
-	for p in _pool + [_roll, _music]:
+	for p in _pool + [_roll] + _mus:
 		p.stop()
 		p.stream = null
 	_cache.clear()
@@ -198,41 +209,72 @@ func set_roll(speed: float) -> void:
 
 # ---------------------------------------------------------------- музыка
 
-func play_music(path: String = MUSIC_BATTLE, fade: float = 1.5) -> void:
+## Музыка ходов матча: battle.ogg, если трек есть, иначе музыка выбора команды.
+func turn_music() -> String:
+	return MUSIC_BATTLE if ResourceLoader.exists(MUSIC_BATTLE) or FileAccess.file_exists(MUSIC_BATTLE) else MUSIC_TEAM
+
+
+## Плавный переход на трек: старый гаснет, новый нарастает (равная мощность), без обрыва.
+## resume — продолжить трек с места, где он прервался (музыка хода после боя).
+func play_music(path: String, fade: float = MUSIC_XFADE, resume: bool = true) -> void:
+	var cur := _mus[_mus_cur]
+	if path == _mus_path and cur.playing:
+		_fade_to(cur, null, fade)  # тот же трек: только снять приглушение
+		return
 	var s := _load(path.get_basename())
 	if s == null:
 		return
 	if s is AudioStreamOggVorbis:
 		(s as AudioStreamOggVorbis).loop = true
-	if _music.stream == s and _music.playing:
-		return
-	_music.stream = s
-	_music.volume_db = -40.0
-	if is_inside_tree():
-		_music.play()
+	if _mus_path != "" and cur.playing:
+		_mus_resume[_mus_path] = cur.get_playback_position()
+	var nxt := _mus[1 - _mus_cur]
+	nxt.stop()
+	nxt.stream = s
+	nxt.volume_db = -80.0
+	var at := 0.0
+	if resume and _mus_resume.has(path):
+		at = fmod(float(_mus_resume[path]), maxf(s.get_length(), 1.0))
+	if nxt.is_inside_tree():
+		nxt.play(at)
 	else:
-		_music.play.call_deferred()
-	_fade_music(0.0 if not music_muted else -80.0, fade)
+		nxt.play.call_deferred(at)
+	_mus_cur = 1 - _mus_cur
+	_mus_path = path
+	_fade_to(nxt, cur if cur.playing else null, fade)
 
 
 func stop_music(fade: float = 1.2) -> void:
-	if not _music.playing:
-		return
-	_fade_music(-60.0, fade, true)
+	var cur := _mus[_mus_cur]
+	if _mus_path != "" and cur.playing:
+		_mus_resume[_mus_path] = cur.get_playback_position()
+	_mus_path = ""
+	_fade_to(null, cur if cur.playing else null, fade)
 
 
-## Приглушить музыку на время джингла.
+## Приглушить музыку на время джингла/важного звука (вернуть — play_music того же трека).
 func duck_music(db: float = -14.0, fade: float = 0.4) -> void:
-	_fade_music(db, fade)
-
-
-func _fade_music(db: float, fade: float, stop_after: bool = false) -> void:
 	if _music_tw != null:
 		_music_tw.kill()
 	_music_tw = create_tween()
-	_music_tw.tween_property(_music, "volume_db", db, fade)
-	if stop_after:
-		_music_tw.tween_callback(_music.stop)
+	_music_tw.tween_property(_mus[_mus_cur], "volume_db", db, fade)
+
+
+## Кроссфейд равной мощности: incoming 0→1, outgoing 1→0 по амплитуде; outgoing после — стоп.
+func _fade_to(incoming: AudioStreamPlayer, outgoing: AudioStreamPlayer, fade: float) -> void:
+	if _music_tw != null:
+		_music_tw.kill()
+	var in0 := db_to_linear(incoming.volume_db) if incoming != null else 0.0
+	var out0 := db_to_linear(outgoing.volume_db) if outgoing != null else 0.0
+	_music_tw = create_tween()
+	_music_tw.tween_method(func(t: float) -> void:
+		if incoming != null:
+			incoming.volume_db = linear_to_db(maxf(lerpf(in0, 1.0, sin(t * PI / 2.0)), 0.0001))
+		if outgoing != null:
+			outgoing.volume_db = linear_to_db(maxf(out0 * cos(t * PI / 2.0), 0.0001)),
+		0.0, 1.0, maxf(fade, 0.05))
+	if outgoing != null:
+		_music_tw.tween_callback(outgoing.stop)
 
 
 func toggle_music_mute() -> void:

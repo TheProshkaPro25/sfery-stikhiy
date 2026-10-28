@@ -20,7 +20,7 @@ var _mouse_hover := false
 
 
 func _ready() -> void:
-	SoundFx.i()
+	SoundFx.i().play_music(SoundFx.MUSIC_MENU)
 	AudioSettings.load_and_apply()
 	city = MenuCity.new()
 	city.name = "City"

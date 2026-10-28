@@ -67,6 +67,7 @@ func _ready() -> void:
 	_build_world()
 	_build_ui()
 	team_menu.deck_chosen.connect(_on_deck_chosen)
+	SoundFx.i().play_music(SoundFx.MUSIC_TEAM)
 
 
 # ---------------------------------------------------------------- построение
@@ -403,7 +404,6 @@ func _refresh_hand() -> void:
 
 
 func _on_restart() -> void:
-	SoundFx.i().stop_music(0.4)
 	get_tree().reload_current_scene()
 
 
@@ -1036,6 +1036,7 @@ func _anim_stood(uid: int, slot: int) -> void:
 
 
 func _anim_battle_started(slot: int, attacker_uid: int, defender_uid: int, powers: Array = [], momentum: Array = [0, 0]) -> void:
+	SoundFx.i().play_music(SoundFx.MUSIC_CLASH, 1.5, false)  # бой — тема схватки с начала
 	arena.set_highlight([slot])
 	var atk: CreatureBall = balls.get(attacker_uid)
 	var dfn: CreatureBall = balls.get(defender_uid)
@@ -1163,6 +1164,7 @@ func _anim_battle_resolved(result: BattleResult) -> void:
 	else:
 		await _wait(0.6)
 	battle_hud.close()
+	SoundFx.i().play_music(SoundFx.i().turn_music())  # после боя — музыка хода с того же места
 	hud.set_battle_mode(false)
 	cam.snap_overview()  # кат на общий план после боя
 	_focus_labels([])
@@ -1192,6 +1194,7 @@ func _anim_no_winner(result: BattleResult) -> void:
 		battle_hud.resolve(-1)
 		await hud.banner("БОЙ ПРЕРВАН", "Отлив уносит соперника на другие ворота", Color(0.45, 0.75, 1.0), 0.8)
 	battle_hud.close()
+	SoundFx.i().play_music(SoundFx.i().turn_music())  # после боя — музыка хода с того же места
 	hud.set_battle_mode(false)
 	cam.snap_overview()
 	_focus_labels([])
