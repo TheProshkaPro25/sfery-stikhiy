@@ -23,6 +23,10 @@ const PRESETS := [
 ]
 
 static var level: int = -1
+## Ограничитель кадров: 0 — без лимита (Engine.max_fps). По умолчанию 60.
+const FPS_OPTIONS := [60, 90, 120, 144, 0]
+const FPS_DEFAULT := 60
+static var max_fps: int = -1
 ## Подмена отдельных параметров (замеры tools/perf.gd: ключ=значение поверх уровня).
 static var overrides: Dictionary = {}
 
@@ -34,6 +38,30 @@ static func current() -> int:
 	return level
 
 
+## Текущий лимит fps (загружается вместе с качеством).
+static func fps_limit() -> int:
+	if max_fps < 0:
+		load_settings()
+	return max_fps
+
+
+static func fps_name(v: int = -1) -> String:
+	var f: int = fps_limit() if v < 0 else v
+	return "без лимита" if f == 0 else str(f)
+
+
+## Выставить лимит fps, применить сразу и сохранить.
+static func set_fps(v: int) -> void:
+	max_fps = v if FPS_OPTIONS.has(v) else FPS_DEFAULT
+	Engine.max_fps = max_fps
+	save()
+
+
+## Следующий вариант лимита по кругу 60 → 90 → 120 → 144 → без лимита.
+static func next_fps() -> void:
+	set_fps(FPS_OPTIONS[(FPS_OPTIONS.find(fps_limit()) + 1) % FPS_OPTIONS.size()])
+
+
 static func param(key: String) -> Variant:
 	if overrides.has(key):
 		return overrides[key]
@@ -42,7 +70,10 @@ static func param(key: String) -> Variant:
 
 static func load_settings() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(PATH) == OK and cfg.has_section_key("graphics", "level"):
+	var ok: bool = cfg.load(PATH) == OK
+	var fps: int = int(cfg.get_value("graphics", "max_fps", FPS_DEFAULT)) if ok else FPS_DEFAULT
+	max_fps = fps if FPS_OPTIONS.has(fps) else FPS_DEFAULT
+	if ok and cfg.has_section_key("graphics", "level"):
 		level = clampi(int(cfg.get_value("graphics", "level")), Level.LOW, Level.HIGH)
 	else:
 		level = auto_level(RenderingServer.get_video_adapter_name())
@@ -53,6 +84,8 @@ static func save() -> void:
 	var cfg := ConfigFile.new()
 	cfg.load(PATH)  # сохранить другие разделы, если есть
 	cfg.set_value("graphics", "level", level)
+	if max_fps >= 0:
+		cfg.set_value("graphics", "max_fps", max_fps)
 	cfg.save(PATH)
 
 
@@ -97,6 +130,7 @@ static func level_name(l: int = -1) -> String:
 
 ## Рендер: атлас и каскады теней солнца, фильтр теней, SSAO, сглаживание, детализация мешей.
 static func apply_world(vp: Viewport, env: Environment, sun: DirectionalLight3D) -> void:
+	Engine.max_fps = fps_limit()
 	RenderingServer.directional_shadow_atlas_set_size(int(param("shadow_size")), true)
 	RenderingServer.directional_soft_shadow_filter_set_quality(int(param("shadow_filter")))
 	RenderingServer.positional_soft_shadow_filter_set_quality(int(param("shadow_filter")))

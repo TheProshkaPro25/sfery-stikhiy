@@ -134,6 +134,13 @@ func _build() -> void:
 		if m != null and m.has_method("apply_graphics"):
 			m.apply_graphics())
 	bottom.add_child(gfx)
+	# ограничитель кадров: 60 / 90 / 120 / 144 / без лимита, применяется сразу
+	var fps := _button("FPS: " + GraphicsSettings.fps_name(), 150)
+	fps.tooltip_text = "Предел кадров в секунду. Меньше — тише вентилятор и дольше батарея."
+	fps.pressed.connect(func() -> void:
+		GraphicsSettings.next_fps()
+		fps.text = "FPS: " + GraphicsSettings.fps_name())
+	bottom.add_child(fps)
 	var rnd := _button("Случайная колода", 190)
 	rnd.pressed.connect(pick_random)
 	bottom.add_child(rnd)
