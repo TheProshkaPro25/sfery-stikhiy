@@ -18,6 +18,9 @@ const STREET_Z := 62.0       # шаг улиц вдоль z
 const SEA_X := -780.0        # левее — залив
 const CAM_POS := Vector3(-60.0, 46.0, 265.0)
 const CAM_LOOK := Vector3(110.0, 52.0, -320.0)
+## Воздушная дымка: город тонет в ней с расстоянием (днём слабее, ночью плотнее — огни пробивают).
+const FOG_DAY := 0.0007
+const FOG_NIGHT := 0.00085
 
 ## Фаза суток 0..1 (см. DayCycle); paused — фаза стоит (снимки tools/menu_shots.gd).
 var phase := DayCycle.START_PHASE
@@ -28,6 +31,7 @@ var quality := GraphicsSettings.Level.HIGH
 var env: Environment
 var sun: DirectionalLight3D
 var cam: Camera3D
+var _cam_attr: CameraAttributesPractical
 var _sky_mat: ShaderMaterial
 var _bld_mat: ShaderMaterial
 var _road_mat: ShaderMaterial
@@ -78,6 +82,10 @@ func _ready() -> void:
 	cam.fov = 50.0
 	cam.near = 1.0
 	cam.far = 9000.0
+	_cam_attr = CameraAttributesPractical.new()
+	_cam_attr.dof_blur_far_distance = 300.0
+	_cam_attr.dof_blur_far_transition = 700.0
+	cam.attributes = _cam_attr
 	add_child(cam)
 	cam.current = true
 	apply_quality(GraphicsSettings.current())
@@ -97,6 +105,9 @@ func apply_quality(level: int) -> void:
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	sun.directional_shadow_max_distance = 1400.0 if level == GraphicsSettings.Level.HIGH else 1000.0
 	env.glow_enabled = not low
+	# лёгкое размытие дали: город — простые коробки, вблизи их не разглядеть (на Низких — без размытия)
+	_cam_attr.dof_blur_far_enabled = not low
+	_cam_attr.dof_blur_amount = 0.08 if level == GraphicsSettings.Level.HIGH else 0.06
 	_sky_mat.set_shader_parameter("detail", 0.0 if low else 1.0)
 	traffic.apply_quality(level)
 	orbs.apply_quality(level)
@@ -136,7 +147,7 @@ func _update(delta: float) -> void:
 	env.tonemap_exposure = s.exposure
 	env.ambient_light_energy = lerpf(0.35, 1.5, night)
 	env.fog_light_color = hor.lerp(zen, 0.3)
-	env.fog_density = lerpf(0.00022, 0.00034, night)
+	env.fog_density = lerpf(FOG_DAY, FOG_NIGHT, night)
 	env.glow_intensity = lerpf(0.35, 0.85, night)
 
 	for m: ShaderMaterial in [_bld_mat, _road_mat, _water_mat]:
@@ -198,11 +209,11 @@ func _build_env() -> void:
 		env.set_glow_level(lv, 1.0 if lv in [1, 2, 3, 4] else 0.0)
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
-	env.fog_density = 0.0003
-	env.fog_aerial_perspective = 0.8
+	env.fog_density = FOG_DAY
+	env.fog_aerial_perspective = 0.9
 	env.fog_sky_affect = 0.0
 	env.fog_height = 4.0          # низкая дымка над водой
-	env.fog_height_density = 0.004
+	env.fog_height_density = 0.006
 	env.ssao_enabled = false
 	env.ssr_enabled = false
 	var we := WorldEnvironment.new()

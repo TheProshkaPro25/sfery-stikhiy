@@ -7,10 +7,12 @@ extends Node3D
 ## не считается; узел не скрывается — шейдеры компилируются при старте меню, а не рывком в полночь.
 
 ## Центр кольца — впереди-справа от камеры, ближе высоток центра (шары не прячутся за ними), в свободном небе.
-const CENTER := Vector3(167.0, 173.0, -85.0)
-const RADIUS := 85.0
+## Далеко в небе слева над городом (~2.5 км от камеры, левее и выше небоскрёбов): размер кольца в кадре
+## прежний ×0.5 — шары читаются как далёкие светила, а не как огни у башен.
+const CENTER := Vector3(140.0, 1000.0, -2050.0)
+const RADIUS := 255.0
 const TILT := 0.6            # наклон кольца от горизонтали, рад (эллипс с перспективой, весь в кадре)
-const ORB_R := 14.0          # радиус шара, м
+const ORB_R := 48.0          # радиус шара, м
 const SPARKS := 10           # искр на шар (на Низких — нет)
 ## Окно вокруг полуночи (фаза 0): первый шар загорается в START, шары — через STEP, угасание FADE_A..FADE_B.
 const START := -0.046
@@ -63,7 +65,7 @@ func _make(n: int, mat: Material) -> MultiMeshInstance3D:
 	mi.multimesh = mm
 	mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.custom_aabb = AABB(CENTER - Vector3.ONE * 300.0, Vector3.ONE * 600.0)
+	mi.custom_aabb = AABB(CENTER - Vector3.ONE * 900.0, Vector3.ONE * 1800.0)
 	add_child(mi)
 	return mi
 
@@ -104,7 +106,7 @@ func update(p: float, t: float, water: ShaderMaterial) -> void:
 		# шар загорается чуть ниже и всплывает на место
 		var rise := 1.0 - smoothstep(START + i * STEP, START + i * STEP + 0.012, q)
 		var a := spin + TAU * i / 6.0
-		var c := CENTER + tilt * Vector3(cos(a) * RADIUS, 0.0, sin(a) * RADIUS) + Vector3(0.0, sin(t * 0.7 + i) * 3.0 - rise * 45.0, 0.0)
+		var c := CENTER + tilt * Vector3(cos(a) * RADIUS, 0.0, sin(a) * RADIUS) + Vector3(0.0, sin(t * 0.7 + i) * 9.0 - rise * 135.0, 0.0)
 		var pulse := 1.0 + 0.06 * sin(t * 2.1 + i * 1.3)
 		_mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ONE * ORB_R * pulse * (0.6 + 0.4 * minf(lv, 1.0))), c))
 		var col := _cols[i]
@@ -118,7 +120,7 @@ func update(p: float, t: float, water: ShaderMaterial) -> void:
 			var rad := ORB_R * (1.4 + 1.8 * life)
 			var sp := c + Vector3(cos(ang) * rad, (life - 0.3) * ORB_R * 4.0, sin(ang) * rad)
 			var fade := sin(life * PI) * minf(lv, 1.0)
-			_sparks.set_instance_transform(i * SPARKS + k, Transform3D(Basis.from_scale(Vector3.ONE * 0.9), sp))
+			_sparks.set_instance_transform(i * SPARKS + k, Transform3D(Basis.from_scale(Vector3.ONE * 2.7), sp))
 			var sc := col.lightened(0.35) * fade * 1.4
 			_sparks.set_instance_custom_data(i * SPARKS + k, Color(sc.r, sc.g, sc.b, 0.0))
 	water.set_shader_parameter("orbs_on", 1.0)
