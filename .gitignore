@@ -8,3 +8,4 @@ tools/ai_models/concepts/
 tools/blender/inspect/
 *.png
 *.jpg
+__pycache__/
