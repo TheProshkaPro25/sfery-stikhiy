@@ -93,11 +93,13 @@ def ui():
     fl = mix((L(S1 + "paper_02.ogg"), 0, -4), (door, 0.05, -3), (gong, 0.12, -2), (shim, 0.15, 2))
     out("sfx/card_flip.ogg", reverb(fl, 0.25, 1.4), -18)
     # захват карты: монетный звон + подтверждение + шорох карты
-    cap = mix((L(S1 + "paper_03.ogg"), 0, -2), (L(FA + "Pickup_Gold_00.wav"), 0.12, -4),
-              (L(KI + "confirmation_002.ogg"), 0.18, -3), (pitch(L(S1 + "gong_01.ogg"), -7), 0.18, -10))
-    out("sfx/card_capture.ogg", reverb(cap, 0.18, 1.0), -19)
-    tb = mix((L(KI + "bong_001.ogg"), 0, -2), (pitch(L(S1 + "bell_01.ogg"), -9), 0.0, -6))
-    out("sfx/turn_start.ogg", reverb(tb, 0.25, 1.2), -21)
+    # без монет и звоночков: шорох карты, низкий удар металла и гонг вниз — «трофей взят»
+    cap = mix((L(S1 + "paper_03.ogg"), 0, -2), (synth(g.metal_hit(110, 1.0, 0.4)), 0.08, -4),
+              (synth(g.boom(0.9, 48, 2.0, 0.8)), 0.08, -8), (pitch(L(S1 + "gong_01.ogg"), -9), 0.1, -6))
+    out("sfx/card_capture.ogg", reverb(lp(cap, 6000), 0.18, 1.0), -19, synth_used=True)
+    # начало хода: глухой удар-«барабан» и короткий низкий металл, без колокольчика
+    tb = mix((synth(g.boom(0.7, 62, 1.5, 0.9)), 0, 0), (synth(g.metal_hit(140, 0.6, 0.3)), 0.01, -8))
+    out("sfx/turn_start.ogg", reverb(lp(tb, 4000), 0.22, 1.2), -22, synth_used=True)
 
 
 # ---------------------------------------------------------------- шар
@@ -149,13 +151,20 @@ def battle():
     el = mix((L(BF + "rock_breaking_01.ogg"), 0, 0), (L(MG + "Fire impact 1.wav", 0, 2.0), 0.02, -2),
              (synth(g.boom(1.2, 38, 2.5, 0.9)), 0.03, -6), (pitch(L(R + "NPC/shade/shade8.wav"), -8), 0.1, -8))
     out("sfx/eliminated.ogg", reverb(lp(el, 6000), 0.3, 1.8), -15, synth_used=True)
-    win = mix((L(FA + "Jingle_Achievement_00.wav", 0, 2.2), 0, 0), (pitch(L(S1 + "gong_01.ogg"), -5), 0, -10))
-    out("sfx/battle_win.ogg", fade(win, 0, 0.3), -19)
-    lose = mix((L(FA + "Jingle_Lose_00.wav", 0, 2.4), 0, 0))
-    out("sfx/battle_lose.ogg", fade(lose, 0, 0.4), -20)
-    out("sfx/victory.ogg", fade(L(FA + "Jingle_Win_00.wav", 0, 6.5), 0, 1.0), -18)
-    df = mix((L(FA + "Jingle_Lose_00.wav", 0, 4.6), 0, 0), (pitch(L(S1 + "gong_02.ogg"), -12), 1.0, -6))
-    out("sfx/defeat.ogg", fade(lp(df, 5000), 0, 0.8), -19)
+    # победа/поражение — без джинглов: тяжёлые удары, пауэр-аккорд без терции, гул (серьёзный тон)
+    win = mix((synth(g.boom(1.4, 50, 2.5, 1.0)), 0, 0), (L(BF + "rock_breaking_01.ogg"), 0, -6),
+              (synth(g.stinger(1.6, 55, minor=False)), 0.02, -4), (pitch(L(S1 + "gong_02.ogg"), -10), 0.05, -9))
+    out("sfx/battle_win.ogg", fade(reverb(win, 0.25, 1.6), 0, 0.4), -18, synth_used=True)
+    lose = mix((synth(g.boom(1.0, 40, 1.5, 0.9)), 0, 0), (synth(g.whoosh(1.0, 1600, 160, 0.4, 1.0)), 0, -6),
+               (lp(pitch(L(S1 + "gong_02.ogg"), -14), 1200), 0.1, -6))
+    out("sfx/battle_lose.ogg", fade(reverb(lp(lose, 3000), 0.3, 1.6), 0, 0.5), -20, synth_used=True)
+    vic = mix((synth(g.energy_rise(1.1, 60, 420, 0.8)), 0, -4), (synth(g.boom(2.0, 46, 2.5, 1.0)), 1.1, 0),
+              (L(S1 + "explosion.ogg"), 1.1, -8), (synth(g.stinger(3.2, 49, minor=False)), 1.12, -2),
+              (synth(g.stinger(2.4, 73.4, minor=False)), 1.9, -9), (pitch(L(S1 + "gong_02.ogg"), -8), 1.12, -8))
+    out("sfx/victory.ogg", fade(reverb(vic, 0.3, 2.0), 0, 1.2), -17, synth_used=True)
+    df = mix((synth(g.stinger(3.4, 41.2, minor=True)), 0, 0), (synth(g.boom(1.6, 36, 1.2, 1.0)), 0, -4),
+             (lp(pitch(L(S1 + "gong_02.ogg"), -14), 1500), 0.2, -5), (lp(L(BF + "rock_falling_01.ogg"), 1500), 0.4, -12))
+    out("sfx/defeat.ogg", fade(reverb(lp(df, 2600), 0.3, 2.0), 0, 1.2), -19, synth_used=True)
     # ловушка ворот: механизм ловушки + треск + провал силы
     tr = mix((L(FA + "Trap_00.wav"), 0, 0), (L(FA + "Trap_02.wav"), 0.15, -3), (L(BF + "breaking_02.ogg"), 0.02, -6),
              (pitch(L(FA + "Spell_01.wav"), -10), 0.35, -6))
@@ -173,8 +182,9 @@ def abilities():
     out("sfx/ability_fire.ogg", reverb(fire, 0.15, 1.0), -17, synth_used=True)
     gale = mix((L(MG + "Wind effects 5.wav"), 0, 0), (L(S2 + "air_01.ogg"), 0.1, -4))
     out("sfx/ability_gale.ogg", reverb(gale, 0.15, 1.0), -18)
-    light = mix((L(MG + "Healing Full.wav"), 0, 0), (L(S1 + "bell_03.ogg"), 0.1, -8), (L(FA + "Pickup_Gold_02.wav"), 0.4, -12))
-    out("sfx/ability_light.ogg", reverb(light, 0.3, 1.6, bright=9000), -19)
+    # свет: сияние без колокольчиков — магический гул + нарастание энергии вверх
+    light = mix((L(MG + "Healing Full.wav"), 0, 0), (synth(g.energy_rise(0.9, 200, 1400, 0.7)), 0, -8))
+    out("sfx/ability_light.ogg", reverb(lp(light, 9000), 0.3, 1.6), -19, synth_used=True)
     stone = mix((L(BF + "rock_breaking_02.ogg"), 0, 0), (L(BF + "rock_falling_01.ogg"), 0.2, -3), (synth(g.boom(0.9, 45, 2.0, 1.0)), 0, -6))
     out("sfx/ability_stone.ogg", reverb(stone, 0.2, 1.2), -16, synth_used=True)
     shadow = mix((pitch(L(R + "NPC/shade/shade12.wav"), -5), 0.15, -2), (rev(reverb(L(FA + "Spell_00.wav"), 0.6, 1.2)), 0, -6))
@@ -238,7 +248,7 @@ SPECIES = {
 ELEM_LAYER = {
     "fire": ((MG + "Fire impact 1.wav", 0.0, 2.2), (MG + "Fire impact 1.wav", 0.0, 1.2)),
     "gale": ((S2 + "air_01.ogg", 0.0, None), (S2 + "air_02.ogg", 0.0, None)),
-    "light": ((MG + "Healing Full.wav", 0.1, 2.0), (S1 + "bell_03.ogg", 0.0, None)),
+    "light": ((MG + "Healing Full.wav", 0.1, 2.0), (MG + "Misc 02.wav", 0.0, None)),
     "stone": ((BF + "rock_breaking_01.ogg", 0.0, None), (BF + "rock_falling_03.ogg", 0.0, None)),
     "shadow": ((R + "NPC/shade/shade7.wav", 0.0, None), (R + "NPC/shade/shade2.wav", 0.0, None)),
     "tide": ((S1 + "splash_02.ogg", 0.0, None), (R + "inventory/bubble2.wav", 0.0, None)),
