@@ -80,6 +80,10 @@ func set_model(model: Node3D, d: CreatureDef) -> void:
 					if animation.track_get_type(track) in [Animation.TYPE_ROTATION_3D, Animation.TYPE_POSITION_3D]:
 						animation.track_set_interpolation_type(track, Animation.INTERPOLATION_CUBIC)
 				animation.loop_mode = Animation.LOOP_LINEAR if clip == &"idle" else Animation.LOOP_NONE
+				if clip == &"idle":
+					_prepare_idle_loop(animation)
+				for track in range(animation.get_track_count()):
+					animation.track_set_interpolation_loop_wrap(track, clip == &"idle")
 		_player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 		_player.speed_scale = 1.0
 		_player.playback_default_blend_time = 0.2
@@ -93,6 +97,61 @@ func set_model(model: Node3D, d: CreatureDef) -> void:
 
 func get_height() -> float:
 	return _height
+
+
+static func _rotation_log(q: Quaternion) -> Vector3:
+	q = q.normalized()
+	if q.w < 0.0: q = -q
+	var vector := Vector3(q.x, q.y, q.z)
+	var length := vector.length()
+	return vector * (2.0 * atan2(length, q.w) / length) if length > 0.000001 else vector * 2.0
+
+
+static func _rotation_exp(vector: Vector3) -> Quaternion:
+	var angle := vector.length()
+	return Quaternion(vector / angle, angle) if angle > 0.000001 else Quaternion(vector.x * 0.5, vector.y * 0.5, vector.z * 0.5, 1.0).normalized()
+
+
+static func _prepare_idle_loop(animation: Animation) -> void:
+	# Smooth cyclic curves in the small rotation vector around the first pose.
+	# Play dense samples with SLERP: quaternion cubic wrap can change direction at
+	# the boundary after import key reduction, even for closed source curves.
+	var coarse_count := maxi(4, roundi(animation.length * 60.0))
+	var samples := coarse_count * 2
+	for track in range(animation.get_track_count()):
+		var count := animation.track_get_key_count(track)
+		if count < 2: continue
+		if animation.track_get_type(track) == Animation.TYPE_ROTATION_3D:
+			animation.track_set_interpolation_type(track, Animation.INTERPOLATION_LINEAR)
+			animation.track_set_interpolation_loop_wrap(track, true)
+			var reference := animation.rotation_track_interpolate(track, 0.0).normalized()
+			var points: Array[Vector3] = []
+			for index in range(coarse_count):
+				var value := animation.rotation_track_interpolate(track, animation.length * float(index) / coarse_count)
+				points.append(_rotation_log(reference.inverse() * value))
+			points[0] = Vector3.ZERO
+			var values: Array[Quaternion] = []
+			for index in range(samples):
+				var position := float(index) * coarse_count / samples
+				var base := floori(position)
+				var vector := points[base].cubic_interpolate(points[(base + 1) % coarse_count], points[posmod(base - 1, coarse_count)], points[(base + 2) % coarse_count], position - base)
+				values.append((reference * _rotation_exp(vector)).normalized())
+			values[0] = reference
+			# The two adjacent geodesic increments give exactly the same seam velocity.
+			var tangent := (_rotation_log(reference.inverse() * values[1]) - _rotation_log(reference.inverse() * values[-1])) * 0.5
+			values[1] = (reference * _rotation_exp(tangent)).normalized()
+			values[-1] = (reference * _rotation_exp(-tangent)).normalized()
+			while animation.track_get_key_count(track) > 0:
+				animation.track_remove_key(track, animation.track_get_key_count(track) - 1)
+			for index in range(samples):
+				animation.rotation_track_insert_key(track, animation.length * float(index) / samples, values[index])
+			continue
+		# Loop wrap supplies the first value at length; keep one copy only.
+		if not is_equal_approx(animation.track_get_key_time(track, count - 1), animation.length): continue
+		var first = animation.track_get_key_value(track, 0)
+		var last = animation.track_get_key_value(track, count - 1)
+		if first is Vector3 and last is Vector3 and first.is_equal_approx(last):
+			animation.track_remove_key(track, count - 1)
 
 
 func get_extent() -> float:
@@ -141,7 +200,11 @@ func reset() -> void:
 func _idle_clip(blend: float = 0.22) -> void:
 	if _player != null and _player.has_animation(&"idle"):
 		_player.clear_queue()
-		_player.play(&"idle", blend, _tempo * 0.85)
+		var speed: float = _tempo * {&"kolossar": 0.62, &"rogozhuk": 0.68, &"levian": 0.7, &"dragnar": 0.72, &"ratnik": 0.72, &"klykar": 0.8}.get(_species, 0.85)
+		_player.play(&"idle", blend, speed)
+		# Return to the continuing idle phase, rather than replaying its first beat after each action.
+		var length := _player.get_animation(&"idle").length
+		_player.seek(fposmod(_clock * speed + _phase / TAU * length, length), false)
 
 
 static func _ease(value: float) -> float:

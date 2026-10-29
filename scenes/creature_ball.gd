@@ -443,14 +443,14 @@ static func _streak_ramp(c: Color) -> Gradient:
 ## Рост существа в раскрытом виде (м), для кадрирования камерой.
 func figure_height() -> float:
 	if _anim != null:
-		return _anim.get_height()
+		return _anim.get_height() + _anim.get_hover_height()
 	return Arena.FIG_H * 0.8
 
 
 ## Масштаб кадра для камеры: наибольшее из роста и размера по полу (длинные и широкие существа).
 func figure_size() -> float:
 	if _anim != null:
-		return maxf(_anim.get_height(), _anim.get_extent())
+		return maxf(_anim.get_height() + _anim.get_hover_height(), _anim.get_extent())
 	return Arena.FIG_H * 0.8
 
 

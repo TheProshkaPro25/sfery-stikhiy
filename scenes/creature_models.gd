@@ -32,20 +32,21 @@ render_mode specular_disabled, cull_disabled;
 uniform sampler2D color_map : source_color, filter_linear_mipmap_anisotropic;
 uniform vec4 tint : source_color = vec4(1.0);
 uniform bool has_texture = true;
-uniform bool gold_palette = false;
+uniform bool shadow_palette = false;
 void fragment() {
 	if (!FRONT_FACING) { NORMAL = -NORMAL; }
 	vec3 tex = tint.rgb;
 	if (has_texture) { tex *= texture(color_map, UV).rgb; }
-	if (gold_palette) {
+	if (shadow_palette) {
+		// Small foreign green patches in generated shadow textures aren't part of their palette.
+		float foreign_green = smoothstep(0.025, 0.12, tex.g - max(tex.r, tex.b));
 		float brightness = max(max(tex.r, tex.g), tex.b);
-		float saturation = (brightness - min(min(tex.r, tex.g), tex.b)) / max(brightness, 0.001);
-		tex = mix(tex, vec3(1.0, 0.62, 0.11) * brightness, smoothstep(0.12, 0.4, saturation));
+		tex = mix(tex, vec3(0.52, 0.37, 0.70) * brightness, foreign_green);
 	}
 	float value = max(max(tex.r, tex.g), tex.b);
 	vec3 chroma = tex / max(value, 0.001);
 	// Сжимаем запечённые белые блики и тёмные провалы, сохраняя оттенок.
-	float tone = mix(0.14, 0.68, smoothstep(0.0, 0.9, value));
+	float tone = 0.06 + 0.50 * pow(clamp(value, 0.0, 1.0), 0.72);
 	ALBEDO = chroma * tone;
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.0;
@@ -54,7 +55,8 @@ void light() {
 	float facing = max(dot(NORMAL, LIGHT), 0.0);
 	float shade = mix(0.32, 0.72, smoothstep(0.12, 0.2, facing));
 	shade = mix(shade, 1.0, smoothstep(0.65, 0.73, facing));
-	DIFFUSE_LIGHT += ALBEDO * LIGHT_COLOR * ATTENUATION * shade / PI;
+	// Godot applies ALBEDO after light(): multiply it once, not twice.
+	DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION * shade / PI;
 }
 """
 static var _anime_shader: Shader
@@ -63,10 +65,7 @@ static var _anime_shader: Shader
 
 static func _key_path(d: CreatureDef) -> Array:
 	var key := String(d.id).trim_prefix("creature_")
-	# Повреждённая светлая сетка содержит вросшие плоские листы.
-	# Используем чистую основу того же вида; золотая палитра задаётся материалом.
-	var source_key := "kolossar_gale" if key == "kolossar_light" else key
-	var hd_path := HD_DIR % source_key
+	var hd_path := HD_DIR % key
 	if ResourceLoader.exists(hd_path):
 		return ["hd:" + key, hd_path]
 	return [archetype_of(d), DIR % archetype_of(d)]
@@ -132,7 +131,7 @@ static func build(d: CreatureDef) -> Node3D:
 	root.set_meta("height", box.size.y * k)
 	root.set_meta("extent", maxf(box.size.x, box.size.z) * k)  # наибольший размер по полу (для камеры)
 	if hd:
-		_fix_hd_materials(model, d.species == &"kolossar" and d.attribute == Attr.A.LIGHT)
+		_fix_hd_materials(model, d.attribute)
 	else:
 		_recolor(model, d)
 	return root
@@ -179,7 +178,7 @@ static func world_aabb(n: Node) -> AABB:
 ## Матовая аниме-подача: текстура цвета сохраняется, но PBR-карты не создают
 ## блестящие пятна, грязные впадины и шум нормалей на сгенерированной поверхности.
 ## Геометрические дефекты исходного меша требуют отдельной правки модели.
-static func _fix_hd_materials(node: Node, gold_palette: bool) -> void:
+static func _fix_hd_materials(node: Node, attribute: int = -1) -> void:
 	if node is MeshInstance3D:
 		var mi := node as MeshInstance3D
 		if mi.mesh == null:
@@ -195,13 +194,13 @@ static func _fix_hd_materials(node: Node, gold_palette: bool) -> void:
 			var m := ShaderMaterial.new()
 			m.shader = _anime_shader
 			m.set_shader_parameter("tint", src.albedo_color)
-			m.set_shader_parameter("gold_palette", gold_palette)
+			m.set_shader_parameter("shadow_palette", attribute == Attr.A.SHADOW)
 			m.set_shader_parameter("has_texture", src.albedo_texture != null)
 			if src.albedo_texture != null:
 				m.set_shader_parameter("color_map", src.albedo_texture)
 			mi.set_surface_override_material(i, m)
 	for ch in node.get_children():
-		_fix_hd_materials(ch, gold_palette)
+		_fix_hd_materials(ch, attribute)
 
 
 static func _recolor(node: Node, d: CreatureDef) -> void:

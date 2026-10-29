@@ -7,7 +7,7 @@ from inspect_geometry import read_glb,accessor,triangles
 from upgrade_rigs import globals_of
 args=argparse.ArgumentParser();args.add_argument('--reference');args=args.parse_args();checked=0;bones=0
 for path in sorted((root/'assets/creatures_hd').glob('*.glb')):
- if path.stem.startswith(('glubinnik','sumrachnik')):continue
+ if path.stem.startswith(('glubinnik','sumrachnik','likorez')):continue  # Separate 35-bone rig: tests/likorez_tests.gd.
  doc,binary=read_glb(path);gs=globals_of(doc);skin=doc['skins'][0];joint_count=len(skin['joints']);bones+=joint_count
  old,oldbin=read_glb(Path(args.reference)/path.name) if args.reference else (None,None)
  assert len({doc['nodes'][n]['name'] for n in skin['joints']})==joint_count,(path.name,'duplicate joint names')

@@ -182,6 +182,6 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--species');parser.add_argument('--backup',default='/tmp/sfery-rig-v1');args=parser.parse_args()
     root=Path(__file__).resolve().parents[2];backup=Path(args.backup);backup.mkdir(parents=True,exist_ok=True);report=[]
     for path in sorted((root/'assets/creatures_hd').glob('*.glb')):
-        if path.stem.startswith(('glubinnik','sumrachnik')) or (args.species and not path.stem.startswith(args.species+'_')):continue
+        if path.stem.startswith(('glubinnik','sumrachnik','likorez')) or (args.species and not path.stem.startswith(args.species+'_')):continue
         result=upgrade(path,backup);report.append(result);print(json.dumps(result,ensure_ascii=False),flush=True)
     Path('/tmp/sfery-rig-v2-report'+('-'+args.species if args.species else '')+'.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))

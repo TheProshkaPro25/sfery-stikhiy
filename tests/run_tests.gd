@@ -1486,19 +1486,20 @@ func _test_turn_draw() -> void:
 	_check(a._draw_pools[0][0].is_empty() and a._draw_pools[0][1].is_empty(), "исчерпание запаса не создаёт повторов")
 
 
-## Две стихии используют одну сетку, но золотая палитра не должна протекать в другой экземпляр.
+## Стихийные варианты имеют независимые материалы; очистка палитры Тени не меняет Свет.
 func _test_model_material_isolation() -> void:
 	var light := CreatureModels.build(CardDB.creature(&"creature_kolossar_light"))
-	var gale := CreatureModels.build(CardDB.creature(&"creature_kolossar_gale"))
+	var shadow := CreatureModels.build(CardDB.creature(&"creature_kolossar_shadow"))
 	var lm := _model_first_material(light)
-	var gm := _model_first_material(gale)
-	_check(lm != null and gm != null, "материалы двух вариантов существа доступны")
-	if lm != null and gm != null:
-		_check(lm != gm, "варианты не разделяют изменяемый материал")
-		_check(lm.get_shader_parameter("gold_palette") == true, "у светлого варианта золотая палитра")
-		_check(gm.get_shader_parameter("gold_palette") == false, "палитра другого варианта не меняется")
+	var sm := _model_first_material(shadow)
+	_check(lm != null and sm != null, "материалы двух вариантов существа доступны")
+	if lm != null and sm != null:
+		_check(lm != sm, "варианты не разделяют изменяемый материал")
+		_check(lm.get_shader_parameter("shadow_palette") == false, "светлый вариант сохраняет свою палитру")
+		_check(sm.get_shader_parameter("shadow_palette") == true, "очистка палитры применяется только к Тени")
+	_check(String(CreatureModels._key_path(CardDB.creature(&"creature_kolossar_light"))[1]).ends_with("kolossar_light.glb"), "у светлого Колоссара собственная модель")
 	light.free()
-	gale.free()
+	shadow.free()
 	CreatureModels.clear()
 
 
