@@ -716,24 +716,6 @@ func _build_decor() -> void:
 			sh.position.y = sh_h * 0.5
 			sh.rotation = Vector3(rng.randf_range(-0.3, 0.3), rng.randf() * TAU, rng.randf_range(-0.3, 0.3))
 		_floaters.append([isl, y, rng.randf() * TAU, rng.randf_range(-0.03, 0.03)])
-	for k in range(26):
-		var a: float = rng.randf() * TAU
-		var r: float = rng.randf_range(85.0, 230.0)
-		var y: float = rng.randf_range(12.0, 55.0)
-		var n := Node3D.new()
-		n.position = Vector3(cos(a) * r, y, sin(a) * r)
-		_decor.add_child(n)
-		var glow: bool = k % 3 == 0
-		var sm: Material = _glow_mat(VisualUtil.attr_color(k % 6).lightened(0.2), 2.0) if glow else dark
-		var len: float = rng.randf_range(2.5, 7.0)
-		# ромб из двух пирамид
-		var up := _mi(shard, sm, Vector3(0, len * 0.5, 0), n)
-		up.scale = Vector3(len * 0.45, len, len * 0.45)
-		var dn := _mi(shard, sm, Vector3(0, -len * 0.5, 0), n)
-		dn.scale = Vector3(len * 0.45, len, len * 0.45)
-		dn.rotation.x = PI
-		n.rotation = Vector3(rng.randf_range(-0.5, 0.5), 0, rng.randf_range(-0.5, 0.5))
-		_floaters.append([n, y, rng.randf() * TAU, rng.randf_range(0.1, 0.4) * (1.0 if k % 2 == 0 else -1.0)])
 
 	# Столбы света стихий вдали
 	var beam_sh := Shader.new()

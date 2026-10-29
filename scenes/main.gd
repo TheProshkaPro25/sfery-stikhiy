@@ -77,26 +77,16 @@ func _ready() -> void:
 ## Небо статично (без TIME): иначе Godot пересчитывает кубическую карту отражений каждый кадр.
 const SKY_SHADER := """
 shader_type sky;
-float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
-float noise(vec3 p) {
-	vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
-	return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
-		mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
-}
-float fbm(vec3 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; } return v; }
+// Непрерывные волны без floor/hash: нет клеток на гранях небесного куба.
 void sky() {
-	vec3 d = EYEDIR;
-	float n = fbm(d * 2.2);
-	float n2 = fbm(d * 4.5 + vec3(5.0));
-	vec3 deep = vec3(0.012, 0.012, 0.03);
-	vec3 neb1 = vec3(0.28, 0.08, 0.38);
-	vec3 neb2 = vec3(0.04, 0.22, 0.32);
-	vec3 col = deep + neb1 * smoothstep(0.45, 0.85, n) * 0.9 + neb2 * smoothstep(0.5, 0.9, n2) * 0.7;
-	float band = exp(-abs(d.y - 0.05) * 7.0);
-	col += vec3(0.25, 0.12, 0.3) * band * 0.35 * n;
-	float st = step(0.9975, hash(floor(d * 420.0)));
-	col += vec3(0.9, 0.9, 1.0) * st * (0.5 + 0.5 * sin(hash(floor(d * 420.0)) * 30.0));
-	col *= smoothstep(-0.35, 0.05, d.y) * 0.85 + 0.15;
+	vec3 d = normalize(EYEDIR);
+	float horizon = exp(-abs(d.y - 0.025) * 4.0);
+	float w1 = sin(d.x * 3.6 + d.z * 2.4 + sin(d.y * 4.0) * 1.3);
+	float w2 = sin(d.z * 5.2 - d.y * 3.1 + sin(d.x * 3.3));
+	float mist = smoothstep(-0.7, 1.4, w1 + w2 * 0.45);
+	vec3 zenith = vec3(0.018, 0.025, 0.065);
+	vec3 col = zenith + vec3(0.08, 0.055, 0.13) * horizon;
+	col += mix(vec3(0.025, 0.055, 0.09), vec3(0.11, 0.035, 0.13), mist) * (0.3 + 0.7 * horizon);
 	COLOR = col;
 }
 """
