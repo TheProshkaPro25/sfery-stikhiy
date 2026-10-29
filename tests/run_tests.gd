@@ -63,6 +63,7 @@ func _initialize() -> void:
 	_add_test_creatures()
 	_test_battle_foundation()
 	_test_turn_draw()
+	_test_model_material_isolation()
 	_test_card_db()
 	_test_deck_builder()
 	_test_attribute_table()
@@ -1483,3 +1484,29 @@ func _test_turn_draw() -> void:
 	for i in range(200):
 		a._draw_turn_card(0)
 	_check(a._draw_pools[0][0].is_empty() and a._draw_pools[0][1].is_empty(), "исчерпание запаса не создаёт повторов")
+
+
+## Две стихии используют одну сетку, но золотая палитра не должна протекать в другой экземпляр.
+func _test_model_material_isolation() -> void:
+	var light := CreatureModels.build(CardDB.creature(&"creature_kolossar_light"))
+	var gale := CreatureModels.build(CardDB.creature(&"creature_kolossar_gale"))
+	var lm := _model_first_material(light)
+	var gm := _model_first_material(gale)
+	_check(lm != null and gm != null, "материалы двух вариантов существа доступны")
+	if lm != null and gm != null:
+		_check(lm != gm, "варианты не разделяют изменяемый материал")
+		_check(lm.get_shader_parameter("gold_palette") == true, "у светлого варианта золотая палитра")
+		_check(gm.get_shader_parameter("gold_palette") == false, "палитра другого варианта не меняется")
+	light.free()
+	gale.free()
+	CreatureModels.clear()
+
+
+func _model_first_material(node: Node) -> ShaderMaterial:
+	if node is MeshInstance3D and node.mesh != null and node.mesh.get_surface_count() > 0:
+		return node.get_active_material(0) as ShaderMaterial
+	for child in node.get_children():
+		var found := _model_first_material(child)
+		if found != null:
+			return found
+	return null

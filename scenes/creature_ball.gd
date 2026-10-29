@@ -19,7 +19,7 @@ const VIS_SCALE := 2.2
 ## Цвет кольца владельца: игрок (бросает от +Z), соперник.
 const OWNER_GLOW := [Color(0.35, 0.62, 1.0), Color(1.0, 0.32, 0.28)]
 ## Ободок раскрытого существа по владельцу (next_pass материалов модели): свои — мягкий синий, чужие — красный.
-const RIM_STRENGTH := [0.55, 1.25]
+const RIM_STRENGTH := [0.12, 0.22]
 ## Ободок: аддитивный френель по силуэту (вспышки CreatureAnim идут через material_overlay и его не трогают).
 const RIM_SHADER := """
 shader_type spatial;

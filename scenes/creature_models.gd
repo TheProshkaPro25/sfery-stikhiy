@@ -24,10 +24,49 @@ const HD_YAW_DEG := 0.0
 ## preload_match() в начале, clear() при перезапуске/выходе — иначе видеопамять росла с каждым матчем.
 static var _scenes: Dictionary = {}
 
+## Убирает запечённые фотографические блики из цветовой текстуры;
+## широкие ступени света оставляют рисунок брони, но не имитируют полированный металл.
+const ANIME_SHADER := """
+shader_type spatial;
+render_mode specular_disabled, cull_disabled;
+uniform sampler2D color_map : source_color, filter_linear_mipmap_anisotropic;
+uniform vec4 tint : source_color = vec4(1.0);
+uniform bool has_texture = true;
+uniform bool gold_palette = false;
+void fragment() {
+	if (!FRONT_FACING) { NORMAL = -NORMAL; }
+	vec3 tex = tint.rgb;
+	if (has_texture) { tex *= texture(color_map, UV).rgb; }
+	if (gold_palette) {
+		float brightness = max(max(tex.r, tex.g), tex.b);
+		float saturation = (brightness - min(min(tex.r, tex.g), tex.b)) / max(brightness, 0.001);
+		tex = mix(tex, vec3(1.0, 0.62, 0.11) * brightness, smoothstep(0.12, 0.4, saturation));
+	}
+	float value = max(max(tex.r, tex.g), tex.b);
+	vec3 chroma = tex / max(value, 0.001);
+	// Сжимаем запечённые белые блики и тёмные провалы, сохраняя оттенок.
+	float tone = mix(0.14, 0.68, smoothstep(0.0, 0.9, value));
+	ALBEDO = chroma * tone;
+	ROUGHNESS = 1.0;
+	SPECULAR = 0.0;
+}
+void light() {
+	float facing = max(dot(NORMAL, LIGHT), 0.0);
+	float shade = mix(0.32, 0.72, smoothstep(0.12, 0.2, facing));
+	shade = mix(shade, 1.0, smoothstep(0.65, 0.73, facing));
+	DIFFUSE_LIGHT += ALBEDO * LIGHT_COLOR * ATTENUATION * shade / PI;
+}
+"""
+static var _anime_shader: Shader
+
+
 
 static func _key_path(d: CreatureDef) -> Array:
 	var key := String(d.id).trim_prefix("creature_")
-	var hd_path := HD_DIR % key
+	# Повреждённая светлая сетка содержит вросшие плоские листы.
+	# Используем чистую основу того же вида; золотая палитра задаётся материалом.
+	var source_key := "kolossar_gale" if key == "kolossar_light" else key
+	var hd_path := HD_DIR % source_key
 	if ResourceLoader.exists(hd_path):
 		return ["hd:" + key, hd_path]
 	return [archetype_of(d), DIR % archetype_of(d)]
@@ -93,7 +132,7 @@ static func build(d: CreatureDef) -> Node3D:
 	root.set_meta("height", box.size.y * k)
 	root.set_meta("extent", maxf(box.size.x, box.size.z) * k)  # наибольший размер по полу (для камеры)
 	if hd:
-		_fix_hd_materials(model, VisualUtil.attr_color(d.attribute))
+		_fix_hd_materials(model, d.species == &"kolossar" and d.attribute == Attr.A.LIGHT)
 	else:
 		_recolor(model, d)
 	return root
@@ -137,38 +176,32 @@ static func world_aabb(n: Node) -> AABB:
 	return out
 
 
-## Материалы моделей Hunyuan3D: в glTF не указан metallicFactor, а по стандарту это 1.0 — полностью металл,
-## который под рассеянным светом и тёмным небом выглядит почти чёрным. Делаем диэлектрик (кожа, чешуя)
-## и добавляем контурный свет цвета стихии, чтобы тёмные существа читались на тёмном полу.
-static func _fix_hd_materials(node: Node, rim_col: Color) -> void:
+## Матовая аниме-подача: текстура цвета сохраняется, но PBR-карты не создают
+## блестящие пятна, грязные впадины и шум нормалей на сгенерированной поверхности.
+## Геометрические дефекты исходного меша требуют отдельной правки модели.
+static func _fix_hd_materials(node: Node, gold_palette: bool) -> void:
 	if node is MeshInstance3D:
 		var mi := node as MeshInstance3D
+		if mi.mesh == null:
+			return
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		for i in range(mi.mesh.get_surface_count()):
 			var src := mi.get_active_material(i) as BaseMaterial3D
 			if src == null:
 				continue
-			var m := src.duplicate() as BaseMaterial3D
-			if m.metallic_texture != null:
-				# TRELLIS.2: полный PBR (metallic/roughness/AO/normal) — карты сохраняем, металл приглушаем,
-				# иначе без отражений окружения модели темнеют.
-				m.metallic = 0.1
-				m.metallic_specular = 0.4
-				m.roughness = 1.0
-			else:
-				# Hunyuan: в glTF нет metallic (по стандарту 1.0) — обнуляем.
-				m.metallic = 0.0
-				m.metallic_specular = 0.35
-				m.roughness = 0.72
-			m.rim_enabled = true
-			m.rim = 0.35
-			m.rim_tint = 0.6
-			m.emission_enabled = true
-			m.emission = rim_col.darkened(0.6)
-			m.emission_energy_multiplier = 0.25
+			if _anime_shader == null:
+				_anime_shader = Shader.new()
+				_anime_shader.code = ANIME_SHADER
+			var m := ShaderMaterial.new()
+			m.shader = _anime_shader
+			m.set_shader_parameter("tint", src.albedo_color)
+			m.set_shader_parameter("gold_palette", gold_palette)
+			m.set_shader_parameter("has_texture", src.albedo_texture != null)
+			if src.albedo_texture != null:
+				m.set_shader_parameter("color_map", src.albedo_texture)
 			mi.set_surface_override_material(i, m)
 	for ch in node.get_children():
-		_fix_hd_materials(ch, rim_col)
+		_fix_hd_materials(ch, gold_palette)
 
 
 static func _recolor(node: Node, d: CreatureDef) -> void:
@@ -186,7 +219,9 @@ static func _recolor(node: Node, d: CreatureDef) -> void:
 static func _material(mname: String, d: CreatureDef) -> StandardMaterial3D:
 	var c: Color = d.color
 	var m := StandardMaterial3D.new()
-	m.roughness = 0.55
+	m.roughness = 0.9
+	m.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
+	m.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 	match mname:
 		"Primary":
 			m.albedo_color = c
@@ -197,7 +232,7 @@ static func _material(mname: String, d: CreatureDef) -> StandardMaterial3D:
 				Attr.A.STONE:
 					m.roughness = 0.9
 				Attr.A.TIDE:
-					m.roughness = 0.25
+					m.roughness = 1.05
 					m.clearcoat_enabled = true
 				Attr.A.LIGHT:
 					m.emission_enabled = true
@@ -210,16 +245,18 @@ static func _material(mname: String, d: CreatureDef) -> StandardMaterial3D:
 			m.roughness = 0.7
 		"Metal":
 			m.albedo_color = Color(0.78, 0.78, 0.82).lerp(c, 0.2)
-			m.metallic = 1.0
-			m.roughness = 0.28
+			m.metallic = 0.0
+			m.roughness = 1.08
 		"Glow":
 			m.albedo_color = c.lightened(0.5)
 			m.emission_enabled = true
 			m.emission = c.lightened(0.35)
-			m.emission_energy_multiplier = 3.0
+			m.emission_energy_multiplier = 0.35
+			if d.archetype == "cyclops" or d.archetype == "flying_eye":
+				m.emission_enabled = false
 		"Eye":
 			m.albedo_color = Color(0.95, 0.93, 0.88)
-			m.roughness = 0.2
+			m.roughness = 1.0
 		"Dark":
 			m.albedo_color = Color(0.06, 0.06, 0.07)
 		_:
