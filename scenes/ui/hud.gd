@@ -462,7 +462,9 @@ func _show_next_coach() -> void:
 	vb.add_child(head)
 	var l := VisualUtil.label(text, 14)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.custom_minimum_size = Vector2(250, 0)
+	# A slightly wider text column reduces the height of long instructions,
+	# leaving more of the playing field visible while the player reads them.
+	l.custom_minimum_size = Vector2(300, 0)
 	vb.add_child(l)
 	var b := Button.new()
 	b.text = "Ясно (Enter)" if _coach_queue.is_empty() else "Далее (Enter) · ещё %d" % _coach_queue.size()

@@ -107,9 +107,10 @@ var landing_window: bool = false
 var _stall: int = 0  # подряд ходов, где бросать было некого
 
 
-func _init(deck0: DeckDef, deck1: DeckDef, rng_seed: int) -> void:
+func _init(deck0: DeckDef, deck1: DeckDef, rng_seed: int, ruleset: int = MatchRules.Ruleset.ANIME_INSPIRED) -> void:
 	_rng.seed = rng_seed
 	state = MatchState.new()
+	state.ruleset = ruleset
 	state.phase = Phase.SETUP
 	var decks: Array[DeckDef] = [deck0, deck1]
 	var next_uid: int = 0
@@ -499,6 +500,7 @@ func _win_gate(player: int, slot: int, uids: Array) -> void:
 	s.revealed = false
 	state.players[player].captured.append(card)
 	_ev(&"card_captured", [player, slot, card])
+	state.battle_context = null
 	if not _check_victory():
 		_begin_turn(1 - player)
 	_flush()
@@ -610,6 +612,7 @@ func _swap_fighter(side: int) -> void:
 		if int(pl[0]) == side:
 			count += 1
 	_b_count[side] = count
+	state.battle_context = BattleContext.duel(state, _b_atk, _b_def, _b_slot)
 	_ev(&"fighter_swapped", [old, nu, _b_slot])
 
 
@@ -742,6 +745,7 @@ func _refill_if_needed(player: int) -> void:
 
 
 func _start_battle(atk_uid: int, def_uid: int, slot: int) -> void:
+	state.battle_context = BattleContext.duel(state, atk_uid, def_uid, slot)
 	_b_slot = slot
 	_b_atk = atk_uid
 	_b_def = def_uid
@@ -770,8 +774,8 @@ func _start_battle(atk_uid: int, def_uid: int, slot: int) -> void:
 
 ## Игрок стороны боя (0 — атакующий, 1 — защитник).
 func _battle_player(side: int) -> int:
-	var uid: int = _b_def if side == 1 else _b_atk
-	return state.creatures[uid].owner
+	var players: Array[int] = state.battle_context.players_on_side(side)
+	return players[0] if not players.is_empty() else -1
 
 
 ## Обмен способностями: открывает окно стороне _b_turn; кто не может сыграть — пропускает ход (как пас).
@@ -855,7 +859,7 @@ func _resolve() -> void:
 		# «Натиск»: победитель наращивает серию, проигравший её теряет
 		var wp: PlayerState = state.players[wc.owner]
 		var lp: PlayerState = state.players[lc.owner]
-		if wp.momentum < PowerCalc.MOMENTUM_MAX:
+		if MatchRules.author_bonuses(state.ruleset) and wp.momentum < PowerCalc.MOMENTUM_MAX:
 			wp.momentum += 1
 			_ev(&"momentum_changed", [wc.owner, wp.momentum])
 		if lp.momentum > 0:
@@ -902,6 +906,7 @@ func _resolve() -> void:
 			mc.marks.append(mk)
 			_ev(&"creature_marked", [mc.uid, StringName(mk.get("src", "")), mk])
 
+	state.battle_context = null
 	if not _check_victory():
 		_check_final_round()
 		_begin_turn(next_player)
@@ -977,7 +982,7 @@ func _clear_slot(s: SlotState) -> void:
 
 ## Финальный раунд: впервые у кого-то осталось одно живое существо.
 func _check_final_round() -> void:
-	if state.final_round:
+	if state.final_round or not MatchRules.author_bonuses(state.ruleset):
 		return
 	var last: Array[int] = []
 	for p in range(2):

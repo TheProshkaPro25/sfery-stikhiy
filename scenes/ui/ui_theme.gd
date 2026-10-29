@@ -284,13 +284,11 @@ static func card_help(def: CardDef) -> Array:
 	return [def.display_name, kind, cc.get(cls, GOLD), info[1], def.text, when, extra]
 
 
-## Подсказка для существа: [имя, стихия, сила, кого бьёт, кому уступает].
+## Подсказка для существа: имя, стихия, сила и совместимость карт.
 static func creature_help(d: CreatureDef) -> Array:
-	var beats: int = (d.attribute + 1) % 6
-	var weak: int = Attr.beaten_by(d.attribute)
 	return [d.display_name, "Существо · стихия %s" % VisualUtil.attr_name(d.attribute), VisualUtil.attr_color(d.attribute).lightened(0.3),
-		"Сила G (базовая): %d. В бою к ней прибавляются ворота, преимущество стихии и способности." % d.base_power,
-		"Бьёт стихию %s (+60 к силе), уступает стихии %s." % [VisualUtil.attr_name(beats), VisualUtil.attr_name(weak)],
+		"Сила G (базовая): %d. В бою к ней прибавляются сила ворот и способности." % d.base_power,
+		"Стихия определяет совместимые способности и силу от ворот.",
 		"Бросается на карту ворот. Проиграв бой, выбывает; победив — уходит в зону использованных.", "", d.attribute]
 
 

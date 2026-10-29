@@ -350,13 +350,28 @@ func _ability_fx(player: int, def: CardDef) -> void:
 	var fb: CreatureBall = balls.get(foe)
 	if mb == null:
 		return
-	mb.ability_pulse()
 	var h: float = Arena.FIG_H * 0.7
 	var r: float = Arena.FIG_W * 0.32
 	var base: Vector3 = mb.global_position - Vector3(0, CreatureBall.RADIUS, 0)
 	var foe_base: Vector3 = fb.global_position - Vector3(0, CreatureBall.RADIUS, 0) if fb != null else base
 	var cls: StringName = CardDB.card_class(def)
 	var eff := String(def.effect_id)
+	# Одна карта — один короткий обмен: движение, ответ, затем новое число силы.
+	if eff in ["negate", "cap_own_base", "aloft"]:
+		mb.ability_pulse()
+	elif eff in ["siphon", "strip", "reset_base", "weaken_mark", "drain", "scorch", "radiance", "eclipse", "pact", "doom"]:
+		if fb != null:
+			mb.counter_lunge(fb.global_position)
+			# Контакт рывка — через 0.30 с, как у завершающего удара.
+			# Реакция цели и число силы следуют за контактом, а не за замахом.
+			await _wait(0.3)
+			if not is_instance_valid(mb) or not is_instance_valid(fb):
+				return
+			fb.take_hit(VisualUtil.attr_color(_creature_def(mine).attribute).lightened(0.2))
+		else:
+			mb.ability_pulse()
+	else:
+		mb.ability_pulse()
 	if CardEffects.is_fusion(def):
 		var tc := UiTheme.FUSION_GLOW
 		VisualUtil.ring_wave(world, base + Vector3(0, 0.1, 0), tc, r * 2.2, 0.6)
@@ -664,10 +679,10 @@ func _on_battle_resolved(result: BattleResult) -> void:
 	_refresh_hand()
 	if result.winner_uid < 0:
 		var what: String = "Бой прерван: Отлив" if result.interrupted else "Выбывают оба бойца"
-		_log(what, UiTheme.GOLD)
 		_stats["battles"].append({"turn": ctrl.get_turn(), "winner": "—", "loser": "%s и %s" % [_cname(result.attacker_uid), _cname(result.defender_uid)],
 			"wp": result.powers[0], "lp": result.powers[1], "mine": false})
 		events.push(_anim_battle_resolved.bind(result))
+		_log(what, UiTheme.GOLD)
 		return
 	var win_p: int = _owner_of(result.winner_uid)
 	var atk_won: bool = result.winner_uid == result.attacker_uid
@@ -676,8 +691,8 @@ func _on_battle_resolved(result: BattleResult) -> void:
 	_stats["wins"][win_p] += 1
 	_stats["battles"].append({"turn": ctrl.get_turn(), "winner": _cname(result.winner_uid), "loser": _cname(result.loser_uid),
 		"wp": wp, "lp": lp, "mine": win_p == HUMAN})
-	_log("Побеждает %s (%d : %d)" % [_cname(result.winner_uid), wp, lp], Color(0.6, 1.0, 0.6) if win_p == HUMAN else Color(1.0, 0.6, 0.55))
 	events.push(_anim_battle_resolved.bind(result))
+	_log("Побеждает %s (%d : %d)" % [_cname(result.winner_uid), wp, lp], Color(0.6, 1.0, 0.6) if win_p == HUMAN else Color(1.0, 0.6, 0.55))
 
 
 func _on_creature_eliminated(uid: int) -> void:
@@ -722,6 +737,8 @@ func _on_momentum_changed(player: int, value: int) -> void:
 
 
 func _on_final_round(player: int) -> void:
+	if not MatchRules.author_bonuses(ctrl.get_view(HUMAN).ruleset):
+		return
 	_log("ФИНАЛЬНЫЙ БОЙ", Color(1.0, 0.45, 0.35))
 	events.push(_anim_final_round.bind(player))
 
@@ -919,6 +936,9 @@ func _anim_trap(slot: int, card_id: StringName, effect: StringName) -> void:
 
 
 func _anim_momentum(player: int, value: int) -> void:
+	if not MatchRules.author_bonuses(ctrl.get_view(HUMAN).ruleset):
+		hud.set_momentum(player, 0)
+		return
 	hud.set_momentum(player, value)
 	if value > 0:
 		SoundFx.i().play("power_up", -8.0)
@@ -926,6 +946,8 @@ func _anim_momentum(player: int, value: int) -> void:
 
 
 func _anim_final_round(_player: int) -> void:
+	if not MatchRules.author_bonuses(ctrl.get_view(HUMAN).ruleset):
+		return
 	hud.set_final_round(true)
 	SoundFx.i().play("battle_start", 0.0)
 	cam.shake(0.8, 0.5)
@@ -1118,20 +1140,32 @@ func _anim_card_revealed(slot: int, card_id: StringName) -> void:
 
 
 func _anim_ability_msg(player: int, card_id: StringName, cancelled: bool, powers: Array = []) -> void:
-	if powers.size() == 2:
-		battle_hud.set_powers(powers)
 	var c: CardDef = CardDB.card(card_id)
 	var cname: String = c.display_name if c != null else str(card_id)
 	SoundFx.i().ability(c, cancelled)
 	if not cancelled:
 		ability_panel.show_played(card_id, player != HUMAN)
-		_anim_ability_cam(player)
-		_ability_fx(player, c)
+		if c != null and CardEffects.is_fusion(c):
+			_anim_ability_cam(player)
+		else:
+			cam.battle_wide()
+		await _ability_fx(player, c)
+	else:
+		# Срыв карты виден на самом бойце, даже без изменения силы.
+		for uid in _battle_uids:
+			if _owner_of(uid) == player:
+				var b: CreatureBall = balls.get(uid)
+				if b != null:
+					b.take_hit(Color(0.65, 0.7, 0.85))
+		cam.shake(0.16, 0.18)
+	await _wait(0.22)
+	if powers.size() == 2:
+		battle_hud.set_powers(powers)
 	if cancelled:
 		hud.flash("%s «%s» отменена" % ["Ваша карта" if player == HUMAN else "Карта соперника", cname])
 	else:
 		hud.flash(("Вы играете «%s»" if player == HUMAN else "Соперник играет «%s»") % cname)
-	await hud.wait_read(1.1)
+	await hud.wait_read(0.75)
 	hud.clear_flash()
 	if not cancelled and _battle_uids.size() == 2:
 		cam.battle_wide()
@@ -1154,7 +1188,8 @@ func _anim_ability_cam(player: int) -> void:
 func _anim_battle_resolved(result: BattleResult) -> void:
 	arena.set_highlight([])
 	battle_hud.set_powers([result.powers[0], result.powers[1]])
-	await _wait(0.6)
+	cam.battle_wide()
+	await _wait(0.22)
 	if result.winner_uid < 0:
 		await _anim_no_winner(result)
 		return
@@ -1181,12 +1216,11 @@ func _anim_battle_resolved(result: BattleResult) -> void:
 	battle_hud.resolve(0 if result.winner_uid == result.attacker_uid else 1)
 	SoundFx.i().play_later("battle_win" if _owner_of(result.winner_uid) == HUMAN else "battle_lose", 0.35, -2.0)
 	await _wait(0.5)
-	# победитель: медленный облёт
+	# Короткая победная пауза; полный облёт оставляем раскрытию существ.
 	if wb != null and is_instance_valid(wb):
-		var orbit_t: float = cam.winner_orbit(wb.global_position - Vector3(0, CreatureBall.RADIUS, 0), wh, wb.figure_size())
-		await _wait(minf(orbit_t, 1.7))
-	else:
-		await _wait(0.6)
+		var facing: Vector3 = lb.global_position - wb.global_position if lb != null else Vector3.FORWARD
+		cam.close_up(wb.global_position - Vector3(0, CreatureBall.RADIUS, 0), facing, wh, wb.figure_size())
+	await _wait(0.65)
 	battle_hud.close()
 	SoundFx.i().play_music(SoundFx.i().turn_music())  # после боя — музыка хода с того же места
 	hud.set_battle_mode(false)

@@ -2,6 +2,8 @@ class_name BattleResult
 extends RefCounted
 ## Итог (или предпросмотр) боя. Сторона 0 = атакующий, 1 = защитник.
 
+var context: BattleContext = null
+
 var slot: int = -1
 var attacker_uid: int = -1
 var defender_uid: int = -1

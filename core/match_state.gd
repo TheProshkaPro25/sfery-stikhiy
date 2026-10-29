@@ -1,6 +1,10 @@
 class_name MatchState
 extends RefCounted
 ## Полное состояние матча. Мутируется только MatchController.
+## Поддерживает снимки N игроков; MatchController и PowerCalc пока проводят только дуэли.
+
+var ruleset: int = MatchRules.Ruleset.ANIME_INSPIRED
+var battle_context: BattleContext = null
 
 var players: Array[PlayerState] = []
 var slots: Array[SlotState] = []
@@ -8,14 +12,14 @@ var creatures: Dictionary = {}  # uid(int) -> CreatureState
 var turn: int = 0
 var phase: int = 0
 var active_player: int = 0
-## Финальный бой: у кого-то осталось одно живое существо (преимущество стихии ×2 до конца матча).
+## Только LEGACY: у кого-то осталось одно живое существо (преимущество стихии ×2 до конца матча).
 var final_round: bool = false
 ## Счётчик розыгрышей способностей (метка времени для порядка прикреплённых карт).
 var play_stamp: int = 0
 
 
-func _init() -> void:
-	for i in range(2):
+func _init(player_count: int = 2) -> void:
+	for i in range(maxi(2, player_count)):
 		players.append(PlayerState.new(i))
 	for i in range(6):
 		slots.append(SlotState.new())
@@ -51,7 +55,7 @@ func used_count(player: int) -> int:
 ## Полная копия без маскировки (для пробных расчётов: «Вихревая подмена», «Сдвиг плит»).
 func duplicate_full() -> MatchState:
 	var v: MatchState = duplicate_view(-1)
-	for i in range(2):
+	for i in range(players.size()):
 		v.players[i] = players[i].clone(false)
 	for i in range(slots.size()):
 		v.slots[i] = slots[i].clone(false)
@@ -61,13 +65,15 @@ func duplicate_full() -> MatchState:
 ## Копия состояния с точки зрения for_player: чужие закрытые карты арены и чужие руки замаскированы.
 ## for_player = -1 даёт вид наблюдателя (скрыто всё скрытое).
 func duplicate_view(for_player: int) -> MatchState:
-	var v: MatchState = MatchState.new()
+	var v: MatchState = MatchState.new(players.size())
+	v.ruleset = ruleset
+	v.battle_context = battle_context.clone() if battle_context != null else null
 	v.turn = turn
 	v.phase = phase
 	v.active_player = active_player
 	v.final_round = final_round
 	v.play_stamp = play_stamp
-	for i in range(2):
+	for i in range(players.size()):
 		v.players[i] = players[i].clone(i != for_player)
 	for i in range(slots.size()):
 		var s: SlotState = slots[i]

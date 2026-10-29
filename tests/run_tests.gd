@@ -61,6 +61,7 @@ func _test_deck(index: int) -> DeckDef:
 func _initialize() -> void:
 	CardDB.load_all()
 	_add_test_creatures()
+	_test_battle_foundation()
 	_test_card_db()
 	_test_deck_builder()
 	_test_attribute_table()
@@ -158,6 +159,7 @@ func _on_game_over(w: int, reason: StringName) -> void:
 ## Бой uid 0 (P0, атакует) против uid 1 (P1, защищает) на воротах card в слоте 0; ворота принадлежат P1.
 func _mk_state(atk_id: StringName, def_id: StringName, card_id: StringName) -> MatchState:
 	var st: MatchState = MatchState.new()
+	st.ruleset = MatchRules.Ruleset.LEGACY
 	st.creatures[0] = CreatureState.new(0, atk_id, 0)
 	st.players[0].creature_uids.append(0)
 	st.creatures[1] = CreatureState.new(1, def_id, 1)
@@ -257,7 +259,7 @@ func _p0_idle(ctrl: MatchController) -> void:
 
 ## Контроллер с колодами (uid P0 — 0..2, P1 — 3..5), все 6 ворот нейтральные (P0 — 0,2,4; P1 — 1,3,5), ход P0.
 func _ctrl(cs0: Array, ab0: Array, cs1: Array, ab1: Array, rng_seed: int, landing: bool = false) -> MatchController:
-	var ctrl: MatchController = MatchController.new(_mk_deck(cs0, [NEUTRAL, NEUTRAL, NEUTRAL], ab0), _mk_deck(cs1, [NEUTRAL, NEUTRAL, NEUTRAL], ab1), rng_seed)
+	var ctrl: MatchController = MatchController.new(_mk_deck(cs0, [NEUTRAL, NEUTRAL, NEUTRAL], ab0), _mk_deck(cs1, [NEUTRAL, NEUTRAL, NEUTRAL], ab1), rng_seed, MatchRules.Ruleset.LEGACY)
 	ctrl.landing_window = landing
 	_setup_controller(ctrl)
 	return ctrl
@@ -620,7 +622,7 @@ func _test_exchange() -> void:
 func _test_attach_moments() -> void:
 	var deck0: DeckDef = _mk_deck([ZH, LU, GR], [NEUTRAL, NEUTRAL, NEUTRAL], [PLUS, MINUS, &"ability_fire_spark"])
 	var deck1: DeckDef = _mk_deck([VI, SU, MA], [NEUTRAL, NEUTRAL, NEUTRAL], [&"ability_stone_firm", SHIELD, MINUS])
-	var ctrl: MatchController = MatchController.new(deck0, deck1, 71)
+	var ctrl: MatchController = MatchController.new(deck0, deck1, 71, MatchRules.Ruleset.LEGACY)
 	ctrl.landing_window = true
 	_setup_controller(ctrl)
 	var att: Array = []
@@ -645,11 +647,11 @@ func _test_attach_moments() -> void:
 	ctrl.pass_ability(0)
 	_check(ctrl.state.creatures[0].attached.is_empty(), "после боя прикреплённые карты сняты")
 	_check(ctrl.state.players[0].captured.size() == 1, "Драгнар (420) отбился от Горгула (350)")
-	var c2: MatchController = MatchController.new(deck0, deck1, 72)
+	var c2: MatchController = MatchController.new(deck0, deck1, 72, MatchRules.Ruleset.LEGACY)
 	_setup_controller(c2)
 	_throw(c2, 0, 0, 0)
 	_check(c2.get_active_player() == 1, "окно после приземления выключено по умолчанию")
-	var c3: MatchController = MatchController.new(deck1, deck0, 73)
+	var c3: MatchController = MatchController.new(deck1, deck0, 73, MatchRules.Ruleset.LEGACY)
 	_setup_controller(c3)
 	c3.select_creature(0, 0)
 	_check(not c3.legal_abilities(0).has(&"ability_stone_firm"), "чужая стихия не прикрепляется")
@@ -982,7 +984,7 @@ func _test_ai_levels() -> void:
 	_check(AIPlayer.difficulty_name(2) == "Мастер", "имя уровня")
 	# приманка: на своё «Зеркало» Боец ставит слабейшее существо
 	var deck1: DeckDef = _mk_deck([VI, SU, MA], [&"arena_mirror", NEUTRAL, NEUTRAL], [PLUS, SHIELD, MINUS])
-	var ctrl: MatchController = MatchController.new(_test_deck(0), deck1, 121)
+	var ctrl: MatchController = MatchController.new(_test_deck(0), deck1, 121, MatchRules.Ruleset.LEGACY)
 	_setup_controller(ctrl)
 	for i in range(6):
 		ctrl.state.slots[i].has_card = false
@@ -1007,7 +1009,7 @@ func _test_ai_levels() -> void:
 	_check(hc != &"" and nc == &"", "мастер начинает пару карт, боец пасует: %s / %s" % [hc, nc])
 	# прикрепление защиты после приземления
 	var deck_g: DeckDef = _mk_deck([GR, ZH, LU], [NEUTRAL, NEUTRAL, NEUTRAL], [&"ability_stone_firm", PLUS, MINUS])
-	var c3: MatchController = MatchController.new(deck_g, _test_deck(1), 123)
+	var c3: MatchController = MatchController.new(deck_g, _test_deck(1), 123, MatchRules.Ruleset.LEGACY)
 	c3.landing_window = true
 	_setup_controller(c3)
 	for i in range(6):
@@ -1042,7 +1044,7 @@ func _test_ai_levels() -> void:
 
 ## «Ворота + бросок»: карта ворот ложится в момент броска, цель — эта карта.
 func _test_gate_throw() -> void:
-	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 81)
+	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 81, MatchRules.Ruleset.LEGACY)
 	ctrl.start()
 	var ev: Array = []
 	ctrl.gate_thrown.connect(func(p: int, sl: int, u: int) -> void: ev.append([p, sl, u]))
@@ -1057,7 +1059,7 @@ func _test_gate_throw() -> void:
 	_check(ctrl.state.creatures[0].slot == 1 and ctrl.get_active_player() == 1, "существо встало на свою карту, ход сопернику")
 	_check(ctrl.get_view(1).slots[1].card_id == &"", "соперник не видит карту")
 	# промах с обычной погрешностью
-	var c2: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 82)
+	var c2: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 82, MatchRules.Ruleset.LEGACY)
 	c2.start()
 	c2.throw_with_gate(0, c2.state.players[0].arena_hand[0], 0, 1)
 	c2.report_landing(1, -1)
@@ -1065,7 +1067,7 @@ func _test_gate_throw() -> void:
 
 
 func _test_hidden_info() -> void:
-	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 5)
+	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 5, MatchRules.Ruleset.LEGACY)
 	_setup_controller(ctrl)
 	var v0: MatchState = ctrl.get_view(0)
 	var v1: MatchState = ctrl.get_view(1)
@@ -1088,7 +1090,7 @@ func _test_hidden_info() -> void:
 
 ## Промах уводит существо в зону использованных; когда бросать некого, все возвращаются.
 func _test_used_zone_refill() -> void:
-	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 11)
+	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 11, MatchRules.Ruleset.LEGACY)
 	_setup_controller(ctrl)
 	var refills: Array = []
 	ctrl.creatures_refilled.connect(func(p: int) -> void: refills.append(p))
@@ -1113,7 +1115,7 @@ func _test_used_zone_refill() -> void:
 
 ## Выкладка ворот: сначала обязательна, дальше по желанию; рядом с лежащими, ближе к сопернику.
 func _test_gate_placement_rules() -> void:
-	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 12)
+	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 12, MatchRules.Ruleset.LEGACY)
 	ctrl.start()
 	var legal0: Array[int] = ctrl.legal_setup_slots()
 	_check(legal0 == [0, 1, 2], "P0 кладёт ближе к сопернику (дальний ряд): %s" % str(legal0))
@@ -1132,7 +1134,7 @@ func _test_gate_placement_rules() -> void:
 ## Попадание на ворота со своим существом: перестановка в бой; если некуда — карта засчитывается.
 ## Все свои на воротах: отзыва нет, ход пропускается; у обоих все на воротах — сильнейшие стоящие дерутся.
 func _test_no_recall_and_standoff() -> void:
-	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 41)
+	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 41, MatchRules.Ruleset.LEGACY)
 	_setup_controller(ctrl)
 	for i in range(6):
 		_set_card(ctrl, i, NEUTRAL, i % 2)
@@ -1144,7 +1146,7 @@ func _test_no_recall_and_standoff() -> void:
 	_check(ctrl.event_log.any(func(e: String) -> bool: return e.begins_with("turn_skipped(0")), "P0 пропускает ход: бросать некого")
 	_check(ctrl.get_active_player() == 1 and ctrl.get_phase() == MatchController.Phase.AWAIT_THROW, "ход перешёл к P1")
 	_check(ctrl.state.creatures[0].slot == 0 and ctrl.state.creatures[1].slot == 2, "стоящие P0 не отозваны")
-	var c2: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 42)
+	var c2: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 42, MatchRules.Ruleset.LEGACY)
 	_setup_controller(c2)
 	for i in range(6):
 		_set_card(c2, i, NEUTRAL, i % 2)
@@ -1161,7 +1163,7 @@ func _test_no_recall_and_standoff() -> void:
 
 
 func _test_own_gate() -> void:
-	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 31)
+	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 31, MatchRules.Ruleset.LEGACY)
 	_setup_controller(ctrl)
 	for i in range(6):
 		_set_card(ctrl, i, NEUTRAL, i % 2)
@@ -1174,7 +1176,7 @@ func _test_own_gate() -> void:
 	_check(ctrl.get_phase() == MatchController.Phase.ABILITY_WINDOW, "начался бой после перестановки")
 	_pass_windows(ctrl)
 	_check(ctrl.state.players[0].captured.size() == 1, "Гранитрог выиграл перенесённый бой")
-	var c2: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 32)
+	var c2: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 32, MatchRules.Ruleset.LEGACY)
 	_setup_controller(c2)
 	for i in range(6):
 		var sl: SlotState = c2.state.slots[i]
@@ -1189,7 +1191,7 @@ func _test_own_gate() -> void:
 
 
 func _test_win_by_three_captures() -> void:
-	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 21)
+	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 21, MatchRules.Ruleset.LEGACY)
 	_setup_controller(ctrl)
 	for i in range(6):
 		_set_card(ctrl, i, NEUTRAL, i % 2)
@@ -1216,7 +1218,7 @@ func _test_win_by_three_captures() -> void:
 
 func _test_turn_limit() -> void:
 	# A против B: суммы БС живых 1040 против 970 -> побеждает P0
-	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 51)
+	var ctrl: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 51, MatchRules.Ruleset.LEGACY)
 	_setup_controller(ctrl)
 	_go_winner = -2
 	_go_reason = &""
@@ -1226,14 +1228,14 @@ func _test_turn_limit() -> void:
 	_check(_go_reason == &"turn_limit" and _go_winner == 0, "тай-брейк по сумме БС: %d %s" % [_go_winner, String(_go_reason)])
 	_check(ctrl.state.turn == MatchController.MAX_TURNS, "сыграно ровно MAX_TURNS ходов, а не %d" % ctrl.state.turn)
 	# зеркальные колоды -> ничья
-	var ctrl2: MatchController = MatchController.new(_test_deck(0), _test_deck(0), 52)
+	var ctrl2: MatchController = MatchController.new(_test_deck(0), _test_deck(0), 52, MatchRules.Ruleset.LEGACY)
 	_setup_controller(ctrl2)
 	_go_winner = -2
 	ctrl2.game_over.connect(_on_game_over)
 	_idle_until_end(ctrl2)
 	_check(_go_winner == -1 and _go_reason == &"turn_limit", "ничья при равенстве: %d" % _go_winner)
 	# число захваченных карт важнее суммы БС
-	var ctrl3: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 53)
+	var ctrl3: MatchController = MatchController.new(_test_deck(0), _test_deck(1), 53, MatchRules.Ruleset.LEGACY)
 	_setup_controller(ctrl3)
 	ctrl3.state.creatures[0].alive = false  # у P0 на одно существо меньше
 	_go_winner = -2
@@ -1267,6 +1269,11 @@ func _test_determinism() -> void:
 
 
 func _test_simulation() -> void:
+	for ruleset in [MatchRules.Ruleset.ANIME_INSPIRED, MatchRules.Ruleset.LEGACY]:
+		for difficulty in [AIPlayer.Difficulty.EASY, AIPlayer.Difficulty.NORMAL, AIPlayer.Difficulty.HARD]:
+			for seed_value in range(1, 6):
+				var smoke := _run_match(seed_value, ruleset, difficulty)
+				_check(smoke["ok"], "ИИ ruleset=%d difficulty=%d seed=%d: %s" % [ruleset, difficulty, seed_value, smoke["error"]])
 	var reasons: Dictionary = {}
 	var wins: Array[int] = [0, 0, 0]
 	var total_turns: int = 0
@@ -1293,15 +1300,15 @@ func _test_simulation() -> void:
 
 
 ## ИИ против ИИ. Модель броска: с шансом HIT_CHANCE шар попадает в цель, иначе случайный слот или промах.
-func _run_match(seed_value: int) -> Dictionary:
+func _run_match(seed_value: int, ruleset: int = MatchRules.Ruleset.ANIME_INSPIRED, difficulty: int = AIPlayer.Difficulty.NORMAL) -> Dictionary:
 	var out: Dictionary = {"ok": false, "error": "", "winner": -2, "reason": &"", "turns": 0, "log_hash": 0, "log_len": 0, "throws": 0, "hits": 0}
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var deck0: DeckDef = CardDB.random_deck(rng)
 	var deck1: DeckDef = CardDB.random_deck(rng)
-	var ctrl: MatchController = MatchController.new(deck0, deck1, seed_value)
+	var ctrl: MatchController = MatchController.new(deck0, deck1, seed_value, ruleset)
 	ctrl.landing_window = true
-	var ais: Array[AIPlayer] = [AIPlayer.new(0, seed_value + 1), AIPlayer.new(1, seed_value + 2)]
+	var ais: Array[AIPlayer] = [AIPlayer.new(0, seed_value + 1, -1.0, difficulty), AIPlayer.new(1, seed_value + 2, -1.0, difficulty)]
 	ctrl.start()
 	var steps: int = 0
 	var pending_uid: int = -1
@@ -1355,6 +1362,9 @@ func _run_match(seed_value: int) -> Dictionary:
 			_:
 				out["error"] = "неожиданная фаза %d" % ctrl.get_phase()
 				return out
+		if ctrl.get_phase() != MatchController.Phase.ABILITY_WINDOW and ctrl.state.battle_context != null:
+			out["error"] = "контекст боя остался после завершения"
+			return out
 		if err != OK:
 			out["error"] = "ошибка действия %d в фазе %d (игрок %d, шаг %d)" % [err, ctrl.get_phase(), p, steps]
 			return out
@@ -1384,3 +1394,68 @@ func _near_miss(target: int, rng: RandomNumberGenerator) -> int:
 	near.append((1 - row) * 3 + col)
 	return near[rng.randi_range(0, near.size() - 1)]
 
+
+
+func _test_battle_foundation() -> void:
+	var context := BattleContext.new()
+	context.slot = 3
+	for i in range(4):
+		_check(context.add(BattleParticipant.new(10 + i, 100 + i, i % 2, i % 2 + 50)), "добавление участника %d" % i)
+		if i == 2:
+			_check(context.clone().participants.size() == 3, "снимок боя на троих")
+	_check(context.players_on_side(0) == [10, 12], "два игрока на стороне, id не равен стороне")
+	_check(context.for_player(13).team_id == 51, "команда отдельно от id игрока")
+	var triple := BattleContext.new()
+	_check(triple.add(BattleParticipant.new(0, 100, 0)) and triple.add(BattleParticipant.new(0, 101, 0)) and triple.add(BattleParticipant.new(1, 102, 1)), "бой 2v1: три бойца двух игроков")
+	_check(triple.participants_for_player(0).size() == 2 and triple.players_on_side(0) == [0], "все бойцы игрока и уникальные игроки стороны")
+	_check(triple.clone().participants.size() == 3, "копия 2v1 сохраняет всех бойцов")
+	_check(not context.add(BattleParticipant.new(99, 100, 2)), "повторный боец отклонён")
+	var state4 := MatchState.new(4)
+	state4.battle_context = context
+	state4.players[3].ability_hand.append(PLUS)
+	var view := state4.duplicate_view(3)
+	_check(view.players.size() == 4 and view.players[3].ability_hand == [PLUS], "снимок четырёх игроков")
+	view.battle_context.participants[0].creature_uid = 888
+	_check(context.participants[0].creature_uid == 100, "контекст снимка изолирован")
+	for count in [3, 4]:
+		var many := MatchState.new(count)
+		many.battle_context = BattleContext.new()
+		for player in range(count):
+			many.players[player].ability_hand.append(PLUS)
+			many.players[player].arena_hand.append(NEUTRAL)
+			many.creatures[100 + player] = CreatureState.new(100 + player, ZH, player)
+			many.players[player].creature_uids.append(100 + player)
+			many.battle_context.add(BattleParticipant.new(player, 100 + player, (player + 1) % 2))
+		var masked := many.duplicate_view(count - 1)
+		var full := many.duplicate_full()
+		_check(masked.battle_context.participants.size() == count and full.players.size() == count, "состав и полная копия %d игроков" % count)
+		for player in range(count):
+			_check(masked.players[player].ability_hand[0] == (PLUS if player == count - 1 else &""), "маскировка руки P%d из %d игроков" % [player, count])
+			_check(full.players[player].ability_hand == [PLUS], "полная рука P%d из %d игроков" % [player, count])
+		full.players[count - 1].ability_hand.clear()
+		full.creatures[100 + count - 1].alive = false
+		_check(not many.players[count - 1].ability_hand.is_empty() and many.creatures[100 + count - 1].alive, "полная копия %d игроков изолирована" % count)
+	var st := _mk_state(ZH, VI, NEUTRAL)
+	var legacy := PowerCalc.compute(st, 0, 1, 0, &"", &"")
+	_check(legacy.context.players_on_side(0) == [0] and legacy.context.players_on_side(1) == [1], "дуэль сохраняет mapping сторон")
+	st.ruleset = MatchRules.Ruleset.ANIME_INSPIRED
+	st.final_round = true
+	st.players[0].momentum = 2
+	var anime := PowerCalc.compute(st, 0, 1, 0, &"", &"")
+	_check(anime.powers == [340, 300] and anime.momentum == [0, 0] and not anime.final_round, "новые правила отключают авторские бонусы")
+	_check(st.duplicate_full().ruleset == st.ruleset, "ruleset сохраняется при копировании")
+	var ctrl := MatchController.new(_test_deck(0), _test_deck(1), 123)
+	_check(ctrl.state.ruleset == MatchRules.Ruleset.ANIME_INSPIRED, "новый режим по умолчанию")
+	for u in [1, 2]:
+		ctrl.state.creatures[u].alive = false
+	ctrl._check_final_round()
+	_check(not ctrl.is_final_round(), "новый режим не включает финальный множитель")
+
+	var default_ctrl := MatchController.new(_mk_deck([ZH, LU, GR], [NEUTRAL, NEUTRAL, NEUTRAL], [PLUS, MINUS, SHIELD]), _mk_deck([VI, SU, MA], [NEUTRAL, NEUTRAL, NEUTRAL], [PLUS, MINUS, SHIELD]), 124)
+	_setup_controller(default_ctrl)
+	_throw(default_ctrl, 0, 0, 0)
+	_throw(default_ctrl, 1, 3, 0)
+	_check(default_ctrl.state.battle_context != null, "контекст существует во время боя")
+	_pass_windows(default_ctrl)
+	_check(default_ctrl.state.battle_context == null, "контекст очищается после боя")
+	_check(default_ctrl.state.players[0].momentum == 0 and default_ctrl.state.players[1].momentum == 0, "новый режим не наращивает натиск")

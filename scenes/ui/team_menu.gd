@@ -324,7 +324,7 @@ func _build_creatures_page() -> void:
 		nl.add_theme_color_override("font_color", Color.WHITE if a == _element else VisualUtil.attr_color(a).lightened(0.35))
 		hb.add_child(nl)
 		_filters.add_child(b)
-	_hint.text = "Клик — взять / убрать.  Цикл стихий: Пламя > Буря > Свет > Камень > Тень > Прилив > Пламя"
+	_hint.text = "Клик — взять / убрать.  Стихия влияет на карты и силу ворот."
 	# 8 видов стихии: сетка 4×2, карты по размеру свободного места
 	var avail := _center_size()
 	var w: float = minf(minf((avail.x - 3 * 14.0) / 4.0, (avail.y - 14.0) / 2.0 / 1.4), 160.0)

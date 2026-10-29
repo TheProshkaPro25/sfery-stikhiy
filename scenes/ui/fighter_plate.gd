@@ -17,7 +17,7 @@ var _active := false
 func _init(side: int = 0, title: String = "") -> void:
 	_side = side
 	mouse_filter = Control.MOUSE_FILTER_PASS
-	tooltip_text = ("Ваша плашка. " if side == 0 else "Плашка соперника. ") + "Шарики — три существа (выбывшие перечёркнуты). Ворота — захваченные карты. Огоньки — натиск."
+	tooltip_text = ("Ваша плашка. " if side == 0 else "Плашка соперника. ") + "Шарики — три существа (выбывшие перечёркнуты). Ворота — захваченные карты."
 	_accent = Color(0.5, 0.75, 1.0) if side == 0 else Color(1.0, 0.55, 0.5)
 	_apply_style(false)
 	var vb := VBoxContainer.new()
@@ -41,7 +41,7 @@ func _init(side: int = 0, title: String = "") -> void:
 	_gates.mouse_filter = Control.MOUSE_FILTER_PASS
 	_gates.tooltip_text = "Захваченные карты ворот: ворота, где сражение выиграно или карта засчитана."
 	_flames = _Flames.new()
-	_flames.tooltip_text = "Натиск: серия побед подряд даёт +40, затем +80 силы в следующем бою. Поражение сбрасывает серию."
+	_flames.visible = false
 	if side == 0:
 		row.add_child(_gates)
 		row.add_child(_flames)

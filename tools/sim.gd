@@ -82,7 +82,6 @@ func run_match(seed_value: int, d0: int, d1: int, st: Dictionary) -> void:
 		if r.plays.size() >= 3:
 			m["multi"] += 1)
 	ctrl.gate_trap_triggered.connect(func(_s: int, _c: StringName, e: StringName) -> void: (m["traps"] as Array).append(String(e)))
-	ctrl.final_round_started.connect(func(p: int) -> void: m["final_player"] = p)
 	ctrl.momentum_changed.connect(func(_p: int, v: int) -> void:
 		if v >= PowerCalc.MOMENTUM_MAX:
 			m["momentum2"] += 1)
@@ -149,6 +148,15 @@ func run_match(seed_value: int, d0: int, d1: int, st: Dictionary) -> void:
 			MatchController.Phase.ABILITY_WINDOW:
 				var pick: StringName = ais[p].choose_ability(ctrl.get_view(p), ctrl.get_battle_preview(), ctrl.legal_abilities(p))
 				err = ctrl.pass_ability(p) if pick == &"" else ctrl.play_ability(p, pick)
+		# Метрика камбэка не зависит от бонуса финального раунда LEGACY.
+		# Смотрим итог действия (включая возрождения); терминальная победа сама по себе не камбэк.
+		if int(m["final_player"]) == -2 and ctrl.get_phase() != MatchController.Phase.GAME_OVER:
+			var last: Array[int] = []
+			for player_id in range(ctrl.state.players.size()):
+				if ctrl.state.alive_count(player_id) == 1:
+					last.append(player_id)
+			if not last.is_empty():
+				m["final_player"] = last[0] if last.size() == 1 else -1
 		if err != OK:
 			st["bad"] += 1
 			print("ОШИБКА действия %d: seed=%d фаза %d" % [err, seed_value, ctrl.get_phase()])
@@ -215,7 +223,7 @@ func report(st: Dictionary, n: int) -> bool:
 		float(st["multi"]) / played, float(st["gate_throws"]) / played, float(st["standoffs"]) / played])
 	print("  ловушки сработали: %s; «Натиск» ×2 набран %.2f раза за матч" % [str(st["traps"]), float(st["momentum2"]) / played])
 	var comeback: float = float(st["final_comeback"]) / maxf(1.0, float(st["final_one"]))
-	print("  финальный раунд в %.0f %% матчей, камбэк (победил тот, у кого первым осталось одно) %.1f %% из %d" % [
+	print("  последнее существо в %.0f %% матчей, камбэк (победил тот, у кого первым осталось одно) %.1f %% из %d" % [
 		100.0 * st["final"] / played, 100.0 * comeback, int(st["final_one"])])
 	var fx: PackedStringArray = PackedStringArray()
 	for k in FX_KEYS:

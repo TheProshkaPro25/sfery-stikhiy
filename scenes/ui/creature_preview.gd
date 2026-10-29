@@ -211,9 +211,7 @@ func show_creature(d: CreatureDef, pose: bool = false, in_team: bool = false, no
 	_power.text = "%d G" % d.base_power
 	VisualUtil.clear_children(_lines)
 	_line(String(SPECIES_INFO.get(d.species, "")), UiTheme.TEXT, 14)
-	var beats: int = (d.attribute + 1) % 6
-	var weak: int = Attr.beaten_by(d.attribute)
-	_line("Бьёт стихию %s (+60 в бою), уступает стихии %s." % [VisualUtil.attr_name(beats), VisualUtil.attr_name(weak)], UiTheme.TEXT_DIM, 13)
+	_line("Стихия определяет совместимые способности и силу от ворот.", UiTheme.TEXT_DIM, 13)
 	var own: PackedStringArray = []
 	for id in CardDB.ability_ids() + CardDB.arena_ids():
 		var c: CardDef = CardDB.card(id)

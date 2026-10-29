@@ -56,10 +56,11 @@ static func attached_plays(state: MatchState, atk_uid: int, def_uid: int) -> Arr
 ## Полный расчёт. battle_plays — карты обмена боя; прикреплённые к бойцам карты добавляются в начало автоматически.
 static func compute_seq(state: MatchState, atk_uid: int, def_uid: int, slot: int, battle_plays: Array) -> BattleResult:
 	var r: BattleResult = BattleResult.new()
+	r.context = BattleContext.duel(state, atk_uid, def_uid, slot)
 	r.slot = slot
 	r.attacker_uid = atk_uid
 	r.defender_uid = def_uid
-	r.final_round = state.final_round
+	r.final_round = state.final_round and MatchRules.author_bonuses(state.ruleset)
 	var plays: Array = attached_plays(state, atk_uid, def_uid)
 	plays.append_array(battle_plays)
 	r.plays = plays.duplicate(true)
@@ -212,9 +213,9 @@ static func compute_seq(state: MatchState, atk_uid: int, def_uid: int, slot: int
 				r.add(i, "arena:" + String(arena.id), ad[i])
 
 	# 5. Преимущество стихии
-	var bonus: int = ADVANTAGE_BONUS * (FINAL_ADVANTAGE_MULT if state.final_round else 1)
+	var bonus: int = ADVANTAGE_BONUS * (FINAL_ADVANTAGE_MULT if r.final_round else 1) if MatchRules.author_bonuses(state.ruleset) else 0
 	for i in range(2):
-		if Attr.beats(attr[i], attr[1 - i]):
+		if bonus > 0 and Attr.beats(attr[i], attr[1 - i]):
 			p[i] += bonus
 			r.add(i, "advantage", bonus)
 
@@ -251,7 +252,7 @@ static func compute_seq(state: MatchState, atk_uid: int, def_uid: int, slot: int
 
 	# 6а. «Натиск»: бонус за серию побед владельца бойца
 	for i in range(2):
-		var mo: int = clampi(state.players[owners[i]].momentum, 0, MOMENTUM_MAX) * MOMENTUM_STEP
+		var mo: int = clampi(state.players[owners[i]].momentum, 0, MOMENTUM_MAX) * MOMENTUM_STEP if MatchRules.author_bonuses(state.ruleset) else 0
 		r.momentum[i] = mo
 		if mo > 0:
 			p[i] += mo
