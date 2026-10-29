@@ -159,3 +159,6 @@ CC0 — авторство не обязательно, указано из ув
 | assets/audio/creatures/gorgul_shadow_attack.ogg | RPG Sound Pack / shade5.wav; 75 CC0 breaking / falling / hit sfx / bfh1_rock_hit_01.ogg; RPG Sound Pack / shade2.wav | artisticdude, rubberduck | CC0 | да |
 | assets/audio/creatures/gorgul_tide_appear.ogg | RPG Sound Pack / shade12.wav; 75 CC0 breaking / falling / hit sfx / bfh1_rock_falling_09.ogg; 100 CC0 SFX / splash_02.ogg | artisticdude, rubberduck | CC0 | да |
 | assets/audio/creatures/gorgul_tide_attack.ogg | RPG Sound Pack / shade15.wav; 100 CC0 SFX #2 / sfx100v2_stones_02.ogg; RPG Sound Pack / bubble2.wav | artisticdude, rubberduck | CC0 | да |
+
+## Шрифты интерфейса
+Fira Sans (Regular, SemiBold), SIL Open Font License 1.1. Текст лицензии: assets/fonts/OFL.txt.

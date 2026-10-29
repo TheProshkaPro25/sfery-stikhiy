@@ -173,8 +173,8 @@ static var _pfont: FontVariation
 static func title_font() -> FontVariation:
 	if _tfont == null:
 		_tfont = FontVariation.new()
-		_tfont.base_font = ThemeDB.fallback_font
-		_tfont.variation_embolden = 0.55
+		_tfont.base_font = UiTheme.heading_font()
+		_tfont.variation_embolden = 0.0
 		_tfont.spacing_glyph = 0
 	return _tfont
 
@@ -183,8 +183,8 @@ static func title_font() -> FontVariation:
 static func power_font() -> FontVariation:
 	if _pfont == null:
 		_pfont = FontVariation.new()
-		_pfont.base_font = ThemeDB.fallback_font
-		_pfont.variation_embolden = 1.1
+		_pfont.base_font = UiTheme.heading_font()
+		_pfont.variation_embolden = 0.2
 		_pfont.variation_transform = Transform2D(Vector2(1, 0), Vector2(0.12, 1), Vector2.ZERO)
 	return _pfont
 

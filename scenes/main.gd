@@ -245,6 +245,7 @@ func _build_logic() -> void:
 	_index_creatures()
 	CreatureModels.preload_match(_defs.values())  # 6 моделей матча — в фоне, до первого раскрытия
 
+	ctrl.card_drawn.connect(_on_card_drawn)
 	ctrl.phase_changed.connect(_on_phase_changed)
 	ctrl.setup_requested.connect(_on_setup_requested)
 	ctrl.arena_card_placed.connect(_on_arena_card_placed)
@@ -1634,3 +1635,10 @@ func _on_ability_chosen(card_id: StringName) -> void:
 func _on_ability_passed() -> void:
 	ability_panel.hide_panel()
 	ctrl.pass_ability(HUMAN)
+
+
+func _on_card_drawn(player: int, card_id: StringName) -> void:
+	if player == HUMAN:
+		_log("Получена карта «%s»" % CardDB.card(card_id).display_name, UiTheme.GOLD)
+	else:
+		_log("Соперник получает карту", UiTheme.TEXT_DIM)

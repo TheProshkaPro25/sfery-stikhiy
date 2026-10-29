@@ -70,6 +70,7 @@ static func clear_children(n: Node) -> void:
 static func label(text: String, size: int = 18) -> Label:
 	var l := Label.new()
 	l.text = text
+	l.add_theme_font_override("font", UiTheme.heading_font() if size >= 22 else UiTheme.body_font())
 	l.add_theme_font_size_override("font_size", size)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l

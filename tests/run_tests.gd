@@ -62,6 +62,7 @@ func _initialize() -> void:
 	CardDB.load_all()
 	_add_test_creatures()
 	_test_battle_foundation()
+	_test_turn_draw()
 	_test_card_db()
 	_test_deck_builder()
 	_test_attribute_table()
@@ -1459,3 +1460,26 @@ func _test_battle_foundation() -> void:
 	_pass_windows(default_ctrl)
 	_check(default_ctrl.state.battle_context == null, "контекст очищается после боя")
 	_check(default_ctrl.state.players[0].momentum == 0 and default_ctrl.state.players[1].momentum == 0, "новый режим не наращивает натиск")
+
+
+func _test_turn_draw() -> void:
+	var a := MatchController.new(CardDB.preset_deck(0), CardDB.preset_deck(1), 991)
+	var b := MatchController.new(CardDB.preset_deck(0), CardDB.preset_deck(1), 991)
+	_check(a.state.players[0].arena_hand.size() == 3 and a.state.players[0].ability_hand.size() == 3, "старт 3+3 карты")
+	a._draw_turn_card(0)
+	b._draw_turn_card(0)
+	_check(a.state.players[0].arena_hand.size() + a.state.players[0].ability_hand.size() == 6, "первый ход без лишней карты")
+	for i in range(8):
+		a._draw_turn_card(0)
+		b._draw_turn_card(0)
+	_check(a.state.players[0].arena_hand.size() + a.state.players[0].ability_hand.size() == 14, "по одной карте каждый следующий ход")
+	_check(a.state.players[0].arena_hand == b.state.players[0].arena_hand and a.state.players[0].ability_hand == b.state.players[0].ability_hand, "детерминированный добор")
+	var seen: Dictionary = {}
+	for id in a.state.players[0].arena_hand + a.state.players[0].ability_hand:
+		_check(not seen.has(id), "добор без повторов")
+		seen[id] = true
+	var view := a.get_view(1)
+	_check(view.players[0].ability_hand[0] == &"", "добранные карты скрыты от соперника")
+	for i in range(200):
+		a._draw_turn_card(0)
+	_check(a._draw_pools[0][0].is_empty() and a._draw_pools[0][1].is_empty(), "исчерпание запаса не создаёт повторов")

@@ -104,6 +104,11 @@ var _gate_throw_slot: int = -1  # слот карты, выложенной «в
 ## Окно «после приземления» (Phase.AFTER_LANDING). Выключено, пока интерфейс его не поддерживает (см. PLAN_ANIME «Отчёт Б»);
 ## тесты и tools/sim.gd включают его.
 var landing_window: bool = false
+signal card_drawn(player: int, card_id: StringName)
+
+var _personal_turns: Array[int] = [0, 0]
+var _draw_pools: Array = []
+
 var _stall: int = 0  # подряд ходов, где бросать было некого
 
 
@@ -126,6 +131,42 @@ func _init(deck0: DeckDef, deck1: DeckDef, rng_seed: int, ruleset: int = MatchRu
 			ps.arena_hand.append(card.id)
 		for card in deck.abilities:
 			ps.ability_hand.append(card.id)
+
+	# Добор без повторов: только карты под стихию и виды стартовой команды.
+	for p in range(2):
+		var deck: DeckDef = decks[p]
+		var ids: Array = []
+		for c in deck.creatures:
+			ids.append(c.id)
+		var el: int = deck.creatures[0].attribute
+		var species: Array = CardDB.team_species(ids)
+		var pools: Array = [[], []]
+		for kind in [CardDef.Kind.ARENA, CardDef.Kind.ABILITY]:
+			var classes: Array = CardDB.GATE_CLASSES if kind == CardDef.Kind.ARENA else CardDB.ABILITY_CLASSES
+			for cls in classes:
+				for id in CardDB.cards_of(kind, cls, el, species):
+					if not state.players[p].arena_hand.has(id) and not state.players[p].ability_hand.has(id):
+						pools[kind].append(id)
+		_draw_pools.append(pools)
+
+
+## По одной новой карте со второго личного хода; исчерпавшийся тип заменяется другим.
+func _draw_turn_card(player: int) -> void:
+	_personal_turns[player] += 1
+	if _personal_turns[player] <= 1 or state.ruleset == MatchRules.Ruleset.LEGACY:
+		return
+	var kind: int = _rng.randi_range(0, 1)
+	if _draw_pools[player][kind].is_empty():
+		kind = 1 - kind
+	var pool: Array = _draw_pools[player][kind]
+	if pool.is_empty():
+		return
+	var id: StringName = pool.pop_at(_rng.randi_range(0, pool.size() - 1))
+	if kind == CardDef.Kind.ARENA:
+		state.players[player].arena_hand.append(id)
+	else:
+		state.players[player].ability_hand.append(id)
+	_ev(&"card_drawn", [player, id])
 
 
 # ---------------------------------------------------------------- запросы
@@ -641,6 +682,7 @@ func _begin_turn(player: int) -> void:
 	if state.turn >= MAX_TURNS:
 		_finish_by_limit(&"turn_limit")
 		return
+	_draw_turn_card(player)
 	# Ворота кончились: выигранные карты возвращаются в руки игроков, игра продолжается.
 	if _gates_on_field() == 0 and state.players[0].arena_hand.is_empty() and state.players[1].arena_hand.is_empty():
 		for p in range(2):

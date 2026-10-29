@@ -139,6 +139,7 @@ func _build() -> void:
 		markers.append(m)
 		_highlights.append(_make_ghost(i, m.position))
 	_build_decor()
+	_build_sanctuary()
 	_build_motes()
 
 
@@ -772,3 +773,41 @@ func _build_decor() -> void:
 		var ms := Vector3(rng.randf_range(140.0, 260.0), mh, rng.randf_range(120.0, 220.0))
 		_static(mount, mmat, Vector3(cos(a) * r, mh * 0.5 - 10.0, sin(a) * r), ms, Vector3(0.0, rng.randf() * TAU, 0.0))
 	_flush_static()
+
+
+## Шесть святилищ стихий обрамляют поле; декор за пределами траекторий броска.
+func _build_sanctuary() -> void:
+	var stone := _stone(Color(0.24, 0.29, 0.34), 0.9, 0.15, 0.3)
+	for i in range(6):
+		var a: float = TAU * (float(i) + 0.5) / 6.0
+		var center := Vector3(cos(a) * 103.0, 0, sin(a) * 103.0)
+		var color := VisualUtil.attr_color(i).lightened(0.15)
+		var glow := _glow_mat(color, 1.15)
+		var base := CylinderMesh.new()
+		base.top_radius = 7.0
+		base.bottom_radius = 8.2
+		base.height = 0.8
+		base.radial_segments = 12
+		_mi(base, stone, center + Vector3(0, 0.4, 0))
+		var ring := TorusMesh.new()
+		ring.inner_radius = 5.5
+		ring.outer_radius = 5.75
+		ring.rings = 32
+		ring.ring_segments = 6
+		_mi(ring, glow, center + Vector3(0, 0.9, 0))
+		var tangent := Vector3(-sin(a), 0, cos(a))
+		for side in [-1.0, 1.0]:
+			var pillar := BoxMesh.new()
+			pillar.size = Vector3(2.4, 14.0, 2.4)
+			var pos: Vector3 = center + tangent * side * 5.8 + Vector3(0, 7.4, 0)
+			var mi := _mi(pillar, stone, pos)
+			mi.rotation.y = -a
+			var rune := BoxMesh.new()
+			rune.size = Vector3(0.18, 10.0, 2.5)
+			var line := _mi(rune, glow, pos)
+			line.rotation.y = -a
+		var lintel := BoxMesh.new()
+		lintel.size = Vector3(14.0, 1.4, 3.0)
+		var top := _mi(lintel, stone, center + Vector3(0, 14.7, 0))
+		top.rotation.y = -a
+		_crystal(center + Vector3(0, 2.4, 0), color, 5.5, 700 + i, false)

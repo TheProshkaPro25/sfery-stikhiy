@@ -6,14 +6,28 @@ const ElementIcon := preload("res://scenes/element_icon.gd")
 
 const GOLD := Color(0.95, 0.80, 0.45)
 const GOLD_DIM := Color(0.62, 0.50, 0.28)
-const INK := Color(0.07, 0.07, 0.12, 0.88)
+const INK := Color(0.035, 0.055, 0.095, 0.96)
 const TEXT := Color(0.96, 0.93, 0.86)
-const TEXT_DIM := Color(0.70, 0.67, 0.62)
+const TEXT_DIM := Color(0.73, 0.78, 0.85)
 const ABILITY_BASE := Color(0.30, 0.16, 0.46)
 const ABILITY_GLOW := Color(1.0, 0.80, 0.45)
 const ARENA_NEUTRAL := Color(0.55, 0.47, 0.33)
 
 static var _theme: Theme
+static var _body_font: FontFile
+static var _heading_font: FontFile
+
+
+static func body_font() -> Font:
+	if _body_font == null:
+		_body_font = load("res://assets/fonts/FiraSans-Regular.ttf")
+	return _body_font
+
+
+static func heading_font() -> Font:
+	if _heading_font == null:
+		_heading_font = load("res://assets/fonts/FiraSans-SemiBold.ttf")
+	return _heading_font
 
 
 static func get_theme() -> Theme:
@@ -37,8 +51,10 @@ static func box(bg: Color, border: Color, bw: int = 2, radius: int = 10, pad: in
 static func _make() -> Theme:
 	var t := Theme.new()
 	t.default_font_size = 18
+	t.default_font = body_font()
+	t.set_font("font", "Button", heading_font())
 
-	var panel := box(INK, GOLD_DIM, 2, 12, 14)
+	var panel := box(INK, Color(0.28, 0.38, 0.49), 1, 8, 16)
 	panel.shadow_color = Color(0, 0, 0, 0.45)
 	panel.shadow_size = 8
 	t.set_stylebox("panel", "PanelContainer", panel)
@@ -50,10 +66,10 @@ static func _make() -> Theme:
 	t.set_font_size("font_size", "TooltipLabel", 15)
 	t.set_color("font_color", "Label", TEXT)
 	t.set_color("font_outline_color", "Label", Color(0, 0, 0, 0.85))
-	t.set_constant("outline_size", "Label", 4)
+	t.set_constant("outline_size", "Label", 1)
 
-	var bn := box(Color(0.16, 0.13, 0.20, 0.95), GOLD_DIM, 2, 8, 10)
-	var bh := box(Color(0.24, 0.19, 0.28, 0.97), GOLD, 2, 8, 10)
+	var bn := box(Color(0.09, 0.14, 0.21, 0.98), GOLD_DIM, 2, 8, 10)
+	var bh := box(Color(0.15, 0.24, 0.32, 1.0), GOLD, 2, 8, 10)
 	var bp := box(Color(0.36, 0.27, 0.14, 0.97), GOLD, 2, 8, 10)
 	var bd := box(Color(0.12, 0.12, 0.14, 0.75), Color(0.3, 0.3, 0.32), 2, 8, 10)
 	var bf := box(Color(0, 0, 0, 0), GOLD, 2, 8, 10)
@@ -70,7 +86,7 @@ static func _make() -> Theme:
 	t.set_color("font_hover_pressed_color", "Button", GOLD)
 	t.set_color("font_disabled_color", "Button", Color(0.5, 0.5, 0.5))
 	t.set_color("font_outline_color", "Button", Color(0, 0, 0, 0.8))
-	t.set_constant("outline_size", "Button", 3)
+	t.set_constant("outline_size", "Button", 0)
 	return t
 
 
