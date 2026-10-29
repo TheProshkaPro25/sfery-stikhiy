@@ -6,6 +6,9 @@ extends Node3D
 signal strike_contact
 signal action_finished(action: StringName)
 
+const BodySupport := preload("res://scenes/creature_support.gd")
+var _support
+
 const FLYERS := ["bird", "flying_eye", "dragon"]
 const TEMPO := [1.04, 1.08, 1.0, 0.92, 0.96, 0.98]
 
@@ -29,6 +32,7 @@ var _flash_age := 0.0
 var _flash_duration := 0.0
 var _flash_strength := 0.0
 var _kind := "fighter"
+var _species: StringName = &""
 var _tempo := 1.0
 var _clock := 0.0
 var _action: StringName = &""
@@ -54,6 +58,7 @@ func set_model(model: Node3D, d: CreatureDef) -> void:
 	add_child(model)
 	_height = float(model.get_meta("height", 1.5))
 	_extent = float(model.get_meta("extent", _height))
+	_species = d.species if d != null else &""
 	var archetype := CreatureModels.archetype_of(d) if d != null else "knight"
 	_flyer = FLYERS.has(archetype)
 	_kind = "flyer" if _flyer else ("heavy" if archetype in ["cyclops", "beetle"] else ("beast" if archetype in ["wolf", "serpent"] else "fighter"))
@@ -78,6 +83,8 @@ func set_model(model: Node3D, d: CreatureDef) -> void:
 		_player.speed_scale = 1.0
 		_player.playback_default_blend_time = 0.2
 	reset()
+	_support = BodySupport.new()
+	_support.configure(self, model)
 
 
 func get_height() -> float:
@@ -103,6 +110,7 @@ func set_base(p: Vector3) -> void:
 
 
 func reset() -> void:
+	if _support != null: _support.reset()
 	_action = &""
 	_pause_left = 0.0
 	_elapsed = 0.0
@@ -132,10 +140,13 @@ static func _ease(value: float) -> float:
 
 
 func _process(delta: float) -> void:
+	# Закрытые сферы не требуют расчёта скрытого скелета и опоры.
+	if not is_visible_in_tree(): return
 	_update_flash(delta)
 	if _pause_left > 0.0:
 		_pause_left = maxf(0.0, _pause_left - delta)
 		return
+	if _support != null: _support.restore()
 	_clock += delta
 	_blend = move_toward(_blend, 1.0 if idle_on and _action == &"" else 0.0, delta * 3.5)
 	if _action == &"":
@@ -157,6 +168,7 @@ func _process(delta: float) -> void:
 		elif _player != null:
 			_player.advance(delta)
 	_apply(_clock)
+	if _support != null: _support.apply(delta)
 
 
 func _apply(now: float) -> void:
@@ -199,10 +211,18 @@ func _advance_clip(t: float) -> void:
 	if _action == &"attack":
 		# Скелетный замах заканчивается на кадре 10 из 28. Продвижение клипа
 		# привязано к контакту профиля, а не к отдельному таймеру/скорости стихии.
-		progress = (t / _contact_time) / 3.0 if t <= _contact_time else 1.0 / 3.0 + (t - _contact_time) / (_duration - _contact_time) * 2.0 / 3.0
+		progress = _attack_progress(t)
 	var target := clampf(progress, 0.0, 1.0) * animation.length
 	_player.advance(maxf(0.0, target - _clip_time))
 	_clip_time = target
+
+
+func _attack_progress(t: float) -> float:
+	if t <= _contact_time:
+		return t / _contact_time / 3.0
+	if t <= _contact_time + 0.07:
+		return 1.0 / 3.0
+	return 1.0 / 3.0 + (t - _contact_time - 0.07) / (_duration - _contact_time - 0.07) * 2.0 / 3.0
 
 
 func _sample_action(t: float) -> void:
@@ -249,6 +269,38 @@ func _sample_action(t: float) -> void:
 			var rise := _ease(t / 0.28) if t < 0.28 else 1.0 - _ease((t - 0.42) / (_duration - 0.42))
 			pitch = -0.12 * rise * skeleton_k
 			pos.y = _height * 0.025 * rise if _flyer else 0.0
+	if _action == &"attack":
+		var p := clampf(_attack_progress(t), 0.0, 1.0)
+		var envelope := sin(p * PI)
+		var thrust := sin(minf(p * 1.5, 1.0) * PI)
+		match _species:
+			&"dragnar":
+				pos.y += _height * 0.07 * envelope
+				pitch += 0.045 * thrust
+			&"grifalon":
+				pos.y += _height * 0.11 * envelope
+				pitch += 0.08 * thrust
+			&"klykar":
+				pos.y += _height * 0.045 * maxf(0.0, thrust)
+				pitch += 0.04 * thrust
+			&"ratnik":
+				pos.x += _height * 0.035 * envelope
+				yaw += 0.16 * sin(p * TAU) * envelope
+			&"kolossar":
+				yaw += 0.065 * sin(p * TAU) * envelope
+			&"rogozhuk":
+				pitch -= 0.10 * sin(p * PI) * skeleton_k
+			&"levian":
+				pos.z *= 0.45
+				pos.x += _height * 0.025 * sin(p * TAU) * envelope
+			&"gorgul":
+				pos.x += _height * 0.06 * sin(p * TAU) * envelope
+				pos.y += _height * 0.045 * envelope
+				roll = -0.10 * sin(p * TAU) * envelope
+	if _species == &"levian":
+		pos = Vector3.ZERO
+		pitch = 0.0
+		roll = 0.0
 	# При смене действия продолжаем из текущей позы, включая недовыполненную отдачу.
 	var blend := _ease(t / 0.14)
 	fx_pos = _start_pos.lerp(pos, blend)
@@ -278,8 +330,14 @@ func roar(delay: float = 0.0) -> void:
 
 
 func lunge(dist: float, contact_override: float = 0.0) -> void:
-	_contact_time = {"heavy": 0.5, "flyer": 0.42, "beast": 0.36, "fighter": 0.44}[_kind] / _tempo
-	var duration: float = {"heavy": 1.28, "flyer": 1.08, "beast": 0.96, "fighter": 1.12}[_kind] / _tempo
+	var timing: Vector2 = {
+		&"dragnar": Vector2(0.48, 1.22), &"klykar": Vector2(0.32, 0.94),
+		&"grifalon": Vector2(0.39, 1.08), &"kolossar": Vector2(0.56, 1.42),
+		&"rogozhuk": Vector2(0.5, 1.24), &"levian": Vector2(0.45, 1.26),
+		&"ratnik": Vector2(0.43, 1.16), &"gorgul": Vector2(0.35, 1.0),
+	}.get(_species, Vector2(0.44, 1.12))
+	_contact_time = timing.x / _tempo
+	var duration: float = timing.y / _tempo
 	if contact_override > 0.0:
 		_contact_time = contact_override
 		duration = maxf(duration, _contact_time + 0.6)
