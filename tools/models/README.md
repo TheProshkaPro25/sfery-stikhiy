@@ -42,3 +42,12 @@ STEP в исходниках в основном относится к пост�
 Проверки: `godot --headless -s res://tests/support_tests.gd`. Стенд animation_review показывает пол,
 сетку и тени; принимает несколько id через запятую. Это визуальное управление опорой, без изменения
 правил матча или физических коллизий существ.
+
+## Ликорез Тени — 0.2.5
+Отдельная HD-модель `assets/creatures_hd/likorez_shadow.glb`, общий аниме-материал.
+Образ `tools/ai_models/concepts/likorez_shadow.png` основан на собственных теневых существах проекта.
+Генерация: `TR2_ENGINE=pixal TR2_PAINT=1 TR2_OUT=meshes_likorez1024 TR2_SIGN=udf TR2_REMESH=640 HF_HUB_OFFLINE=1 <ComfyUI-python> tools/ai_models/trellis2.py likorez_shadow`.
+Риг: `blender -b --factory-startup -P tools/blender/rig_likorez.py -- tools/ai_models/meshes_likorez1024/likorez_shadow.glb assets/creatures_hd/likorez_shadow.glb`.
+Шесть цепей рук/кистей/клинков, 35 костей, пять клипов с поправкой опоры по деформированной сетке.
+Генератор прочих 48 моделей к нему не применяется. Проверка: `godot --headless -s tests/likorez_tests.gd`.
+Крупный план: `godot -s tools/creature_detail.gd -- creature_likorez_shadow /tmp/likorez.png`.

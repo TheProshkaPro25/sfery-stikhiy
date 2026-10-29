@@ -84,8 +84,11 @@ func set_model(model: Node3D, d: CreatureDef) -> void:
 		_player.speed_scale = 1.0
 		_player.playback_default_blend_time = 0.2
 	reset()
-	_support = BodySupport.new()
-	_support.configure(self, model)
+	# У шестирукого собственные опорные ключи и смена ноги в клипах.
+	_support = null
+	if _species != &"likorez":
+		_support = BodySupport.new()
+		_support.configure(self, model)
 
 
 func get_height() -> float:
