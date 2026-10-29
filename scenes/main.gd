@@ -352,10 +352,7 @@ func _ability_fx(player: int, def: CardDef) -> void:
 		mb.ability_pulse()
 	elif eff in ["siphon", "strip", "reset_base", "weaken_mark", "drain", "scorch", "radiance", "eclipse", "pact", "doom"]:
 		if fb != null:
-			mb.counter_lunge(fb.global_position)
-			# Контакт рывка — через 0.30 с, как у завершающего удара.
-			# Реакция цели и число силы следуют за контактом, а не за замахом.
-			await _wait(0.3)
+			await mb.counter_lunge(fb.global_position)
 			if not is_instance_valid(mb) or not is_instance_valid(fb):
 				return
 			fb.take_hit(VisualUtil.attr_color(_creature_def(mine).attribute).lightened(0.2))
@@ -1091,14 +1088,12 @@ func _anim_battle_started(slot: int, attacker_uid: int, defender_uid: int, power
 	var dz: float = Arena.FIG_H / 3.0
 	var y := Vector3(0.0, BALL_Y + 0.02, 0.0)
 	if atk != null:
-		atk.freeze_at(base + y + Vector3(0.0, 0.0, dz))
+		atk.stage_at(base + y + Vector3(0.0, 0.0, dz), base - Vector3(0.0, 0.0, dz))
 		atk.set_label_shift(-110.0 * signf(dz))
-		atk.face_toward(base - Vector3(0.0, 0.0, dz))
 		atk.open_animated(false)
 	if dfn != null:
-		dfn.freeze_at(base + y - Vector3(0.0, 0.0, dz))
+		dfn.stage_at(base + y - Vector3(0.0, 0.0, dz), base + Vector3(0.0, 0.0, dz))
 		dfn.set_label_shift(110.0 * signf(dz))
-		dfn.face_toward(base + Vector3(0.0, 0.0, dz))
 		dfn.open_animated(false)
 	hud.set_hint("Бой: %s против %s" % [_cname(attacker_uid), _cname(defender_uid)])
 	SoundFx.i().play("battle_start")
@@ -1190,10 +1185,11 @@ func _anim_battle_resolved(result: BattleResult) -> void:
 	_cry(result.winner_uid, "attack", 0.0)
 	var wh: float = wb.figure_height() if wb != null else 10.0
 	if wb != null and lb != null:
-		# удар: быстрый наезд в точку столкновения
-		cam.impact((wb.global_position + lb.global_position) * 0.5 + Vector3(0, wh * 0.45, 0))
-		lb.counter_lunge(wb.global_position)
+		# Замах виден на общем плане, наезд — только в момент контакта.
+		lb.brace()
 		await wb.lunge(lb.global_position)
+		wb.hold_impact()
+		cam.impact((wb.global_position + lb.global_position) * 0.5 + Vector3(0, wh * 0.45, 0))
 		lb.take_hit(VisualUtil.attr_color(_creature_def(result.winner_uid).attribute).lightened(0.2))
 		AttackFx.play(world, _creature_def(result.winner_uid).attribute, wb.global_position - Vector3(0, CreatureBall.RADIUS, 0),
 				lb.global_position - Vector3(0, CreatureBall.RADIUS, 0), lb.figure_height(), lb.figure_size(), wh)
@@ -1228,8 +1224,9 @@ func _anim_no_winner(result: BattleResult) -> void:
 	if result.both_lose:
 		if ab != null and db != null:
 			cam.impact((ab.global_position + db.global_position) * 0.5 + Vector3(0, ab.figure_height() * 0.45, 0))
-			ab.counter_lunge(db.global_position)
-			db.counter_lunge(ab.global_position)
+			var contact: Signal = ab.lunge(db.global_position, 0.46)
+			db.lunge(ab.global_position, 0.46)
+			await contact
 			ab.take_hit(Color(1.0, 0.4, 0.3))
 			db.take_hit(Color(1.0, 0.4, 0.3))
 			var floor_off := Vector3(0, CreatureBall.RADIUS, 0)

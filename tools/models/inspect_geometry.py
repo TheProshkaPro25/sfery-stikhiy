@@ -16,7 +16,7 @@ def read_glb(path):
 def accessor(doc,binary,index):
     a=doc['accessors'][index];view=doc['bufferViews'][a['bufferView']]
     dtype={5126:'<f4',5125:'<u4',5123:'<u2',5121:'u1'}[a['componentType']]
-    width={'SCALAR':1,'VEC2':2,'VEC3':3,'VEC4':4}[a['type']]
+    width={'SCALAR':1,'VEC2':2,'VEC3':3,'VEC4':4,'MAT4':16}[a['type']]
     start=view.get('byteOffset',0)+a.get('byteOffset',0);item=np.dtype(dtype).itemsize
     return np.ndarray((a['count'],width),dtype=dtype,buffer=binary,offset=start,strides=(view.get('byteStride',width*item),item)).copy()
 

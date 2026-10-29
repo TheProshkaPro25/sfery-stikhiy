@@ -1,21 +1,20 @@
 class_name CreatureAnim
 extends Node3D
-## Процедурная анимация статичной модели существа. Узел стоит в основании модели
-## (точка опоры = пол), поэтому масштаб и наклоны не отрывают существо от карты.
-## Локальные оси: +Z — взгляд существа (на соперника в бою).
-## Итоговая поза = простой (idle) + эффект (fx_*), который двигают твины.
+## Один таймлайн управляет корпусом, скелетом и контактом. +Z — к сопернику.
+## Отложенные действия принадлежат текущему состоянию и отменяются новым действием.
+
+signal strike_contact
+signal action_finished(action: StringName)
 
 const FLYERS := ["bird", "flying_eye", "dragon"]
-## Темп скелетных клипов по стихии (Attr.A): Буря резкая, Камень тяжёлый, Тень плавная.
-const TEMPO := [1.08, 1.18, 1.0, 0.85, 0.93, 0.97]
+const TEMPO := [1.04, 1.08, 1.0, 0.92, 0.96, 0.98]
 
-var fx_pos := Vector3.ZERO      ## смещение, м (в осях существа)
-var fx_scale := 1.0             ## импульс масштаба
-var fx_pitch := 0.0             ## наклон вперёд(+)/назад(-), рад
-var fx_roll := 0.0              ## крен, рад
-var fx_yaw := 0.0               ## доворот (появление), рад
-var idle_on := false            ## включает «живой простой» (плавно)
-
+var fx_pos := Vector3.ZERO
+var fx_scale := 1.0
+var fx_pitch := 0.0
+var fx_roll := 0.0
+var fx_yaw := 0.0
+var idle_on := false
 var _base := Vector3.ZERO
 var _height := 1.5
 var _extent := 1.5
@@ -23,44 +22,68 @@ var _flyer := false
 var _phase := 0.0
 var _blend := 0.0
 var _color := Color.WHITE
-var _tw: Tween
-var _tw_yaw: Tween
-var _tw_flash: Tween
-var _overlay: StandardMaterial3D
 var _meshes: Array[MeshInstance3D] = []
-## Скелетные клипы вида (tools/blender/rig_species.py): idle, stance, roar, attack, hit. Без скелета — null.
 var _player: AnimationPlayer
+var _overlay: StandardMaterial3D
+var _flash_age := 0.0
+var _flash_duration := 0.0
+var _flash_strength := 0.0
+var _kind := "fighter"
+var _tempo := 1.0
+var _clock := 0.0
+var _action: StringName = &""
+var _elapsed := 0.0
+var _delay := 0.0
+var _duration := 1.0
+var _contact_time := 0.42
+var _contact_sent := false
+var _distance := 0.0
+var _clip_started := false
+var _clip_time := 0.0
+var _clip_name: StringName = &""
+var _start_pos := Vector3.ZERO
+var _start_angles := Vector3.ZERO
+var _pause_left := 0.0
 
 
 func _ready() -> void:
 	_phase = randf() * TAU
 
 
-## Подключить построенную модель (CreatureModels.build); основание модели — в начале координат.
 func set_model(model: Node3D, d: CreatureDef) -> void:
 	add_child(model)
 	_height = float(model.get_meta("height", 1.5))
 	_extent = float(model.get_meta("extent", _height))
-	_flyer = d != null and FLYERS.has(CreatureModels.archetype_of(d))
+	var archetype := CreatureModels.archetype_of(d) if d != null else "knight"
+	_flyer = FLYERS.has(archetype)
+	_kind = "flyer" if _flyer else ("heavy" if archetype in ["cyclops", "beetle"] else ("beast" if archetype in ["wolf", "serpent"] else "fighter"))
 	_color = VisualUtil.attr_color(d.attribute) if d != null else Color.WHITE
+	_tempo = TEMPO[d.attribute] if d != null and d.attribute >= 0 and d.attribute < TEMPO.size() else 1.0
 	_meshes.clear()
 	_player = null
 	_collect(model)
-	if _player != null and _player.has_animation("idle"):
-		_player.playback_default_blend_time = 0.3  # клип → idle по очереди тоже со сведением
-		_player.speed_scale = TEMPO[d.attribute] if d != null and d.attribute >= 0 and d.attribute < TEMPO.size() else 1.0
-		_player.get_animation("idle").loop_mode = Animation.LOOP_LINEAR
-		_player.play("idle")
-		_player.seek(randf() * _player.get_animation("idle").length)  # не синхронно с соседями
+	if _player != null:
+		# Библиотеки экземпляра: сглаживание не меняет общий ресурс и соседних бойцов.
+		for name in _player.get_animation_library_list():
+			var library := _player.get_animation_library(name).duplicate(true) as AnimationLibrary
+			_player.remove_animation_library(name)
+			_player.add_animation_library(name, library)
+			for clip in library.get_animation_list():
+				var animation := library.get_animation(clip)
+				for track in range(animation.get_track_count()):
+					if animation.track_get_type(track) in [Animation.TYPE_ROTATION_3D, Animation.TYPE_POSITION_3D]:
+						animation.track_set_interpolation_type(track, Animation.INTERPOLATION_CUBIC)
+				animation.loop_mode = Animation.LOOP_LINEAR if clip == &"idle" else Animation.LOOP_NONE
+		_player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+		_player.speed_scale = 1.0
+		_player.playback_default_blend_time = 0.2
 	reset()
 
 
-## Рост модели (м) без эффектов.
 func get_height() -> float:
 	return _height
 
 
-## Наибольший размер модели по полу (длина или размах), м.
 func get_extent() -> float:
 	return _extent
 
@@ -70,176 +93,225 @@ func _collect(n: Node) -> void:
 		_meshes.append(n)
 	elif n is AnimationPlayer and _player == null:
 		_player = n
-	for c in n.get_children():
-		_collect(c)
+	for child in n.get_children():
+		_collect(child)
 
 
 func set_base(p: Vector3) -> void:
 	_base = p
-	position = p
+	_apply(_clock)
 
 
-## Сброс всех эффектов (шар закрыт / переставлен).
 func reset() -> void:
-	_kill(_tw)
-	_kill(_tw_yaw)
-	_kill(_tw_flash)
+	_action = &""
+	_pause_left = 0.0
+	_elapsed = 0.0
+	_delay = 0.0
 	fx_pos = Vector3.ZERO
 	fx_scale = 1.0
 	fx_pitch = 0.0
 	fx_roll = 0.0
 	fx_yaw = 0.0
 	_blend = 0.0
-	for m in _meshes:
-		m.material_overlay = null
-	_apply(0.0)
+	_flash_duration = 0.0
+	for mesh in _meshes:
+		mesh.material_overlay = null
+	_idle_clip(0.0)
+	_apply(_clock)
 
 
-func _kill(t: Tween) -> void:
-	if t != null and t.is_valid():
-		t.kill()
+func _idle_clip(blend: float = 0.22) -> void:
+	if _player != null and _player.has_animation(&"idle"):
+		_player.clear_queue()
+		_player.play(&"idle", blend, _tempo * 0.85)
+
+
+static func _ease(value: float) -> float:
+	var s := clampf(value, 0.0, 1.0)
+	return s * s * (3.0 - 2.0 * s)
 
 
 func _process(delta: float) -> void:
-	_blend = move_toward(_blend, 1.0 if idle_on else 0.0, delta * 2.5)
-	_apply(Time.get_ticks_msec() * 0.001)
+	_update_flash(delta)
+	if _pause_left > 0.0:
+		_pause_left = maxf(0.0, _pause_left - delta)
+		return
+	_clock += delta
+	_blend = move_toward(_blend, 1.0 if idle_on and _action == &"" else 0.0, delta * 3.5)
+	if _action == &"":
+		if _player != null:
+			_player.advance(delta)
+	else:
+		_elapsed += delta
+		var t := _elapsed - _delay
+		if t >= 0.0:
+			_sample_action(minf(t, _duration))
+			_advance_clip(t)
+			# Сначала поза контакта, затем сигнал — реакция цели видит правильную позу.
+			_apply(_clock)
+			if _action == &"attack" and not _contact_sent and t >= _contact_time:
+				_contact_sent = true
+				strike_contact.emit()
+			if t >= _duration:
+				_finish_action()
+		elif _player != null:
+			_player.advance(delta)
+	_apply(_clock)
 
 
 func _apply(now: float) -> void:
 	var t := now + _phase
-	var b := _blend
-	# дыхание и покачивание всей моделью — только без скелета (со скелетом дышит сам клип idle,
-	# а масштаб и наклон целиком выглядят как надувная игрушка)
-	var bs := b if _player == null else 0.0
-	var breath := sin(t * 2.2)
-	var sy := 1.0 + breath * 0.015 * bs
-	var sxz := 1.0 - breath * 0.007 * bs  # компенсация объёма
-	var lift := 0.0
-	if _flyer:
-		lift = (0.6 + 0.4 * sin(t * 1.6)) * _height * 0.05 * b
-	var sway := sin(t * 0.9)
-	var rx := sin(t * 0.7 + 1.3) * deg_to_rad(1.0) * bs
-	var rz := sway * deg_to_rad(1.0) * bs
-	position = _base + fx_pos + Vector3(0.0, lift, 0.0)
-	scale = Vector3(sxz, sy, sxz) * fx_scale
-	rotation = Vector3(rx + fx_pitch, fx_yaw, rz + fx_roll)
+	var procedural := _blend if _player == null else 0.0
+	var breath := sin(t * 1.7)
+	var lift := (0.6 + 0.4 * sin(t * 1.3)) * _height * 0.025 * _blend if _flyer else 0.0
+	position = _base + fx_pos + Vector3(0, lift, 0)
+	scale = Vector3(1.0 - breath * 0.003 * procedural, 1.0 + breath * 0.006 * procedural, 1.0 - breath * 0.003 * procedural) * fx_scale
+	rotation = Vector3(fx_pitch + sin(t * 0.7) * 0.006 * procedural, fx_yaw, fx_roll + sin(t * 0.8) * 0.006 * procedural)
 
 
-func _new_tween() -> Tween:
-	_kill(_tw)
-	_tw = create_tween()
-	return _tw
+func _begin(action: StringName, duration: float, clip: StringName, delay: float = 0.0) -> void:
+	_start_pos = fx_pos
+	_start_angles = Vector3(fx_pitch, fx_yaw, fx_roll)
+	_action = action
+	_elapsed = 0.0
+	_delay = maxf(delay, 0.0)
+	_duration = duration
+	_clip_name = clip
+	_clip_started = false
+	_clip_time = 0.0
+	_contact_sent = false
+	_pause_left = 0.0
+	if _player != null:
+		_player.clear_queue()
 
 
-## Скелетный клип поверх процедурных эффектов, потом снова idle. Если у модели нет скелета — ничего.
-func _clip(clip: StringName, delay: float = 0.0, speed: float = 1.0, blend: float = 0.12) -> void:
-	if _player == null or not _player.has_animation(clip):
+func _advance_clip(t: float) -> void:
+	if _player == null:
 		return
-	if delay > 0.0:
-		await get_tree().create_timer(delay).timeout
-		if not is_inside_tree():
-			return
-	_player.play(clip, blend, speed)
-	if _player.has_animation("idle"):
-		_player.queue("idle")
+	if not _player.has_animation(_clip_name):
+		_player.advance(get_process_delta_time())
+		return
+	if not _clip_started:
+		_player.play(_clip_name, 0.16, 1.0)
+		_clip_started = true
+	var animation := _player.get_animation(_clip_name)
+	var progress := clampf(t / _duration, 0.0, 1.0)
+	if _action == &"attack":
+		# Скелетный замах заканчивается на кадре 10 из 28. Продвижение клипа
+		# привязано к контакту профиля, а не к отдельному таймеру/скорости стихии.
+		progress = (t / _contact_time) / 3.0 if t <= _contact_time else 1.0 / 3.0 + (t - _contact_time) / (_duration - _contact_time) * 2.0 / 3.0
+	var target := clampf(progress, 0.0, 1.0) * animation.length
+	_player.advance(maxf(0.0, target - _clip_time))
+	_clip_time = target
 
 
-## Выход из сферы: существо вырастает сжатым (клип stance), доворачивается к сопернику, на ~0.65 с
-## распрямляется во весь размах с рёвом и чуть подпрыгивает, потом встаёт в боевую стойку (idle).
-## Масштаб растит сам шар (_figure). pose = false — только доворот (в бою стойку заменяет рёв).
+func _sample_action(t: float) -> void:
+	var pos := Vector3.ZERO
+	var pitch := 0.0
+	var yaw := 0.0
+	var roll := 0.0
+	var skeleton_k := 0.45 if _player != null else 1.0
+	match _action:
+		&"attack":
+			var windup := _contact_time * 0.66
+			var hold := _contact_time + 0.07
+			var back := Vector3(0, _height * 0.025 if _flyer else 0.0, -_distance * 0.18)
+			var contact := Vector3(0, _height * 0.015 if _flyer else 0.0, _distance)
+			var power: float
+			if t < windup:
+				power = _ease(t / windup)
+				pos = back * power
+				pitch = -0.14 * power * skeleton_k
+				yaw = -0.12 * power if _kind == "fighter" else 0.0
+			elif t < _contact_time:
+				power = _ease((t - windup) / (_contact_time - windup))
+				pos = back.lerp(contact, power)
+				pitch = lerpf(-0.14, 0.19, power) * skeleton_k
+				yaw = lerpf(-0.12, 0.08, power) if _kind == "fighter" else 0.0
+			else:
+				power = 1.0 - _ease((t - hold) / (_duration - hold))
+				pos = contact * power
+				pitch = 0.19 * power * skeleton_k
+				yaw = 0.08 * power if _kind == "fighter" else 0.0
+		&"hit":
+			var recoil := _ease(t / 0.12) if t < 0.12 else 1.0 - _ease((t - 0.18) / (_duration - 0.18))
+			pos.z = -_distance * recoil
+			pitch = -0.16 * recoil * skeleton_k
+			roll = sin(t * TAU * 2.0) * 0.035 * recoil
+		&"brace":
+			var weight := sin(clampf(t / _duration, 0.0, 1.0) * PI)
+			pos.z = -_height * 0.025 * weight
+			pitch = 0.07 * weight * skeleton_k
+		&"appear":
+			yaw = -0.3 * (1.0 - _ease(t / _duration))
+			pitch = -0.045 * sin(t / _duration * PI)
+		&"roar", &"ability":
+			var rise := _ease(t / 0.28) if t < 0.28 else 1.0 - _ease((t - 0.42) / (_duration - 0.42))
+			pitch = -0.12 * rise * skeleton_k
+			pos.y = _height * 0.025 * rise if _flyer else 0.0
+	# При смене действия продолжаем из текущей позы, включая недовыполненную отдачу.
+	var blend := _ease(t / 0.14)
+	fx_pos = _start_pos.lerp(pos, blend)
+	fx_pitch = lerpf(_start_angles.x, pitch, blend)
+	fx_yaw = lerpf(_start_angles.y, yaw, blend)
+	fx_roll = lerpf(_start_angles.z, roll, blend)
+	fx_scale = 1.0
+
+
+func _finish_action() -> void:
+	var finished := _action
+	_action = &""
+	fx_pos = Vector3.ZERO
+	fx_pitch = 0.0
+	fx_yaw = 0.0
+	fx_roll = 0.0
+	_idle_clip()
+	action_finished.emit(finished)
+
+
 func appear(pose: bool = true) -> void:
-	_kill(_tw_yaw)
-	fx_yaw = -PI * 0.8
-	_tw_yaw = create_tween()
-	_tw_yaw.tween_property(self, "fx_yaw", 0.0, 0.6).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	if not pose:
-		return
-	_clip(&"stance", 0.0, 0.85, 0.0)
-	var tw := _new_tween()
-	tw.tween_interval(0.5)
-	tw.set_parallel(true)
-	tw.tween_property(self, "fx_pos", Vector3(0.0, _height * 0.07, 0.0), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_pitch", -0.06, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.chain().set_parallel(true)
-	tw.tween_property(self, "fx_pos", Vector3.ZERO, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.tween_callback(flash_color.bind(_color, 0.35, 0.5)).set_delay(0.16)
-	tw.tween_property(self, "fx_pitch", 0.0, 0.6).set_delay(0.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_begin(&"appear", 1.1, &"stance" if pose else &"idle")
 
 
-## Рёв: клип roar; телом — лёгкий подъём и отклон назад (основное движение делает скелет).
 func roar(delay: float = 0.0) -> void:
-	_clip(&"roar", delay)
-	var tw := _new_tween()
-	if delay > 0.0:
-		tw.tween_interval(delay)
-	var up := Vector3(0.0, _height * 0.03, -_height * 0.02)
-	var k := 1.0 if _player == null else 0.4
-	tw.set_parallel(true)
-	tw.tween_property(self, "fx_pitch", -0.2 * k, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_pos", up, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.chain().tween_interval(0.45)
-	tw.chain().set_parallel(true)
-	tw.tween_property(self, "fx_pitch", 0.0, 0.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(self, "fx_pos", Vector3.ZERO, 0.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_begin(&"roar", 1.05, &"roar", delay)
 
 
-## Рывок вперёд (+Z) на dist метров и откат. Удар приходится на ~0.3 с.
-func lunge(dist: float) -> void:
-	_clip(&"attack")
-	var tw := _new_tween()
-	tw.set_parallel(true)
-	var k := 1.0 if _player == null else 0.4  # со скелетом корпус наклоняет сам клип
-	tw.tween_property(self, "fx_pos", Vector3(0, 0, -dist * 0.15), 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_pitch", -0.12 * k, 0.18)
-	tw.chain().set_parallel(true)
-	tw.tween_property(self, "fx_pos", Vector3(0, 0, dist), 0.12).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
-	tw.tween_property(self, "fx_pitch", 0.2 * k, 0.12)
-	tw.chain().set_parallel(true)
-	tw.tween_property(self, "fx_pos", Vector3.ZERO, 0.3).set_delay(0.06).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_pitch", 0.0, 0.3).set_delay(0.06)
+func lunge(dist: float, contact_override: float = 0.0) -> void:
+	_contact_time = {"heavy": 0.5, "flyer": 0.42, "beast": 0.36, "fighter": 0.44}[_kind] / _tempo
+	var duration: float = {"heavy": 1.28, "flyer": 1.08, "beast": 0.96, "fighter": 1.12}[_kind] / _tempo
+	if contact_override > 0.0:
+		_contact_time = contact_override
+		duration = maxf(duration, _contact_time + 0.6)
+	_distance = clampf(dist, 0.0, _height * 0.24)
+	_begin(&"attack", duration, &"attack")
 
 
-## Ответный рывок защитника: то же, но короче.
 func counter(dist: float) -> void:
-	lunge(dist * 0.4)
+	lunge(dist * 0.45)
 
 
-## Отдача проигравшего: откат назад (-Z), встряска, возврат; вспышка цветом стихии победителя.
+func brace() -> void:
+	_begin(&"brace", 0.8, &"idle")
+
+
 func hit(flash: Color, dist: float) -> void:
-	_clip(&"hit", 0.0, 1.0, 0.06)
-	var tw := _new_tween()
-	var k := 1.0 if _player == null else 0.5
-	tw.set_parallel(true)
-	tw.tween_property(self, "fx_pos", Vector3(0, 0, -dist), 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_pitch", -0.25 * k, 0.1)
-	tw.chain().tween_method(_shake, 1.0, 0.0, 0.35)
-	tw.tween_property(self, "fx_pos", Vector3.ZERO, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_pitch", 0.0, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	flash_color(flash, 0.5, 0.45)
+	_distance = clampf(dist, 0.0, _height * 0.1)
+	_begin(&"hit", 0.8, &"hit")
+	flash_color(flash, 0.22, 0.28)
 
 
-## Дрожь: крен меняется со знаком, амплитуда затухает.
-func _shake(k: float) -> void:
-	fx_roll = sin(k * 30.0) * 0.06 * k
+## Короткая остановка только этого бойца: частицы, камера и интерфейс не замедляются.
+func hold_impact(seconds: float = 0.055) -> void:
+	_pause_left = maxf(_pause_left, seconds)
 
 
-## Сила способности: короткая поза рёва (если есть скелет), подъём и вспышка своей стихии.
 func ability_pulse() -> void:
-	if _player != null and _player.has_animation(&"roar"):
-		_player.play(&"roar", 0.15, 1.4)
-		_player.queue(&"idle")
-	var tw := _new_tween()
-	tw.set_parallel(true)
-	tw.tween_property(self, "fx_pitch", -0.05, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "fx_pos", Vector3(0, _height * 0.04, 0), 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.chain().set_parallel(true)
-	tw.tween_property(self, "fx_pitch", 0.0, 0.35).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(self, "fx_pos", Vector3.ZERO, 0.35).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	flash_color(_color, 0.3, 0.5)
+	_begin(&"ability", 0.85, &"roar")
+	flash_color(_color, 0.16, 0.45)
 
 
-## Вспышка: аддитивный overlay поверх материалов, затухает за dur.
-func flash_color(c: Color, strength: float = 0.5, dur: float = 0.4) -> void:
+func flash_color(c: Color, strength: float = 0.22, dur: float = 0.28) -> void:
 	if _meshes.is_empty():
 		return
 	if _overlay == null:
@@ -247,12 +319,20 @@ func flash_color(c: Color, strength: float = 0.5, dur: float = 0.4) -> void:
 		_overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		_overlay.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	_kill(_tw_flash)
+	_flash_age = 0.0
+	_flash_duration = maxf(dur, 0.01)
+	_flash_strength = strength
 	_overlay.albedo_color = Color(c.r, c.g, c.b, strength)
-	for m in _meshes:
-		m.material_overlay = _overlay
-	_tw_flash = create_tween()
-	_tw_flash.tween_property(_overlay, "albedo_color:a", 0.0, dur).set_ease(Tween.EASE_OUT)
-	_tw_flash.tween_callback(func() -> void:
-		for m in _meshes:
-			m.material_overlay = null)
+	for mesh in _meshes:
+		mesh.material_overlay = _overlay
+
+
+func _update_flash(delta: float) -> void:
+	if _flash_duration <= 0.0:
+		return
+	_flash_age += delta
+	_overlay.albedo_color.a = _flash_strength * (1.0 - _ease(_flash_age / _flash_duration))
+	if _flash_age >= _flash_duration:
+		_flash_duration = 0.0
+		for mesh in _meshes:
+			mesh.material_overlay = null

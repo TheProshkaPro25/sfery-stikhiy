@@ -540,7 +540,7 @@ func open_animated(pose: bool = true) -> Signal:
 	tw.tween_method(_pose_halves, 0.0, 1.0, 0.42).set_delay(0.06).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(_shell_burst).set_delay(0.5)
 	tw.tween_property(_shell, "scale", Vector3.ONE * 0.001, 0.22).set_delay(0.5).set_ease(Tween.EASE_IN)
-	tw.tween_property(_figure, "scale", Vector3.ONE, 0.4).set_delay(0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_figure, "scale", Vector3.ONE, 0.65).set_delay(0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tw.chain().tween_callback(_finish_open)
 	if _anim != null:
 		_anim.reset()
@@ -623,8 +623,8 @@ func close_up() -> void:
 
 ## Фиксирует тело в точке (без вращения); используется и для удержания шара перед броском.
 ## Замороженный шар не сталкивается с катящимися: иначе в слот с существом нельзя попасть (отскок).
-func freeze_at(pos: Vector3) -> void:
-	if _anim != null:
+func freeze_at(pos: Vector3, reset_pose: bool = true) -> void:
+	if _anim != null and reset_pose:
 		_anim.reset()
 	if not _home_set:
 		# первая фиксация — точка броска владельца: туда шар вернётся, по ней же цвет кольца владельца
@@ -650,27 +650,50 @@ func freeze_at(pos: Vector3) -> void:
 		transform = Transform3D(Basis(), pos)
 
 
+## Выход на боевую позицию без телепорта и мгновенного разворота уже стоящего бойца.
+func stage_at(destination: Vector3, target: Vector3) -> Signal:
+	var start := global_position
+	freeze_at(start, false)
+	var facing := target - destination
+	var angle := atan2(facing.x, facing.z)
+	var initial := _figure.rotation.y
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(self, "global_position", destination, 0.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_method(func(value: float) -> void: _figure.rotation.y = lerp_angle(initial, angle, value), 0.0, 1.0, 0.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	return tw.finished
+
+
 func unfreeze() -> void:
 	freeze = false
 
 
-## Рывок к цели и обратно (удар в бою). Возвращает сигнал окончания.
-func lunge(target: Vector3) -> Signal:
+## Сигнал контакта приходит от таймлайна бойца, а не от независимого таймера.
+func lunge(target: Vector3, contact_time: float = 0.0) -> Signal:
 	var d := target - global_position
 	d.y = 0.0
 	if _anim != null:
-		_anim.lunge(d.length() * 0.45)
-	var done := create_tween()
-	done.tween_interval(0.3)
-	return done.finished
+		_anim.lunge(d.length() * 0.38, contact_time)
+		return _anim.strike_contact
+	return get_tree().create_timer(0.42).timeout
 
 
-## Ответный (короткий) рывок защитника.
-func counter_lunge(target: Vector3) -> void:
+func counter_lunge(target: Vector3) -> Signal:
 	var d := target - global_position
 	d.y = 0.0
 	if _anim != null:
-		_anim.counter(d.length() * 0.45)
+		_anim.counter(d.length() * 0.38)
+		return _anim.strike_contact
+	return get_tree().create_timer(0.42).timeout
+
+
+func brace() -> void:
+	if _anim != null:
+		_anim.brace()
+
+
+func hold_impact() -> void:
+	if _anim != null:
+		_anim.hold_impact()
 
 
 ## Рёв: рывок вверх/назад и возврат (delay — под момент крика).
@@ -682,7 +705,8 @@ func roar(delay: float = 0.0) -> void:
 ## Отдача проигравшего с вспышкой цвета стихии победителя.
 func take_hit(flash: Color) -> void:
 	if _anim != null:
-		_anim.hit(flash, RADIUS * 0.6)
+		_anim.hit(flash, figure_height() * 0.075)
+		_anim.hold_impact(0.035)
 
 
 ## Импульс при игре карты способности.

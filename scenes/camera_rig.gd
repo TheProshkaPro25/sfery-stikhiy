@@ -114,8 +114,8 @@ func _process(delta: float) -> void:
 	if _shake_t > 0.0:
 		_shake_t -= delta
 		var amp := _shake * Arena.WORLD * 0.12 * clampf(_shake_t * 3.0, 0.0, 1.0)
-		h_offset = randf_range(-amp, amp)
-		v_offset = randf_range(-amp, amp)
+		h_offset = sin(_t * 37.0) * amp
+		v_offset = sin(_t * 29.0 + 1.7) * amp * 0.7
 	else:
 		h_offset = 0.0
 		v_offset = 0.0
