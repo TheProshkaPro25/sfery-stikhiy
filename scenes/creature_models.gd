@@ -18,6 +18,7 @@ const DIR := "res://assets/creatures/%s.glb"
 const HD_DIR := "res://assets/creatures_hd/%s.glb"
 ## Поворот HD-моделей вокруг Y, чтобы смотрели вдоль +Z (как архетипы).
 const HD_YAW_DEG := 0.0
+const LikorezModel := preload("res://scenes/likorez_model.gd")
 
 
 ## Загруженные модели матча (ключ "hd:<id>" или архетип). Держим только существ текущего матча:
@@ -79,6 +80,8 @@ static func _key_path(d: CreatureDef) -> Array:
 static func preload_match(defs: Array) -> void:
 	for d in defs:
 		if d != null:
+			if d.species == &"likorez":
+				continue # Процедурная модель не требует GLB.
 			var kp := _key_path(d)
 			_scene(kp[0], kp[1])
 
@@ -102,13 +105,14 @@ static func archetype_of(d: CreatureDef) -> String:
 static func build(d: CreatureDef) -> Node3D:
 	if d == null:
 		return null
-	var kp := _key_path(d)
+	var procedural := d.species == &"likorez"
+	var kp := ["likorez", ""] if procedural else _key_path(d)
 	var hd: bool = String(kp[0]).begins_with("hd:")
-	var ps: PackedScene = _scene(kp[0], kp[1])
-	if ps == null:
+	var ps: PackedScene = null if procedural else _scene(kp[0], kp[1])
+	if ps == null and not procedural:
 		return null
 	var root := Node3D.new()
-	var inst := ps.instantiate() as Node3D
+	var inst := LikorezModel.build() if procedural else ps.instantiate() as Node3D
 	var model: Node3D = inst
 	if hd:
 		# обёртка с поворотом, чтобы модель смотрела вдоль +Z
@@ -133,7 +137,7 @@ static func build(d: CreatureDef) -> Node3D:
 	root.set_meta("extent", maxf(box.size.x, box.size.z) * k)  # наибольший размер по полу (для камеры)
 	if hd:
 		_fix_hd_materials(model, d.species == &"kolossar" and d.attribute == Attr.A.LIGHT)
-	else:
+	elif not procedural:
 		_recolor(model, d)
 	return root
 

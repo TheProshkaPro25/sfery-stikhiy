@@ -6,8 +6,8 @@ extends RefCounted
 ## Уровни сложности (Difficulty):
 ## - EASY («Новичок»): большой разброс броска, шумная оценка целей, часто пасует, карты выбирает наугад.
 ## - NORMAL («Боец»): бой с перевесом, своя подходящая карта, самая дешёвая выигрышная способность, в обмене держит
-##   запас перевеса 80 против ответа соперника; «ворота + бросок» под подходящее существо; ставит слабое существо
-##   на своё «Зеркало» (приманка); после приземления прикрепляет защитную карту, если ворота под угрозой.
+##   запас перевеса 80 против ответа соперника и план на две карты; «ворота + бросок» с оценкой угрозы; ставит существо
+##   на своё «Зеркало» (приманка) с учётом угрозы; после приземления прикрепляет защиту.
 ## - HARD («Мастер»): плюс блеф (ловушку кладёт первой и сажает на неё приманку), оценка риска ловушки на чужих
 ##   закрытых воротах (по уже раскрытым картам соперника), оценка ворот соперника под его существом (скорее всего
 ##   «Поле» его стихии), счёт карт: возможные способности соперника — по его стихии, видам и уже сыгранным классам;
@@ -69,11 +69,11 @@ static func difficulty_name(d: int) -> String:
 ## legal — MatchController.legal_setup_slots(). -> {card_id, slot[, throw_uid]}; {} = не класть (если можно пропустить).
 ## throw_uid — «ворота + бросок»: вызвать ctrl.throw_with_gate(p, card_id, slot, throw_uid) и бросать в slot.
 ## Кладёт карту, если ворот на поле мало (или с вероятностью), выбирая карту под стихии своих существ.
-func choose_setup(view: MatchState, legal: Array = [], can_skip: bool = false) -> Dictionary:
+func choose_setup(view: MatchState, legal = null, can_skip: bool = false) -> Dictionary:
 	_remember_gates(view)
 	var ps: PlayerState = view.players[player]
-	var slots: Array = legal
-	if slots.is_empty():
+	var slots: Array = legal.duplicate() if legal != null else []
+	if legal == null:
 		for i in range(view.slots.size()):
 			if not view.slots[i].has_card:
 				slots.append(i)
@@ -87,38 +87,39 @@ func choose_setup(view: MatchState, legal: Array = [], can_skip: bool = false) -
 	if can_skip and gates >= 2 and difficulty != Difficulty.HARD and _rng.randf() < 0.45:
 		return {}
 	var best: StringName = ps.arena_hand[0]
-	var best_fit: int = -1
+	var slot: int = int(slots[0])
+	var pick: int = -1
+	var best_value: float = -INF
+	var ready: Array[int] = _ready(view)
 	for id in ps.arena_hand:
-		var fit: int = 0
 		var card: CardDef = CardDB.card(id)
-		if difficulty == Difficulty.EASY:
-			fit = _rng.randi_range(0, 9)
-		else:
-			for uid in ps_uids(view):
-				if _fits(card, CardDB.creature(view.creatures[uid].def_id)):
-					fit += 1
-			# блеф: ловушка ложится первой, пока соперник не знает, где она
-			if difficulty == Difficulty.HARD and CardEffects.is_gate_trap(card) and _rng.randf() < 0.7:
-				fit = 5
-			fit = fit * 10 + _rng.randi_range(0, 5)
-		if fit > best_fit:
-			best_fit = fit
-			best = id
-	var slot: int = int(slots[_rng.randi_range(0, slots.size() - 1)])
+		for target in slots:
+			var candidates: Array = ready if not ready.is_empty() else [-1]
+			for uid in candidates:
+				var value: float = _rng.randf() * (100.0 if difficulty == Difficulty.EASY else 2.0)
+				if difficulty != Difficulty.EASY and uid >= 0:
+					var trial: MatchState = view.duplicate_full()
+					trial.slots[int(target)].has_card = true
+					trial.slots[int(target)].card_id = id
+					trial.slots[int(target)].card_owner = player
+					value += 100.0 if _fits(card, CardDB.creature(view.creatures[uid].def_id)) else 0.0
+					value -= _exposure(trial, uid, int(target))
+					if CardEffects.is_gate_trap(card):
+						value += _trap_bait_score(view, uid, card) - 650.0
+				if value > best_value:
+					best_value = value
+					best = id
+					slot = int(target)
+					pick = uid
 	var out: Dictionary = {"card_id": best, "slot": slot}
-	# «Ворота + бросок»: сразу бросить под карту подходящее существо, если выгодной атаки нет
-	if difficulty != Difficulty.EASY:
-		var bcard: CardDef = CardDB.card(best)
-		var pick: int = -1
+	if difficulty != Difficulty.EASY and pick >= 0:
 		var attack: bool = false
-		for uid in _ready(view):
-			if pick < 0 and _fits(bcard, CardDB.creature(view.creatures[uid].def_id)):
-				pick = uid
+		for uid in ready:
 			for i in range(view.slots.size()):
 				var occ: int = view.slots[i].occupant_uid
 				if view.slots[i].has_card and occ >= 0 and view.creatures[occ].owner != player and _score(view, uid, i) >= 900.0:
 					attack = true
-		if pick >= 0 and not attack:
+		if not attack:
 			out["throw_uid"] = pick
 	return out
 
@@ -166,15 +167,15 @@ func choose_throw(view: MatchState) -> Dictionary:
 
 ## preview — MatchController.get_battle_preview(). &"" = пас (если соперник уже спасовал — бой решается;
 ## после моей карты соперник снова может ответить).
-## legal: карты, разрешённые контроллером сейчас (ctrl.legal_abilities); пусто — вся рука.
+## legal: карты, разрешённые контроллером сейчас; null — вся рука, пустой список — пас.
 ## Обмен способностями: проигрываю — самая дешёвая карта, после которой выигрываю (HARD ищет и пару карт);
 ## выигрываю — пас, если соперник уже не может ответить или запас перевеса достаточен, иначе карта «про запас».
-func choose_ability(view: MatchState, preview: BattleResult, legal: Array = []) -> StringName:
+func choose_ability(view: MatchState, preview: BattleResult, legal = null) -> StringName:
 	if preview == null:
 		return &""
 	var side: int = 0 if view.creatures[preview.attacker_uid].owner == player else 1
 	var cards: Array[StringName] = []
-	for id in (legal if not legal.is_empty() else view.players[player].ability_hand):
+	for id in (legal if legal != null else view.players[player].ability_hand):
 		if id != &"":
 			cards.append(StringName(id))
 	if cards.is_empty():
@@ -223,19 +224,21 @@ func choose_ability(view: MatchState, preview: BattleResult, legal: Array = []) 
 				best_id = id
 	if best_id != &"":
 		return best_id
-	# HARD: одной карты мало — начать с пары, которая выигрывает (если лимит позволяет)
-	if difficulty == Difficulty.HARD and cards.size() >= 2 and _my_plays_left(view, preview, side) >= 2:
+	# Одной карты мало — начать с пары, которая выигрывает (если лимит позволяет).
+	if difficulty != Difficulty.EASY and not cards.is_empty() and view.players[player].ability_hand.size() >= 2 and _my_plays_left(view, preview, side) >= 2:
 		for i in range(cards.size()):
-			for j in range(cards.size()):
-				if i == j:
+			for second in view.players[player].ability_hand:
+				if cards[i] == second:
 					continue
 				var ci: CardDef = CardDB.card(cards[i])
-				var cj: CardDef = CardDB.card(cards[j])
+				var cj: CardDef = CardDB.card(second)
 				if CardEffects.is_instant(ci) or CardEffects.is_instant(cj) or CardEffects.is_lockout(ci):
+					continue
+				if not _forecast_legal(view, preview, second, side, cards[i]):
 					continue
 				var bp: Array = preview.battle_plays.duplicate(true)
 				bp.append([side, cards[i]])
-				bp.append([side, cards[j]])
+				bp.append([side, second])
 				var r: BattleResult = PowerCalc.compute_seq(view, preview.attacker_uid, preview.defender_uid, preview.slot, bp)
 				if _margin(r, side) > 0.0:
 					return cards[i]
@@ -446,11 +449,40 @@ func _score(view: MatchState, uid: int, slot: int) -> float:
 	if s.card_owner == player:
 		var card: CardDef = CardDB.card(s.card_id)
 		if difficulty != Difficulty.EASY and CardEffects.is_gate_trap(card):
-			return _trap_bait_score(view, uid, card)
+			return _trap_bait_score(view, uid, card) - _exposure(view, uid, slot)
 		stand = 800.0 if _fits(card, cdef) else 650.0
-	if difficulty == Difficulty.HARD:
+	if difficulty != Difficulty.EASY:
 		stand -= _exposure(view, uid, slot)
 	return stand
+
+
+## Проверка следующей предполагаемой карты с учётом бойца и последней своей карты.
+func _forecast_legal(view: MatchState, r: BattleResult, id: StringName, side: int, previous: StringName = &"") -> bool:
+	var c: CardDef = CardDB.card(id)
+	if c == null or CardEffects.moment(c) == &"landing":
+		return false
+	var fighter: int = r.attacker_uid if side == 0 else r.defender_uid
+	var d: CreatureDef = CardDB.creature(view.creatures[fighter].def_id)
+	var species: StringName = CardEffects.species_lock(c)
+	var attr: int = CardEffects.lock_attr(c)
+	if (species != &"" and species != d.species) or (attr >= 0 and attr != d.attribute):
+		return false
+	var last: StringName = previous
+	if last == &"":
+		for pl in r.plays:
+			if int(pl[0]) == side:
+				last = StringName(pl[1])
+				if CardEffects.is_lockout(CardDB.card(last)):
+					return false
+	if last != &"" and CardEffects.is_lockout(CardDB.card(last)):
+		return false
+	if CardEffects.is_fusion(c) and (last == &"" or CardEffects.is_fusion(CardDB.card(last))):
+		return false
+	if CardEffects.is_effect(c, &"swap_fighter"):
+		return PowerCalc.swap_candidate(view, view.creatures[fighter].owner, [r.attacker_uid, r.defender_uid]) >= 0
+	if CardEffects.is_effect(c, &"shift_gate"):
+		return PowerCalc.best_gate_swap(view, r.attacker_uid, r.defender_uid, r.slot, r.battle_plays, side) >= 0
+	return true
 
 
 ## Мастер: обмен картами по шансу удержать перевес. Варианты — пас или одна карта из cards; шанс победы варианта —
@@ -501,20 +533,13 @@ func _flip_prob(view: MatchState, r: BattleResult, side: int) -> float:
 	if r.passed[fs] or r.silenced[fs] or _foe_plays_left(view, r, side) <= 0:
 		return 0.0
 	var fighter: int = r.attacker_uid if fs == 0 else r.defender_uid
-	var d: CreatureDef = CardDB.creature(view.creatures[fighter].def_id)
-	var own_main: bool = false
-	for pl in r.plays:
-		if int(pl[0]) == fs and not CardEffects.is_fusion(CardDB.card(StringName(pl[1]))):
-			own_main = true
 	var keep: float = 1.0
 	for cands in _foe_pool(view, view.creatures[fighter].owner):
 		if cands.is_empty():
 			continue
 		var flips: int = 0
 		for id in cands:
-			var c: CardDef = CardDB.card(id)
-			var sp: StringName = CardEffects.species_lock(c)
-			if (sp != &"" and sp != d.species) or (CardEffects.is_fusion(c) and not own_main):
+			if not _forecast_legal(view, r, id, fs):
 				continue
 			if _margin(_with_card(view, r, id, fs), side) <= 0.0:
 				flips += 1
@@ -525,28 +550,22 @@ func _flip_prob(view: MatchState, r: BattleResult, side: int) -> float:
 ## Мастер: шанс выиграть бой атакой uid на occ (слот slot): лучший из вариантов «без карты» и «одна своя карта»
 ## первым ходом обмена (см. _choose_hard). gate_id — предполагаемая карта закрытых ворот соперника (&"" — как видно).
 func _attack_win_prob(view: MatchState, uid: int, occ: int, slot: int, gate_id: StringName = &"") -> float:
-	var keep: StringName = view.slots[slot].card_id
 	if gate_id != &"":
+		view = view.duplicate_full()
 		view.slots[slot].card_id = gate_id
 	var r: BattleResult = PowerCalc.compute_seq(view, uid, occ, slot, [])
 	var best: float = 0.0
 	if _margin(r, 0) > 0.0:
 		best = 1.0 - _flip_prob(view, r, 0)
-	var d: CreatureDef = CardDB.creature(view.creatures[uid].def_id)
 	for id in view.players[player].ability_hand:
 		var c: CardDef = CardDB.card(id)
-		if c == null or CardEffects.is_fusion(c) or CardEffects.moment(c) == &"landing":
-			continue
-		var sp: StringName = CardEffects.species_lock(c)
-		var lk: int = CardEffects.lock_attr(c)
-		if (sp != &"" and sp != d.species) or (lk >= 0 and lk != d.attribute):
+		if _my_plays_left(view, r, 0) <= 0 or not _forecast_legal(view, r, id, 0):
 			continue
 		var r2: BattleResult = _with_card(view, r, id, 0)
 		if _margin(r2, 0) <= 0.0:
 			continue
 		var cost: float = CARD_COST_RETURNS if CardEffects.returns_to_hand(c) else CARD_COST
 		best = maxf(best, 1.0 - _flip_prob(view, r2, 0) - cost)
-	view.slots[slot].card_id = keep
 	return best
 
 
@@ -561,12 +580,19 @@ func _field_of(c: CreatureState) -> StringName:
 func _exposure(view: MatchState, uid: int, slot: int, extra: StringName = &"") -> float:
 	var worst: float = 0.0
 	var bp: Array = [[1, extra]] if extra != &"" else []
+	var ready: Array[int] = []
 	for fu in view.players[1 - player].creature_uids:
 		var f: CreatureState = view.creatures[fu]
-		if not f.alive or f.slot >= 0 or f.used:
-			continue
+		if f.alive and f.slot < 0 and not f.used:
+			ready.append(fu)
+	if ready.is_empty():
+		for fu in view.players[1 - player].creature_uids:
+			var f: CreatureState = view.creatures[fu]
+			if f.alive and f.slot >= 0:
+				ready.append(fu)
+	for fu in ready:
 		var r: BattleResult = PowerCalc.compute_seq(view, fu, uid, slot, bp)
-		var m: float = float(r.powers[0] - r.powers[1])
+		var m: float = _margin(r, 0)
 		if m > 0.0:
 			worst = maxf(worst, 150.0 + m * 0.5)
 	return worst

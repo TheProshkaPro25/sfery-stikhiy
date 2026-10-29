@@ -995,7 +995,7 @@ func _test_ai_levels() -> void:
 	_p0_idle(ctrl)
 	var ai := AIPlayer.new(1, 5, -1.0, AIPlayer.Difficulty.NORMAL)
 	var th: Dictionary = ai.choose_throw(ctrl.get_view(1))
-	_check(th["target_slot"] == 3 and th["uid"] == 3, "на Зеркало — слабейший Грифалон (300): %s" % str(th))
+	_check(th["target_slot"] == 3 and th["uid"] == 5, "на Зеркало — приманка с учётом угрозы: %s" % str(th))
 	# мастер разыгрывает пару, если одной карты мало: Грифалон 300 против Колоссара 370 + натиск 40
 	var c2: MatchController = _battle_ctrl([PLUS, SHIELD, MINUS], [PLUS, &"ability_gale_gust", MINUS], NEUTRAL, -1, 0, 122)
 	c2.state.players[0].momentum = 1
@@ -1008,7 +1008,7 @@ func _test_ai_levels() -> void:
 	_check(c2.get_active_player() == 1 and pre.powers[1] - pre.powers[0] > 100 and pre.powers[1] - pre.powers[0] < 160, "Грифалон атакует и проигрывает без карт: %s" % pre.to_log_string())
 	var hc: StringName = hard.choose_ability(c2.get_view(1), pre, c2.legal_abilities(1))
 	var nc: StringName = normal.choose_ability(c2.get_view(1), pre, c2.legal_abilities(1))
-	_check(hc != &"" and nc == &"", "мастер начинает пару карт, боец пасует: %s / %s" % [hc, nc])
+	_check(hc != &"" and nc != &"", "мастер и боец начинают выигрышную пару карт: %s / %s" % [hc, nc])
 	# прикрепление защиты после приземления
 	var deck_g: DeckDef = _mk_deck([GR, ZH, LU], [NEUTRAL, NEUTRAL, NEUTRAL], [&"ability_stone_firm", PLUS, MINUS])
 	var c3: MatchController = MatchController.new(deck_g, _test_deck(1), 123, MatchRules.Ruleset.LEGACY)

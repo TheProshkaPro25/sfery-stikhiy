@@ -24,6 +24,7 @@ var _extent := 1.5
 var _flyer := false
 var _phase := 0.0
 var _blend := 0.0
+var _hover_blend := 0.0
 var _color := Color.WHITE
 var _meshes: Array[MeshInstance3D] = []
 var _player: AnimationPlayer
@@ -95,6 +96,11 @@ func get_extent() -> float:
 	return _extent
 
 
+func get_hover_height() -> float:
+	var ratio: float = {&"dragnar": 0.19, &"grifalon": 0.24, &"gorgul": 0.27}.get(_species, 0.20)
+	return _height * ratio if _flyer else 0.0
+
+
 func _collect(n: Node) -> void:
 	if n is MeshInstance3D:
 		_meshes.append(n)
@@ -121,6 +127,7 @@ func reset() -> void:
 	fx_roll = 0.0
 	fx_yaw = 0.0
 	_blend = 0.0
+	_hover_blend = 0.0
 	_flash_duration = 0.0
 	for mesh in _meshes:
 		mesh.material_overlay = null
@@ -149,6 +156,7 @@ func _process(delta: float) -> void:
 	if _support != null: _support.restore()
 	_clock += delta
 	_blend = move_toward(_blend, 1.0 if idle_on and _action == &"" else 0.0, delta * 3.5)
+	_hover_blend = move_toward(_hover_blend, 1.0 if idle_on or _action != &"" else 0.0, delta * 3.5)
 	if _action == &"":
 		if _player != null:
 			_player.advance(delta)
@@ -175,7 +183,8 @@ func _apply(now: float) -> void:
 	var t := now + _phase
 	var procedural := _blend if _player == null else 0.0
 	var breath := sin(t * 1.7)
-	var lift := (0.6 + 0.4 * sin(t * 1.3)) * _height * 0.025 * _blend if _flyer else 0.0
+	# Заметный постоянный просвет над воротами; волна только мягко меняет высоту.
+	var lift := (get_hover_height() + 0.016 * _height * sin(t * 1.3)) * _hover_blend if _flyer else 0.0
 	position = _base + fx_pos + Vector3(0, lift, 0)
 	scale = Vector3(1.0 - breath * 0.003 * procedural, 1.0 + breath * 0.006 * procedural, 1.0 - breath * 0.003 * procedural) * fx_scale
 	rotation = Vector3(fx_pitch + sin(t * 0.7) * 0.006 * procedural, fx_yaw, fx_roll + sin(t * 0.8) * 0.006 * procedural)

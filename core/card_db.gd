@@ -9,6 +9,8 @@ static var _cards: Dictionary = {}
 static var _creature_order: Array[StringName] = []
 static var _arena_order: Array[StringName] = []
 static var _ability_order: Array[StringName] = []
+const RARE_SHADOW_ID: StringName = &"creature_likorez_shadow"
+const RARE_ENCOUNTER_CHANCE: float = 0.10
 
 
 static func load_all() -> void:
@@ -22,6 +24,11 @@ static func load_all() -> void:
 	for d in species_creatures():
 		_creatures[String(d.id)] = d
 		_creature_order.append(d.id)
+	# Особая встреча: не входит в обычный пул и меню выбора игрока.
+	var rare := CreatureDef.make(RARE_SHADOW_ID, "Ликорез Тени", Attr.A.SHADOW, 370, Color("674085"))
+	rare.species = &"likorez"
+	rare.archetype = "sixarm"
+	_creatures[String(rare.id)] = rare
 	for row in GameData.CARDS:
 		var c: CardDef = CardDef.make(StringName(row["id"]), String(row["name"]), int(row["kind"]), StringName(row["effect"]), (row["params"] as Dictionary).duplicate(), String(row["text"]))
 		if c.kind == CardDef.Kind.ARENA and not c.params.has("g"):
@@ -226,6 +233,8 @@ static func deck_error(creatures: Array, arena: Array, abilities: Array) -> Stri
 
 ## Имя вида по id («Драгнар»).
 static func species_name(sp: StringName) -> String:
+	if sp == &"likorez":
+		return "Ликорез"
 	for row in GameData.SPECIES:
 		if StringName(row["id"]) == sp:
 			return String(row["name"])
@@ -250,6 +259,23 @@ static func random_deck(rng: RandomNumberGenerator) -> DeckDef:
 	for cls in ABILITY_CLASSES:
 		abil.append_array(_pick(cards_of(CardDef.Kind.ABILITY, cls, el, species), 1, rng))
 	return build_deck(team, arena, abil)
+
+
+## Один независимый бросок на матч: 10% команд соперника содержат Ликореза.
+## Вся команда Тени, ровно три разных существа и обычный лимит силы/карт.
+static func opponent_deck(rng: RandomNumberGenerator) -> DeckDef:
+	load_all()
+	if rng.randf() >= RARE_ENCOUNTER_CHANCE:
+		return random_deck(rng)
+	var pool := creatures_of(Attr.A.SHADOW)
+	var pairs: Array = []
+	for i in range(pool.size()):
+		for j in range(i + 1, pool.size()):
+			var ids: Array[StringName] = [RARE_SHADOW_ID, pool[i], pool[j]]
+			if team_power(ids) <= GameData.TEAM_POWER_LIMIT:
+				pairs.append(ids)
+	var team: Array = pairs[rng.randi_range(0, pairs.size() - 1)]
+	return deck_from_creatures(team, rng)
 
 
 ## Все существа в стабильном порядке (для меню выбора).

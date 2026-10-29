@@ -431,7 +431,7 @@ func _build_decks() -> Array[DeckDef]:
 	if mine == null:
 		push_warning("Недопустимая команда, берётся пресет")
 		mine = CardDB.preset_deck(0)
-	return [mine, CardDB.random_deck(rng)]
+	return [mine, CardDB.opponent_deck(rng)]
 
 
 ## uid -> определение и владелец. Существа в get_view не маскируются, uid не меняются за матч.

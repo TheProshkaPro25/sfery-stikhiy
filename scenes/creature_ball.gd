@@ -216,7 +216,7 @@ func setup(d: CreatureDef, u: int) -> void:
 		_figure.add_child(_anim)
 		_anim.set_base(Vector3(0, -RADIUS, 0))
 		_anim.set_model(model, d)
-		_label.position = Vector3(0, float(model.get_meta("height", 1.5)) - RADIUS + 0.35 * Arena.WORLD, 0)
+		_label.position = Vector3(0, _anim.get_height() + _anim.get_hover_height() - RADIUS + 0.35 * Arena.WORLD, 0)
 	else:
 		_anim = null
 	_label.text = txt
