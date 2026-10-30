@@ -17,14 +17,18 @@ func run():
  for id in ids:
   # A raw GLB backup lives in an ignored directory and has no .import file.
   # Load it explicitly for reproducible before/after comparisons.
+  var source_path := ''
   for arg in args:
-   if arg.begins_with('source='):
-    var document:=GLTFDocument.new();var state:=GLTFState.new()
-    assert(document.append_from_file(arg.trim_prefix('source='),state)==OK)
-    var original:=document.generate_scene(state);var packed:=PackedScene.new()
-    assert(packed.pack(original)==OK);original.free()
-    CreatureModels._scenes['hd:'+String(id).trim_prefix('creature_')]=packed
-  var a:=CreatureAnim.new();stage.add_child(a);a.set_process(false);a.set_model(CreatureModels.build(CardDB.creature(id)),CardDB.creature(id));a.idle_on=true
+   if arg.begins_with('source-dir='):source_path=arg.trim_prefix('source-dir=')+'/'+String(id).trim_prefix('creature_')+'.glb'
+   elif arg.begins_with('source='):source_path=arg.trim_prefix('source=')
+  if not source_path.is_empty():
+   var document:=GLTFDocument.new();var state:=GLTFState.new()
+   assert(document.append_from_file(source_path,state)==OK)
+   var original:=document.generate_scene(state);var packed:=PackedScene.new()
+   assert(packed.pack(original)==OK);original.free()
+   CreatureModels._scenes['hd:'+String(id).trim_prefix('creature_')]=packed
+  var a:=CreatureAnim.new();stage.add_child(a);a.set_process(false);a.set_model(CreatureModels.build(CardDB.creature(id)),CardDB.creature(id));a.idle_on=true;a._phase=0;a._clock=0
+  if args.has("no-support"):a._support=null
   var surface:=ShaderMaterial.new();surface.shader=Shader.new();surface.shader.code='shader_type spatial; render_mode cull_disabled,specular_disabled; void fragment(){ALBEDO=FRONT_FACING?vec3(.65,.7,.75):vec3(.25,.55,.85);ROUGHNESS=1.;}'
   var hidden:=ShaderMaterial.new();hidden.shader=Shader.new();hidden.shader.code='shader_type spatial; void fragment(){discard;}'
   var stack:Array[Node]=[a]
@@ -38,8 +42,16 @@ func run():
   var pose_frames:=24
   for arg in args:
    if arg.begins_with('frames='):pose_frames=int(arg.trim_prefix('frames='))
-  for pose in ['rest','idle','appear','attack']:
-   a.reset();a.idle_on=pose!='rest'
+  var poses:PackedStringArray = ['rest','idle','appear','attack']
+  for arg in args:
+   if arg.begins_with('poses='):poses=arg.trim_prefix('poses=').split(',')
+  for pose in poses:
+   a.reset();a._clock=0;a.idle_on=pose!='rest'
+   if pose=='rest' and args.has('bind-rest'):
+    var bones:Array[Node]=[a]
+    while not bones.is_empty():
+     var node:Node=bones.pop_back();bones.append_array(node.get_children())
+     if node is Skeleton3D:node.reset_bone_poses()
    if pose=='appear':a.appear()
    if pose=='attack':a.lunge(h*.22)
    if pose!='rest':
@@ -48,7 +60,10 @@ func run():
    var distance:=box.size.length()*.5/sin(deg_to_rad(cam.fov*.5))*1.12
    for side in range(4 if batch else 8):
     var angle:=side*TAU/(4 if batch else 8)
-    cam.look_at_from_position(center+Vector3(sin(angle),.16,cos(angle)).normalized()*distance,center)
+    var elevation:=.16
+    for arg in args:
+     if arg.begins_with("elevation="):elevation=float(arg.trim_prefix("elevation="))
+    cam.look_at_from_position(center+Vector3(sin(angle),elevation,cos(angle)).normalized()*distance,center)
     await process_frame;await process_frame;RenderingServer.force_draw(false)
     root.get_texture().get_image().save_png('%s/%s_%s_%d.png'%[out,id,pose,side] if batch or ids.size()>1 else '%s/%s_%d.png'%[out,pose,side])
   print('SURFACE REVIEW ',id)

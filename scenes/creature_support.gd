@@ -15,11 +15,21 @@ var last_ground_errors: Array[float] = []
 func configure(owner: Node3D, model: Node3D) -> void:
 	actor = owner
 	var stack: Array[Node] = [model]
+	var rigid_rear := false
+	var rigid_limbs := false
+	var turn_stance := false
+	var middle_stride := 1.0
+	var stride_by_bone: Dictionary = {}
 	while not stack.is_empty():
 		var n: Node = stack.pop_back()
+		var extras: Dictionary = n.get_meta("extras", {})
+		rigid_rear = rigid_rear or bool(extras.get("sfery_rigid_rear", false))
+		rigid_limbs = rigid_limbs or bool(extras.get("sfery_rigid_limbs", false))
+		turn_stance = turn_stance or bool(extras.get("sfery_turn_stance", false))
+		middle_stride = float(extras.get("sfery_middle_stride", middle_stride))
+		stride_by_bone.merge(extras.get("sfery_stride_by_bone", {}), true)
 		if n is Skeleton3D:
 			skeleton = n
-			break
 		for child in n.get_children(): stack.append(child)
 	if skeleton == null: return
 	hip = skeleton.find_bone("hips")
@@ -41,6 +51,12 @@ func configure(owner: Node3D, model: Node3D) -> void:
 			var pole := mid - start.lerp(end, start.distance_to(mid) / maxf(start.distance_to(mid) + mid.distance_to(end), 0.001))
 			if pole.length() < 0.001: pole = Vector3(0, 0, -1 if family[3] else 1)
 			limbs.append({"a":a,"b":b,"c":c,"anchor":end,"pole":mid+pole.normalized()*actor.get_height()*0.3,"side":side,"front":family[3],"rear":family[0] == "rear_thigh.","basis":(to_actor.basis*skeleton.get_bone_global_rest(c).basis).orthonormalized()})
+			if rigid_limbs or (rigid_rear and family[0] == "rear_thigh."): limbs[-1]["rigid"] = true
+			if turn_stance or limbs[-1].get("rigid",false): limbs[-1]["turn_stance"] = true
+			if not family[3] and family[0] != "rear_thigh.": limbs[-1]["stride_scale"] = middle_stride
+			# Asymmetric sculpts can need different clearance for each leg.
+			var bone_name: String = family[0] + side
+			if stride_by_bone.has(bone_name): limbs[-1]["stride_scale"] = float(stride_by_bone[bone_name])
 	last_parent = _parent_transform().origin
 	if not actor._flyer and not limbs.is_empty(): _collect_soles(model)
 
@@ -108,13 +124,27 @@ func apply(delta: float) -> void:
 				reaction = strength * sin(t * PI)
 			var fold := 0.68 + 0.10 * drift + 0.045 * flap + reaction - 0.46 * reach
 			var upper := -0.42 - 0.07 * drift - 0.025 * flap - reaction * 0.45 + 0.37 * reach
+			if actor._species in [&"dragnar", &"gorgul"]:
+				# The sculpt and clips already contain the tucked knee pose.
+				# A second knee fold collapses the continuous shin skin. Sway the
+				# whole authored leg together, retaining the clip's articulation.
+				fold = 0.0
+				var attack_reach := 0.23 if actor._species == &"dragnar" else 0.12
+				upper = 0.025 * drift + 0.012 * flap + attack_reach * reach - 0.1 * reaction
 			var axis: Vector3 = (skeleton.global_basis.inverse() * actor.global_basis.x).normalized()
 			_set_global_rotation(limb.a, Basis(axis, upper) * upper_basis)
-			_set_global_rotation(limb.b, Basis(axis, fold) * lower_basis)
-			_set_global_rotation(limb.c, foot_basis)
+			# fold is the knee's additional bend relative to the thigh.
+			# Applying it as a global angle opposed the thigh and increased
+			# the bend across the shared thigh/shin skin transition.
+			_set_global_rotation(limb.b, Basis(axis, upper + fold) * lower_basis)
+			_set_global_rotation(limb.c, Basis(axis, upper + fold) * foot_basis)
 			continue
 		var offset := Vector3.ZERO
 		var anchor: Vector3 = limb.anchor
+		if limb.get("turn_stance", false):
+			# Turn the planted stance with the creature's entrance yaw. Holding
+			# its feet in the unturned frame twists the solid leg roots into the shell.
+			anchor = Basis(Vector3.UP,actor.fx_yaw)*anchor
 		if action == &"attack":
 			var distance: float = actor._distance
 			if actor._species == &"klykar":
@@ -125,7 +155,9 @@ func apply(delta: float) -> void:
 				offset.y = h*(0.055 if limb.front else 0.075)*air
 			elif actor._species == &"rogozhuk":
 				var drive := _ease((phase-0.12)/0.21)*(1-_ease((phase-0.56)/0.44))
-				offset.z = distance*drive
+				# Broad, solid middle legs need a shorter step than the leading
+				# pair to keep clearance below the continuous body between sockets.
+				offset.z = distance*drive*float(limb.get("stride_scale",1.0))
 				offset.y = h*0.025*sin(clampf((phase-(0.1 if limb.front else 0.18))/0.28,0,1)*PI)
 			else:
 				var lead: bool = limb.side == "L"
@@ -143,10 +175,14 @@ func apply(delta: float) -> void:
 			target += parent_velocity.normalized()*forward
 			if gait >= 0.6: target.y += h*0.035*sin((gait-0.6)/0.4*PI)
 		var pole: Vector3 = parent*(actor._base+limb.pole)
+		if limb.get("turn_stance", false):
+			pole = parent*(actor._base+Basis(Vector3.UP,actor.fx_yaw)*limb.pole)
 		_solve(limb,target,pole)
 		# Опорная стопа сохраняет ориентацию относительно пола, а не наклоняется с туловищем.
-		var desired: Basis = skeleton.global_basis.inverse()*parent.basis*limb.basis
-		_set_global_rotation(limb.c,desired.orthonormalized())
+		var stance_basis := parent.basis
+		if limb.get("turn_stance", false): stance_basis *= Basis(Vector3.UP,actor.fx_yaw)
+		var desired: Basis = skeleton.global_basis.inverse()*stance_basis*limb.basis
+		if not limb.get("rigid", false): _set_global_rotation(limb.c,desired.orthonormalized())
 		if limb.has("sole") and not limb.sole.is_empty():
 			var floor_y: float = (parent*actor._base).y + offset.y
 			# Исправляем опору по поверхности подошвы, а не по центру кости голеностопа.
@@ -155,7 +191,7 @@ func apply(delta: float) -> void:
 				if absf(ground_error) < h*0.001: break
 				target.y -= clampf(ground_error,-h*0.06,h*0.06)*0.85
 				_solve(limb,target,pole)
-				_set_global_rotation(limb.c,desired.orthonormalized())
+				if not limb.get("rigid", false): _set_global_rotation(limb.c,desired.orthonormalized())
 				ground_error = _sole_height(limb)-floor_y
 			last_ground_errors.append(ground_error)
 
@@ -186,6 +222,16 @@ func _solve(limb: Dictionary, world_target: Vector3, world_pole: Vector3) -> voi
 	var a: Transform3D = skeleton.get_bone_global_pose(limb.a)
 	var b: Transform3D = skeleton.get_bone_global_pose(limb.b)
 	var c: Transform3D = skeleton.get_bone_global_pose(limb.c)
+	if limb.get("rigid", false):
+		_save(limb.b);_save(limb.c)
+		skeleton.set_bone_pose(limb.b,skeleton.get_bone_rest(limb.b))
+		skeleton.set_bone_pose(limb.c,skeleton.get_bone_rest(limb.c))
+		c = skeleton.get_bone_global_pose(limb.c)
+		# A solid stone appendage rocks at its socket without rubber-like knee
+		# deformation. The same sole solver still plants and steps the whole leg.
+		var rotation := Quaternion((c.origin-a.origin).normalized(),(target-a.origin).normalized())
+		_set_global_rotation(limb.a,Basis(rotation)*a.basis.orthonormalized())
+		return
 	var l1 := a.origin.distance_to(b.origin)
 	var l2 := b.origin.distance_to(c.origin)
 	if minf(l1,l2) < 0.00001: return

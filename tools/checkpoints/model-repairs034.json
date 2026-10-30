@@ -1,0 +1,55 @@
+{
+  "status": "accepted targeted Stone repair; full model still has recorded anterior/root overlaps",
+  "assets": {
+    "assets/creatures_hd/rogozhuk_stone.glb": "3079d002a63ab10b012e5b8a6c629c25bc57988f560599a606dd0a8707041ce1",
+    "scenes/creature_support.gd": "f999f46d500e122981db40a0cbdbd881dcdc9fee6a6800afb574233d4568adef"
+  },
+  "source": "tools/_tmp/repair033/crown-rebuilt/rogozhuk_stone.glb",
+  "candidate": "tools/_tmp/repair034/candidate/rogozhuk_stone.glb",
+  "reproducible_scripts": [
+    "tools/models/cut_stone_rear.py",
+    "tools/models/extract_stone_leg_donors.py",
+    "tools/models/repair_stone_rear.py"
+  ],
+  "new_rear": {
+    "action_poses": 67,
+    "action_intersections": 0,
+    "installed_idle_poses": 121,
+    "installed_idle_intersections": 0,
+    "minimum_area_ratio": 0.9985169172286987,
+    "attachment": "rest, idle90, appear32, attack20/40, hit18 passed"
+  },
+  "retained_body": {
+    "worst_total": 740,
+    "worst_changed_faces": 25,
+    "idle_total": 0,
+    "idle_changed_faces": 0,
+    "limitation": "Some original anterior/root skin overlaps remain, including contacts with closure faces. This is not whole-model intersection-free acceptance."
+  },
+  "tests": {
+    "core": [
+      1180,
+      0
+    ],
+    "animation": [
+      435,
+      0
+    ],
+    "support": [
+      1893,
+      0
+    ],
+    "flight": [
+      45360,
+      0
+    ],
+    "rig_models": 48,
+    "rig_bones": 1197,
+    "raw_import_binding_models": 20,
+    "binding_failures": 0,
+    "beetle_integrity": "6/6",
+    "stone_integrity": "passed"
+  },
+  "preview": "build/stone-repair034-preview.jpg",
+  "release": "No new executable or publication; version remains 0.2.8"
+}

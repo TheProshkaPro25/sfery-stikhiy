@@ -1,0 +1,77 @@
+{
+  "status": "TAIL CONNECTION REPAIRED; other model complaints remain open",
+  "date": "2026-10-30",
+  "user_hypothesis": "mesh/skeleton desynchronization",
+  "binding_audit": {
+    "models": 20,
+    "stale_imports": 0,
+    "missing_or_mismatched_bindings": 0,
+    "max_rest_bind_error": 4.17232513427734e-07,
+    "scope": "fresh Godot load, not a previously running game instance"
+  },
+  "tail_fix": {
+    "variants": 6,
+    "sampled_action_poses": 402,
+    "pairs_touching_caps": 0,
+    "pairs_touching_tail_tip": 0,
+    "protected_geometry_uv_triangles": "unchanged",
+    "skeleton_rest_bind_and_clips": "unchanged",
+    "weights": "anatomical assignment corrected at both cut surfaces"
+  },
+  "remaining_lower_body_overlaps": {
+    "creature_levian_fire": {
+      "idle_max": 0,
+      "all_actions_max": 13
+    },
+    "creature_levian_gale": {
+      "idle_max": 0,
+      "all_actions_max": 6
+    },
+    "creature_levian_light": {
+      "idle_max": 0,
+      "all_actions_max": 109
+    },
+    "creature_levian_shadow": {
+      "idle_max": 0,
+      "all_actions_max": 131
+    },
+    "creature_levian_stone": {
+      "idle_max": 1,
+      "all_actions_max": 149
+    },
+    "creature_levian_tide": {
+      "idle_max": 1,
+      "all_actions_max": 86
+    }
+  },
+  "validation": {
+    "core": [
+      1180,
+      0
+    ],
+    "animation": [
+      435,
+      0
+    ],
+    "rig_integrity": "48 models,1197 bones passed",
+    "tail_integrity": "all6 passed",
+    "installed_gpu": "idle120 and attack24,8views,6variants"
+  },
+  "open": [
+    "Dragnar lower feet in idle (user clarified this turn)",
+    "Stone beetle crown and rear-leg shape",
+    "separate anterior lower-body intersections in Levian actions",
+    "Light beetle inherited overlaps outside repaired rear plates"
+  ],
+  "published": false,
+  "version_changed": false,
+  "evidence": "tools/_tmp/repair031",
+  "sha256": {
+    "assets/creatures_hd/levian_fire.glb": "93ba60c06ade700a40ce3800a4edb226905e6103dcf102f37066726ac114e439",
+    "assets/creatures_hd/levian_gale.glb": "bab8f168f17c84fee2e8742aaa271cc9ac3b6bd621988161ce0a52a2db3efcd1",
+    "assets/creatures_hd/levian_light.glb": "b1dfb2996d52077fae45c1292ea445e53b6a8502872cc7cdc59c661ae8434703",
+    "assets/creatures_hd/levian_shadow.glb": "6d7b93ecfd04ad8fb4e554a9907e37703e3c49598df9013a89eea78e2303d169",
+    "assets/creatures_hd/levian_stone.glb": "ba27042170f5ac9a64434ca9168f14e6f1fecc8c01400d7b5af722b2c76dfe85",
+    "assets/creatures_hd/levian_tide.glb": "983a2b88874a67b4dbe7192444e7d030507daef86130ecb0d8503e0ae5aba76e"
+  }
+}

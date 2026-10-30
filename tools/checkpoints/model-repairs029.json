@@ -1,0 +1,828 @@
+{
+  "status": "REJECTED on visual recheck: remaining malformed surfaces and self-intersections",
+  "published_version_unchanged": "0.2.8",
+  "models": {
+    "assets/creatures_hd/dragnar_fire.glb": "2d759d92cc19566c5228e0ba913a7663fff934131b63f9295c4a84d92f47c6aa",
+    "assets/creatures_hd/dragnar_gale.glb": "d02f3a67084a9e3464716897c2ef5b24f5a53c7ce596c10bf007049d2c97b830",
+    "assets/creatures_hd/dragnar_light.glb": "8a82bcf7f89287daefd65baa25e96a5b1e1c4503b73ea3fa8817c83fcdd81f96",
+    "assets/creatures_hd/dragnar_shadow.glb": "ec28cf12618f5a739fc7b9604d384cf560d23b5590f64491a1ec320de39b8470",
+    "assets/creatures_hd/dragnar_stone.glb": "1db9f2a935fc8731ad7bd274364c749e1622a965deacdfaf9c3e4285f5b2a72d",
+    "assets/creatures_hd/dragnar_tide.glb": "fc95ce7731cf5331c84bfee312f69d7e3e6019c33e04ba011b878fa8adea8b6b",
+    "assets/creatures_hd/gorgul_fire.glb": "128eb7948519337b63fb3349447194910d0cc82e44d2efe22fc0ca0d20a7f3b6",
+    "assets/creatures_hd/gorgul_gale.glb": "55d82a572aec50ffffcc3912b2fc448dec5db1176c819dd4e7b189d2611bd073",
+    "assets/creatures_hd/gorgul_light.glb": "799f7c1f34ee27382315e42ef71a7625c2491648e45a02d6be611cb712b86e5c",
+    "assets/creatures_hd/gorgul_shadow.glb": "d31399c990f0148444c0082bf2bcc5d362d43f0a5516e3e70285beeec9b6ed86",
+    "assets/creatures_hd/gorgul_stone.glb": "e1fd5c9a9c8fd8ff1b01cc670b7a004689f6051484443e7d0518c5fc788d9bca",
+    "assets/creatures_hd/gorgul_tide.glb": "10cde043d74620940f53baff371f27631cf50ecff07bb888ef46255baa017d8a",
+    "assets/creatures_hd/levian_fire.glb": "7ee22ae7687e927470be185718e1a82a4148995891c565071238ba758e5506b4",
+    "assets/creatures_hd/levian_gale.glb": "757d4360c845d785973ed0cb9970bdfad355c1db695962c731c0f0a423a2d83d",
+    "assets/creatures_hd/levian_light.glb": "034c9669a989ca431194c74909dd72491e4569c60742637ec37841cffddad7dd",
+    "assets/creatures_hd/levian_shadow.glb": "2f80ce514f29140e0dce21a745fa39e22008265cc94e0f22d072a45c1d28b19f",
+    "assets/creatures_hd/levian_stone.glb": "fdbd4a5ebbb84389edca3f8c1b81b25a3665e4dfb6177e4053bd8601d0133a47",
+    "assets/creatures_hd/levian_tide.glb": "41d2e81fea7f12f5a028c6e872fad74528c1c7c395c42a0186d14da7290259ce",
+    "assets/creatures_hd/rogozhuk_light.glb": "c8abacaeee91cc94ae15d18530a1a3b6fdf6a891c101a1517812779c486209dd",
+    "assets/creatures_hd/rogozhuk_stone.glb": "3ac53a634d1c7ba6debdf7fd9fac14e3efe268ed104b367afb5de804ce0ebc2c"
+  },
+  "tests": {
+    "core": [
+      1180,
+      0
+    ],
+    "flight": [
+      45360,
+      0
+    ],
+    "support": [
+      1893,
+      0
+    ],
+    "animation": [
+      435,
+      0
+    ],
+    "idle": [
+      374,
+      0
+    ],
+    "beetles": 6,
+    "tail_integrity": 6,
+    "light_attachment_poses": 6,
+    "autoplay": {
+      "matches": 2,
+      "turns": [
+        16,
+        16
+      ],
+      "battles": 9,
+      "exit": 0
+    }
+  },
+  "leg_surface": [
+    {
+      "id": "creature_dragnar_fire",
+      "worst": [
+        {
+          "action": "appear",
+          "frame": 8,
+          "max": 1.4144943952560425,
+          "p999": 1.2936903238296509,
+          "edges": 31314
+        },
+        {
+          "action": "appear",
+          "frame": 16,
+          "max": 1.400795340538025,
+          "p999": 1.2839841842651367,
+          "edges": 31314
+        },
+        {
+          "action": "hit",
+          "frame": 24,
+          "max": 1.3763538599014282,
+          "p999": 1.2772945165634155,
+          "edges": 31314
+        },
+        {
+          "action": "hit",
+          "frame": 30,
+          "max": 1.374558925628662,
+          "p999": 1.276135802268982,
+          "edges": 31314
+        },
+        {
+          "action": "hit",
+          "frame": 18,
+          "max": 1.3704333305358887,
+          "p999": 1.2726776599884033,
+          "edges": 31314
+        },
+        {
+          "action": "hit",
+          "frame": 36,
+          "max": 1.3658517599105835,
+          "p999": 1.2698534727096558,
+          "edges": 31314
+        },
+        {
+          "action": "hit",
+          "frame": 12,
+          "max": 1.3577475547790527,
+          "p999": 1.2625739574432373,
+          "edges": 31314
+        },
+        {
+          "action": "hit",
+          "frame": 42,
+          "max": 1.3517119884490967,
+          "p999": 1.259569764137268,
+          "edges": 31314
+        }
+      ]
+    },
+    {
+      "id": "creature_dragnar_gale",
+      "worst": [
+        {
+          "action": "hit",
+          "frame": 30,
+          "max": 1.6768072843551636,
+          "p999": 1.4676886796951294,
+          "edges": 33596
+        },
+        {
+          "action": "hit",
+          "frame": 24,
+          "max": 1.676697850227356,
+          "p999": 1.4678692817687988,
+          "edges": 33596
+        },
+        {
+          "action": "appear",
+          "frame": 16,
+          "max": 1.670204758644104,
+          "p999": 1.4604005813598633,
+          "edges": 33596
+        },
+        {
+          "action": "appear",
+          "frame": 8,
+          "max": 1.6677892208099365,
+          "p999": 1.456838607788086,
+          "edges": 33596
+        },
+        {
+          "action": "hit",
+          "frame": 36,
+          "max": 1.6598179340362549,
+          "p999": 1.4555063247680664,
+          "edges": 33596
+        },
+        {
+          "action": "hit",
+          "frame": 18,
+          "max": 1.6582993268966675,
+          "p999": 1.4551862478256226,
+          "edges": 33596
+        },
+        {
+          "action": "appear",
+          "frame": 56,
+          "max": 1.6357909440994263,
+          "p999": 1.4382768869400024,
+          "edges": 33596
+        },
+        {
+          "action": "hit",
+          "frame": 42,
+          "max": 1.629347562789917,
+          "p999": 1.4340429306030273,
+          "edges": 33596
+        }
+      ]
+    },
+    {
+      "id": "creature_dragnar_light",
+      "worst": [
+        {
+          "action": "hit",
+          "frame": 30,
+          "max": 1.6556447744369507,
+          "p999": 1.5218329429626465,
+          "edges": 33431
+        },
+        {
+          "action": "hit",
+          "frame": 24,
+          "max": 1.6551181077957153,
+          "p999": 1.5215566158294678,
+          "edges": 33431
+        },
+        {
+          "action": "appear",
+          "frame": 16,
+          "max": 1.6486575603485107,
+          "p999": 1.5112875699996948,
+          "edges": 33431
+        },
+        {
+          "action": "appear",
+          "frame": 8,
+          "max": 1.6458300352096558,
+          "p999": 1.5058162212371826,
+          "edges": 33431
+        },
+        {
+          "action": "hit",
+          "frame": 36,
+          "max": 1.6402612924575806,
+          "p999": 1.5082277059555054,
+          "edges": 33431
+        },
+        {
+          "action": "hit",
+          "frame": 18,
+          "max": 1.6376605033874512,
+          "p999": 1.5074857473373413,
+          "edges": 33431
+        },
+        {
+          "action": "appear",
+          "frame": 56,
+          "max": 1.618390440940857,
+          "p999": 1.488129734992981,
+          "edges": 33431
+        },
+        {
+          "action": "hit",
+          "frame": 42,
+          "max": 1.6122208833694458,
+          "p999": 1.4830002784729004,
+          "edges": 33431
+        }
+      ]
+    },
+    {
+      "id": "creature_dragnar_shadow",
+      "worst": [
+        {
+          "action": "hit",
+          "frame": 24,
+          "max": 1.8133188486099243,
+          "p999": 1.539395809173584,
+          "edges": 32385
+        },
+        {
+          "action": "hit",
+          "frame": 30,
+          "max": 1.8112345933914185,
+          "p999": 1.537482500076294,
+          "edges": 32385
+        },
+        {
+          "action": "appear",
+          "frame": 16,
+          "max": 1.7944068908691406,
+          "p999": 1.5147995948791504,
+          "edges": 32385
+        },
+        {
+          "action": "hit",
+          "frame": 18,
+          "max": 1.7923059463500977,
+          "p999": 1.525059700012207,
+          "edges": 32385
+        },
+        {
+          "action": "appear",
+          "frame": 8,
+          "max": 1.7894763946533203,
+          "p999": 1.5081037282943726,
+          "edges": 32385
+        },
+        {
+          "action": "hit",
+          "frame": 36,
+          "max": 1.7878061532974243,
+          "p999": 1.5205583572387695,
+          "edges": 32385
+        },
+        {
+          "action": "appear",
+          "frame": 56,
+          "max": 1.7559481859207153,
+          "p999": 1.4977058172225952,
+          "edges": 32385
+        },
+        {
+          "action": "hit",
+          "frame": 12,
+          "max": 1.7497000694274902,
+          "p999": 1.495530128479004,
+          "edges": 32385
+        }
+      ]
+    },
+    {
+      "id": "creature_dragnar_stone",
+      "worst": [
+        {
+          "action": "hit",
+          "frame": 24,
+          "max": 1.990615725517273,
+          "p999": 1.676857829093933,
+          "edges": 33735
+        },
+        {
+          "action": "hit",
+          "frame": 30,
+          "max": 1.986338496208191,
+          "p999": 1.6758215427398682,
+          "edges": 33735
+        },
+        {
+          "action": "hit",
+          "frame": 18,
+          "max": 1.9682896137237549,
+          "p999": 1.659881353378296,
+          "edges": 33735
+        },
+        {
+          "action": "hit",
+          "frame": 36,
+          "max": 1.9576669931411743,
+          "p999": 1.6586562395095825,
+          "edges": 33735
+        },
+        {
+          "action": "appear",
+          "frame": 16,
+          "max": 1.9528894424438477,
+          "p999": 1.6583935022354126,
+          "edges": 33735
+        },
+        {
+          "action": "appear",
+          "frame": 8,
+          "max": 1.9360504150390625,
+          "p999": 1.6520018577575684,
+          "edges": 33735
+        },
+        {
+          "action": "hit",
+          "frame": 12,
+          "max": 1.9205442667007446,
+          "p999": 1.625480055809021,
+          "edges": 33735
+        },
+        {
+          "action": "appear",
+          "frame": 56,
+          "max": 1.918007254600525,
+          "p999": 1.6303672790527344,
+          "edges": 33735
+        }
+      ]
+    },
+    {
+      "id": "creature_dragnar_tide",
+      "worst": [
+        {
+          "action": "appear",
+          "frame": 8,
+          "max": 1.3651920557022095,
+          "p999": 1.2723591327667236,
+          "edges": 32980
+        },
+        {
+          "action": "appear",
+          "frame": 16,
+          "max": 1.3539304733276367,
+          "p999": 1.2694973945617676,
+          "edges": 32980
+        },
+        {
+          "action": "hit",
+          "frame": 30,
+          "max": 1.3338334560394287,
+          "p999": 1.2677245140075684,
+          "edges": 32980
+        },
+        {
+          "action": "hit",
+          "frame": 24,
+          "max": 1.3333340883255005,
+          "p999": 1.2682806253433228,
+          "edges": 32980
+        },
+        {
+          "action": "hit",
+          "frame": 18,
+          "max": 1.3261908292770386,
+          "p999": 1.261238932609558,
+          "edges": 32980
+        },
+        {
+          "action": "hit",
+          "frame": 36,
+          "max": 1.3259416818618774,
+          "p999": 1.261017084121704,
+          "edges": 32980
+        },
+        {
+          "action": "appear",
+          "frame": 56,
+          "max": 1.3148506879806519,
+          "p999": 1.2474321126937866,
+          "edges": 32980
+        },
+        {
+          "action": "hit",
+          "frame": 12,
+          "max": 1.3146231174468994,
+          "p999": 1.250878930091858,
+          "edges": 32980
+        }
+      ]
+    },
+    {
+      "id": "creature_gorgul_fire",
+      "worst": [
+        {
+          "action": "appear",
+          "frame": 8,
+          "max": 1.3697983026504517,
+          "p999": 1.2464325428009033,
+          "edges": 36175
+        },
+        {
+          "action": "appear",
+          "frame": 16,
+          "max": 1.3676669597625732,
+          "p999": 1.2400693893432617,
+          "edges": 36175
+        },
+        {
+          "action": "hit",
+          "frame": 30,
+          "max": 1.3613250255584717,
+          "p999": 1.2307817935943604,
+          "edges": 36175
+        },
+        {
+          "action": "hit",
+          "frame": 36,
+          "max": 1.3612706661224365,
+          "p999": 1.2270516157150269,
+          "edges": 36175
+        },
+        {
+          "action": "appear",
+          "frame": 56,
+          "max": 1.3592242002487183,
+          "p999": 1.22280752658844,
+          "edges": 36175
+        },
+        {
+          "action": "idle",
+          "frame": 120,
+          "max": 1.3563271760940552,
+          "p999": 1.2148898839950562,
+          "edges": 36175
+        },
+        {
+          "action": "idle",
+          "frame": 90,
+          "max": 1.3549394607543945,
+          "p999": 1.2189815044403076,
+          "edges": 36175
+        },
+        {
+          "action": "hit",
+          "frame": 24,
+          "max": 1.353183388710022,
+          "p999": 1.2287001609802246,
+          "edges": 36175
+        }
+      ]
+    },
+    {
+      "id": "creature_gorgul_gale",
+      "worst": [
+        {
+          "action": "appear",
+          "frame": 8,
+          "max": 1.652863621711731,
+          "p999": 1.4174697399139404,
+          "edges": 33612
+        },
+        {
+          "action": "appear",
+          "frame": 16,
+          "max": 1.6078914403915405,
+          "p999": 1.3752363920211792,
+          "edges": 33612
+        },
+        {
+          "action": "hit",
+          "frame": 18,
+          "max": 1.606865406036377,
+          "p999": 1.3743393421173096,
+          "edges": 33612
+        },
+        {
+          "action": "hit",
+          "frame": 12,
+          "max": 1.5893958806991577,
+          "p999": 1.364564061164856,
+          "edges": 33612
+        },
+        {
+          "action": "hit",
+          "frame": 24,
+          "max": 1.564206600189209,
+          "p999": 1.341448187828064,
+          "edges": 33612
+        },
+        {
+          "action": "brace",
+          "frame": 48,
+          "max": 1.559244990348816,
+          "p999": 1.3588846921920776,
+          "edges": 33612
+        },
+        {
+          "action": "hit",
+          "frame": 6,
+          "max": 1.5399240255355835,
+          "p999": 1.3325685262680054,
+          "edges": 33612
+        },
+        {
+          "action": "idle",
+          "frame": 60,
+          "max": 1.5353854894638062,
+          "p999": 1.3431516885757446,
+          "edges": 33612
+        }
+      ]
+    },
+    {
+      "id": "creature_gorgul_light",
+      "worst": [
+        {
+          "action": "appear",
+          "frame": 8,
+          "max": 1.6971838474273682,
+          "p999": 1.28573739528656,
+          "edges": 40396
+        },
+        {
+          "action": "appear",
+          "frame": 16,
+          "max": 1.68275785446167,
+          "p999": 1.2788618803024292,
+          "edges": 40396
+        },
+        {
+          "action": "hit",
+          "frame": 30,
+          "max": 1.656623125076294,
+          "p999": 1.263189435005188,
+          "edges": 40396
+        },
+        {
+          "action": "hit",
+          "frame": 24,
+          "max": 1.6527764797210693,
+          "p999": 1.2638965845108032,
+          "edges": 40396
+        },
+        {
+          "action": "hit",
+          "frame": 36,
+          "max": 1.6475049257278442,
+          "p999": 1.257312536239624,
+          "edges": 40396
+        },
+        {
+          "action": "hit",
+          "frame": 18,
+          "max": 1.6365227699279785,
+          "p999": 1.2609639167785645,
+          "edges": 40396
+        },
+        {
+          "action": "appear",
+          "frame": 56,
+          "max": 1.6364847421646118,
+          "p999": 1.2505806684494019,
+          "edges": 40396
+        },
+        {
+          "action": "idle",
+          "frame": 90,
+          "max": 1.627882480621338,
+          "p999": 1.2449564933776855,
+          "edges": 40396
+        }
+      ]
+    },
+    {
+      "id": "creature_gorgul_shadow",
+      "worst": [
+        {
+          "action": "idle",
+          "frame": 60,
+          "max": 1.4690974950790405,
+          "p999": 1.2900378704071045,
+          "edges": 41944
+        },
+        {
+          "action": "brace",
+          "frame": 48,
+          "max": 1.4636130332946777,
+          "p999": 1.283460021018982,
+          "edges": 41944
+        },
+        {
+          "action": "brace",
+          "frame": 6,
+          "max": 1.45033860206604,
+          "p999": 1.2721312046051025,
+          "edges": 41944
+        },
+        {
+          "action": "appear",
+          "frame": 8,
+          "max": 1.4079159498214722,
+          "p999": 1.2882989645004272,
+          "edges": 41944
+        },
+        {
+          "action": "hit",
+          "frame": 24,
+          "max": 1.4000567197799683,
+          "p999": 1.2777881622314453,
+          "edges": 41944
+        },
+        {
+          "action": "appear",
+          "frame": 16,
+          "max": 1.3969471454620361,
+          "p999": 1.288439393043518,
+          "edges": 41944
+        },
+        {
+          "action": "hit",
+          "frame": 18,
+          "max": 1.396263837814331,
+          "p999": 1.2718122005462646,
+          "edges": 41944
+        },
+        {
+          "action": "idle",
+          "frame": 30,
+          "max": 1.3790767192840576,
+          "p999": 1.2441624402999878,
+          "edges": 41944
+        }
+      ]
+    },
+    {
+      "id": "creature_gorgul_stone",
+      "worst": [
+        {
+          "action": "appear",
+          "frame": 8,
+          "max": 1.770945429801941,
+          "p999": 1.3594590425491333,
+          "edges": 46537
+        },
+        {
+          "action": "appear",
+          "frame": 16,
+          "max": 1.7493525743484497,
+          "p999": 1.35140061378479,
+          "edges": 46537
+        },
+        {
+          "action": "hit",
+          "frame": 24,
+          "max": 1.7115479707717896,
+          "p999": 1.3355787992477417,
+          "edges": 46537
+        },
+        {
+          "action": "hit",
+          "frame": 30,
+          "max": 1.7103713750839233,
+          "p999": 1.336935043334961,
+          "edges": 46537
+        },
+        {
+          "action": "hit",
+          "frame": 18,
+          "max": 1.6980476379394531,
+          "p999": 1.3277390003204346,
+          "edges": 46537
+        },
+        {
+          "action": "hit",
+          "frame": 36,
+          "max": 1.6964037418365479,
+          "p999": 1.3319453001022339,
+          "edges": 46537
+        },
+        {
+          "action": "appear",
+          "frame": 56,
+          "max": 1.6819815635681152,
+          "p999": 1.324857473373413,
+          "edges": 46537
+        },
+        {
+          "action": "idle",
+          "frame": 90,
+          "max": 1.6739468574523926,
+          "p999": 1.3205616474151611,
+          "edges": 46537
+        }
+      ]
+    },
+    {
+      "id": "creature_gorgul_tide",
+      "worst": [
+        {
+          "action": "appear",
+          "frame": 8,
+          "max": 1.3830894231796265,
+          "p999": 1.270370602607727,
+          "edges": 42012
+        },
+        {
+          "action": "appear",
+          "frame": 16,
+          "max": 1.367550015449524,
+          "p999": 1.2610536813735962,
+          "edges": 42012
+        },
+        {
+          "action": "hit",
+          "frame": 30,
+          "max": 1.345434546470642,
+          "p999": 1.2518411874771118,
+          "edges": 42012
+        },
+        {
+          "action": "hit",
+          "frame": 24,
+          "max": 1.3429789543151855,
+          "p999": 1.2501354217529297,
+          "edges": 42012
+        },
+        {
+          "action": "hit",
+          "frame": 36,
+          "max": 1.3396859169006348,
+          "p999": 1.2444854974746704,
+          "edges": 42012
+        },
+        {
+          "action": "hit",
+          "frame": 18,
+          "max": 1.3368192911148071,
+          "p999": 1.2402898073196411,
+          "edges": 42012
+        },
+        {
+          "action": "idle",
+          "frame": 120,
+          "max": 1.3316535949707031,
+          "p999": 1.2289658784866333,
+          "edges": 42012
+        },
+        {
+          "action": "appear",
+          "frame": 56,
+          "max": 1.3313223123550415,
+          "p999": 1.240319848060608,
+          "edges": 42012
+        }
+      ]
+    }
+  ],
+  "tail_clearance": [
+    {
+      "id": "creature_levian_fire",
+      "idle_samples": 9,
+      "min_gap": 0.11130700716362817
+    },
+    {
+      "id": "creature_levian_gale",
+      "idle_samples": 9,
+      "min_gap": 0.1015439382171171
+    },
+    {
+      "id": "creature_levian_light",
+      "idle_samples": 9,
+      "min_gap": 0.11923288135006681
+    },
+    {
+      "id": "creature_levian_shadow",
+      "idle_samples": 9,
+      "min_gap": 0.1142817183844453
+    },
+    {
+      "id": "creature_levian_stone",
+      "idle_samples": 9,
+      "min_gap": 0.10595598822471272
+    },
+    {
+      "id": "creature_levian_tide",
+      "idle_samples": 9,
+      "min_gap": 0.11311381401990094
+    }
+  ],
+  "preview": "build/repair029-preview.jpg",
+  "superseded_by": "tools/checkpoints/model-recheck029.json"
+}

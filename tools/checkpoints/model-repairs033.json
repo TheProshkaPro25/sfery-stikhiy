@@ -1,0 +1,25 @@
+{
+  "status": "accepted crown only; rear leg work is still a candidate",
+  "asset": "assets/creatures_hd/rogozhuk_stone.glb",
+  "sha256": "f608832107e1c90152a2e2e81f3722eba176e8b69ae322ecadadfe72541cf6c1",
+  "source": "tools/_tmp/repair033/base/rogozhuk_stone.glb",
+  "script": "tools/models/fair_stone_crown.py",
+  "evidence": "tools/_tmp/repair033",
+  "poses": 67,
+  "max_pairs_touching_changed_faces": 0,
+  "max_existing_body_pairs": 2555,
+  "max_displacement": 0.018543234899880225,
+  "unchanged": [
+    "lower body y<=.14",
+    "head z>=.17",
+    "UVs",
+    "skin weights",
+    "bone nodes",
+    "inverse binds",
+    "animation samples"
+  ],
+  "open": [
+    "fused and inverted Stone rear legs",
+    "inherited lower-body overlaps"
+  ]
+}

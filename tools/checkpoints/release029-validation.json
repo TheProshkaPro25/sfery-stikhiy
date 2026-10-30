@@ -1,0 +1,25 @@
+{
+  "version": "0.2.9",
+  "date": "2026-10-31",
+  "engine": "Godot 4.7.2 Linux Vulkan, NVIDIA GeForce RTX 4070 Laptop",
+  "export": "Godot --headless --export-release Windows Desktop; export exit 0; editor settings and localhost socket diagnostics in restricted environment",
+  "archive": {
+    "path": "build/Sfery_Stikhiy_v0.2.9_win64.zip",
+    "bytes": 846836762,
+    "sha256": "79c4aac5cbea6b8f733c1ab9f19d45fee218d4f003cf644d9e5f3fb88f3fe67c",
+    "crc": "all five files OK"
+  },
+  "exe_sha256": "869c11af71165eaaeaddd3eb381f064da44fcd86ffe6162bf9747dee1f9dc1bc",
+  "pck_sha256": "9fff119e37adae56637d03b9b7e59d2a39b3a60a0224dd78d6a2a2f43a97a89c",
+  "pck_models": "20 changed model imported scene MD5 entries match local imports; see build/pck-models029.log",
+  "source_models": "49 GLB match tools/_tmp/release029-parent/source-models.json after export",
+  "vulkan_pck_autoplay": "Two completed matches: 11 and 15 turns, 7 battles, no engine errors; log build/autoplay029-vulkan.log",
+  "windows_native": "Not tested: Wine unavailable",
+  "model_validation": "See tools/checkpoints/model-repairs035.json and NEXT_SESSION.md; model checks are limited to specified areas and sampled poses.",
+  "independent_sol": {
+    "zip": "CRC all5pass; exact five expected files; PE x86_64 confirmed",
+    "pck": "Independent PCK4 parser checked MD5 for all917entries,20changed imports match workspace; no tools/tests/.codex",
+    "source": "49GLB snapshot unchanged;8installed035 SHA256 and runtime SHA256 match model-repairs035",
+    "licenses": "CREDITS.md,CHANGELOG.md,GPU_CLOTH_LICENSE.txt match staging"
+  }
+}

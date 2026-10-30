@@ -1,0 +1,129 @@
+{
+  "status": "failed_visual_recheck",
+  "model_hashes": {
+    "assets/creatures_hd/dragnar_fire.glb": "2d759d92cc19566c5228e0ba913a7663fff934131b63f9295c4a84d92f47c6aa",
+    "assets/creatures_hd/dragnar_gale.glb": "d02f3a67084a9e3464716897c2ef5b24f5a53c7ce596c10bf007049d2c97b830",
+    "assets/creatures_hd/dragnar_light.glb": "8a82bcf7f89287daefd65baa25e96a5b1e1c4503b73ea3fa8817c83fcdd81f96",
+    "assets/creatures_hd/dragnar_shadow.glb": "ec28cf12618f5a739fc7b9604d384cf560d23b5590f64491a1ec320de39b8470",
+    "assets/creatures_hd/dragnar_stone.glb": "1db9f2a935fc8731ad7bd274364c749e1622a965deacdfaf9c3e4285f5b2a72d",
+    "assets/creatures_hd/dragnar_tide.glb": "fc95ce7731cf5331c84bfee312f69d7e3e6019c33e04ba011b878fa8adea8b6b",
+    "assets/creatures_hd/gorgul_fire.glb": "128eb7948519337b63fb3349447194910d0cc82e44d2efe22fc0ca0d20a7f3b6",
+    "assets/creatures_hd/gorgul_gale.glb": "55d82a572aec50ffffcc3912b2fc448dec5db1176c819dd4e7b189d2611bd073",
+    "assets/creatures_hd/gorgul_light.glb": "799f7c1f34ee27382315e42ef71a7625c2491648e45a02d6be611cb712b86e5c",
+    "assets/creatures_hd/gorgul_shadow.glb": "d31399c990f0148444c0082bf2bcc5d362d43f0a5516e3e70285beeec9b6ed86",
+    "assets/creatures_hd/gorgul_stone.glb": "e1fd5c9a9c8fd8ff1b01cc670b7a004689f6051484443e7d0518c5fc788d9bca",
+    "assets/creatures_hd/gorgul_tide.glb": "10cde043d74620940f53baff371f27631cf50ecff07bb888ef46255baa017d8a",
+    "assets/creatures_hd/levian_fire.glb": "7ee22ae7687e927470be185718e1a82a4148995891c565071238ba758e5506b4",
+    "assets/creatures_hd/levian_gale.glb": "757d4360c845d785973ed0cb9970bdfad355c1db695962c731c0f0a423a2d83d",
+    "assets/creatures_hd/levian_light.glb": "034c9669a989ca431194c74909dd72491e4569c60742637ec37841cffddad7dd",
+    "assets/creatures_hd/levian_shadow.glb": "2f80ce514f29140e0dce21a745fa39e22008265cc94e0f22d072a45c1d28b19f",
+    "assets/creatures_hd/levian_stone.glb": "fdbd4a5ebbb84389edca3f8c1b81b25a3665e4dfb6177e4053bd8601d0133a47",
+    "assets/creatures_hd/levian_tide.glb": "41d2e81fea7f12f5a028c6e872fad74528c1c7c395c42a0186d14da7290259ce",
+    "assets/creatures_hd/rogozhuk_light.glb": "c8abacaeee91cc94ae15d18530a1a3b6fdf6a891c101a1517812779c486209dd",
+    "assets/creatures_hd/rogozhuk_stone.glb": "3ac53a634d1c7ba6debdf7fd9fac14e3efe268ed104b367afb5de804ce0ebc2c"
+  },
+  "captured_views": 400,
+  "sampling": "bind rest; idle 1, 2, 4 seconds; attack 0.4 seconds; four oblique views",
+  "tail_overlaps": [
+    {
+      "id": "creature_levian_fire",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 9,
+      "pairs_touching_repair_caps": 0
+    },
+    {
+      "id": "creature_levian_gale",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 93,
+      "pairs_touching_repair_caps": 0
+    },
+    {
+      "id": "creature_levian_light",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 209,
+      "pairs_touching_repair_caps": 0
+    },
+    {
+      "id": "creature_levian_shadow",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 63,
+      "pairs_touching_repair_caps": 28
+    },
+    {
+      "id": "creature_levian_stone",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 468,
+      "pairs_touching_repair_caps": 10
+    },
+    {
+      "id": "creature_levian_tide",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 104,
+      "pairs_touching_repair_caps": 0
+    }
+  ],
+  "leg_overlaps": [
+    {
+      "id": "creature_dragnar_fire",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 0
+    },
+    {
+      "id": "creature_dragnar_gale",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 0
+    },
+    {
+      "id": "creature_dragnar_light",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 0
+    },
+    {
+      "id": "creature_dragnar_shadow",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 0
+    },
+    {
+      "id": "creature_dragnar_stone",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 0
+    },
+    {
+      "id": "creature_dragnar_tide",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 0
+    },
+    {
+      "id": "creature_gorgul_fire",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 275
+    },
+    {
+      "id": "creature_gorgul_gale",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 37
+    },
+    {
+      "id": "creature_gorgul_light",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 247
+    },
+    {
+      "id": "creature_gorgul_shadow",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 157
+    },
+    {
+      "id": "creature_gorgul_stone",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 242
+    },
+    {
+      "id": "creature_gorgul_tide",
+      "frame": 120,
+      "nonadjacent_overlapping_triangle_pairs": 295
+    }
+  ],
+  "evidence": "build/recheck029-errors.jpg",
+  "limitations": "BVH counts exclude shared welded vertices, epsilon=0; one exported idle pose; not exhaustive motion validation. Dragnar lower-leg complaint not conclusively reproduced."
+}

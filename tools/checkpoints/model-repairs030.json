@@ -1,0 +1,57 @@
+{
+  "status": "PARTIAL — two targeted corrections accepted; other complaints OPEN",
+  "date": "2026-10-30",
+  "published": false,
+  "version_changed": false,
+  "accepted": {
+    "gorgul_leg_buckling": {
+      "variants": 6,
+      "sampled_poses": 401,
+      "overlapping_nonadjacent_leg_triangle_pairs": 0,
+      "change": "remove second procedural knee fold; preserve authored articulation and whole-leg drift/reach",
+      "weights_experiment": "REJECTED; not installed"
+    },
+    "light_beetle_rear_plates": {
+      "sampled_poses": 67,
+      "pairs_touching_changed_faces": 0,
+      "whole_body_overlap_worst_before": 1205,
+      "whole_body_overlap_worst_after": 1077,
+      "whole_model_status": "still has inherited overlaps outside the repaired plates",
+      "rear_leg_geometry_uv_weights_normals": "unchanged",
+      "attachment": "rest and five engine poses passed",
+      "closed_exterior": true
+    }
+  },
+  "open": [
+    "levian all six: tail/body intersection, candidate tail1/2/3/4 rejected",
+    "rogozhuk_stone: crown patch quality and inverted rear legs",
+    "dragnar all six: lower feet complaint not conclusively reproduced/closed",
+    "rogozhuk_light: inherited intersections outside repaired rear plate region"
+  ],
+  "validation": {
+    "flight_pose": [
+      45360,
+      0
+    ],
+    "support": [
+      1893,
+      0
+    ],
+    "core": [
+      1180,
+      0
+    ],
+    "animation": [
+      435,
+      0
+    ],
+    "beetle_integrity": "all six passed",
+    "actual_installed_light_gpu": "idle120 and attack24, eight angles each"
+  },
+  "evidence": "tools/_tmp/repair030",
+  "sha256": {
+    "scenes/creature_support.gd": "a563521bbab117ca991771b528284306dd59223a046143767b5a84d1dbcc69fe",
+    "assets/creatures_hd/rogozhuk_light.glb": "c7dc04f5782b282cac7e908d4bf96588d68418cc20f24a3897b5945233214706"
+  },
+  "limitations": "Sampled poses are not a proof for every instant. Existing dummy material=null diagnostics persist. No new release."
+}

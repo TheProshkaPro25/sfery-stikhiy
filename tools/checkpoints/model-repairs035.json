@@ -1,0 +1,386 @@
+{
+  "status": "accepted and installed; targeted model complaints030-035 addressed; no new game build or publication",
+  "stone": {
+    "asset": "assets/creatures_hd/rogozhuk_stone.glb",
+    "sha256": "e5e198539f5d6ed892a9f0b553dc9d46892a66696b5d7b808acfafa2bd6f1a39",
+    "source": "tools/_tmp/repair035-stone/base/rogozhuk_stone.glb",
+    "candidate": "tools/_tmp/repair035-stone/final/rogozhuk_stone.glb",
+    "reproduce": "tools/models/repair_stone_torso.py",
+    "geometry_uv_rest_bind_idle": "unchanged exactly",
+    "skin": "localized belly/socket to hips; actual right middle-leg root to thigh.R; original inter-leg web retained",
+    "clips": "non-idle chest/head rest-relative excursions scaled 0.2/0.5; timing and other tracks unchanged",
+    "middle_stride": 0.85,
+    "before_body": {
+      "protocol": "canonical035; same turning support, source034",
+      "poses": 67,
+      "max_pairs": 444,
+      "report": "tools/_tmp/repair035-stone/verified-base-body.json"
+    },
+    "after": {
+      "poses": 604,
+      "sampling": "12s idle every3 frames; every frame of all6 reactions",
+      "body_pairs": 0,
+      "rear_pairs": 0,
+      "rear_min_area_ratio": 0.9983469247817993,
+      "attachment": "rest and5 moving poses passed",
+      "reports": [
+        "tools/_tmp/repair035-stone/final-body.json",
+        "tools/_tmp/repair035-stone/final-rear.json"
+      ]
+    },
+    "tests": [
+      "tests/stone_torso_integrity.py",
+      "tests/stone_rear_integrity.py",
+      "tests/stone_body_motion.py",
+      "tests/stone_rear_motion.py",
+      "tests/beetle_attachment.py"
+    ],
+    "preview": "build/stone-repair035-preview.jpg"
+  },
+  "protocol": {
+    "helper": "tools/model_review_state.gd",
+    "changes": "clock before reset; clear fixture stance; reset bones; advance(0); parse numeric action frame suffixes",
+    "gameplay_reset": "unchanged",
+    "regression_checks": 100,
+    "regression_failures": 0,
+    "previous_reports": "Historical sampled poses; new before/after comparisons must use canonical reset on both sides."
+  },
+  "runtime": {
+    "path": "scenes/creature_support.gd",
+    "sha256": "da0090c5bdb90356aca80c38feae4a1d154d51d3158fa8c2d1ebda8b3db6c044",
+    "turning": "anchors, pole, foot basis turn consistently for explicit metadata or rigid limbs",
+    "middle_stride": "per-model metadata; default1; only middle pair attack step changes",
+    "per_bone_stride": "explicit model dictionary; Light thigh.R0.6 overrides middle0.85; unmarked limbs unchanged"
+  },
+  "tests_completed": {
+    "core": [
+      1180,
+      0
+    ],
+    "animation": [
+      435,
+      0
+    ],
+    "flight": [
+      45360,
+      0
+    ],
+    "stance_and_stride": [
+      236,
+      0
+    ],
+    "support_installed_stone": [
+      1893,
+      0
+    ],
+    "binding_installed_stone": [
+      20,
+      0
+    ],
+    "review_state_installed_stone": [
+      100,
+      0
+    ],
+    "binding_installed_levians": [
+      20,
+      0
+    ],
+    "support": [
+      1893,
+      0
+    ],
+    "review_state": [
+      100,
+      0
+    ],
+    "rig_models": 48,
+    "rig_bones": 1197,
+    "binding_final": [
+      20,
+      0
+    ],
+    "beetle_integrity": "6/6",
+    "tail_integrity": "6/6",
+    "sole_samples_on_rendered_geometry": [
+      144,
+      0
+    ]
+  },
+  "release": "No new build or publication; game version remains0.2.8",
+  "levian": {
+    "candidate": "tools/_tmp/repair035-levian/final5",
+    "models": {
+      "levian_fire.glb": "ded936ce93435d9651078a26276a025aff627f150454a08a0d830bd5d2280310",
+      "levian_gale.glb": "fe5c04377285353b7a95bdb723612464824aaaed05f9b499acb732e858db2ddc",
+      "levian_light.glb": "8e15e3d6bc72489f271d0d16f1c6270158fd7d2b113ec96a358ba3ebaba2669a",
+      "levian_shadow.glb": "c8f42fa47c27e6a0d06dfa6fa5d570031601de9e52cb0c7f184979ea78d8a90e",
+      "levian_stone.glb": "070f9616426759b58ebd39b7d64c312fafb7597ef7e333ad6baef8402e188dcf",
+      "levian_tide.glb": "7eade977ce428ce052690b7bbf235740a002a91140b0677e92e5b0d7a2bf63d8"
+    },
+    "preview": "build/levian-repair035-preview.jpg",
+    "standard_poses": {
+      "count": 402,
+      "actions": 7,
+      "lower_pairs_max": 0,
+      "extended_neck_pairs_max": 0,
+      "cap031_pairs_max": 0,
+      "tail_tip031_pairs_max": 0
+    },
+    "idle12_all_six": {
+      "total_idle_poses": 1326,
+      "stone_idle_poses": 721,
+      "other_five_idle_poses": 605,
+      "both_regions_max": 0,
+      "caps_and_tail_tip_max": 0
+    },
+    "dense_hit": {
+      "models": [
+        "light",
+        "stone"
+      ],
+      "phases": 4,
+      "poses": 392,
+      "lower_pairs_max": 0,
+      "extended_neck_pairs_max": 0
+    },
+    "dense_stone": {
+      "poses": 1086,
+      "step_frames": 1,
+      "idle_seconds": 12,
+      "all_actions": true,
+      "lower_pairs_max": 0,
+      "extended_neck_pairs_max": 0
+    },
+    "point_exceptions": {
+      "tide": {
+        "position_indices": [
+          22931,
+          22932,
+          22933
+        ],
+        "max_displacement": 3.604121096040353e-05,
+        "changed_normal_indices": [
+          22790,
+          22791,
+          23021,
+          23022,
+          23093,
+          23094,
+          23145,
+          23146
+        ],
+        "max_normal_change_degrees": 0.308277
+      },
+      "stone": {
+        "position_indices": [
+          81485,
+          81486
+        ],
+        "max_displacement": 0.000116326697716948,
+        "changed_normal_indices": [
+          80726,
+          81173,
+          81346,
+          81347,
+          81580,
+          81581,
+          81582
+        ],
+        "max_normal_change_degrees": 0.455731
+      }
+    },
+    "clip_exceptions": [
+      {
+        "models": [
+          "light",
+          "stone"
+        ],
+        "clip": "hit",
+        "bone": "wing.R",
+        "first_key_excursion_factor": 0.5
+      },
+      {
+        "models": [
+          "stone"
+        ],
+        "clip": "stance",
+        "bone": "neck2",
+        "first_key_excursion_factor": 0.75,
+        "smooth_restore_original_exit_start": 0.85
+      }
+    ],
+    "integrity": "PASS front stage + exact motion stage + original031 regression + normal-only binary/imported-pose equivalence",
+    "raw_rest_controls": {
+      "tide": [
+        1,
+        0
+      ],
+      "stone": [
+        1,
+        0
+      ]
+    },
+    "reports": [
+      "final4-lower.json",
+      "final4-neck/report.json",
+      "final4-stone-dense-lower.json",
+      "final4-stone-dense-neck/report.json",
+      "final4-hit-equivalence.json",
+      "final5-equivalence.json",
+      "final5-idle12-lower.json",
+      "final5-idle12-neck/report.json",
+      "final5-tide-rest.json",
+      "final5-stone-rest.json"
+    ],
+    "handoff": "tools/_tmp/repair035-levian/handoff.json",
+    "scope": "Two explicitly bounded surface regions; no claim of complete full-model/full-game intersection absence.",
+    "installed": true
+  },
+  "light": {
+    "status": "accepted_final_479_plus_234_pass",
+    "candidate": "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-light/production-final/candidate/rogozhuk_light.glb",
+    "sha256": "8dcffa2a2981714c5255403fb7b9ac337b4c709913384b845874cafc006ce21f",
+    "installed_by_this_agent": false,
+    "parent_reported_installed_and_imported": true,
+    "build_or_publication_by_this_agent": false,
+    "main_audit": {
+      "engine_poses": 478,
+      "raw_rest": 1,
+      "body_max": 0,
+      "rear_max": 0,
+      "export_root": "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-light/final-poses",
+      "reports": [
+        "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-light/final-audit-0.json",
+        "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-light/final-audit-1.json",
+        "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-light/final-audit-2.json",
+        "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-light/final-audit-3.json"
+      ],
+      "coverage": "12 seconds idle every 6 frames; every frame of appear, roar, attack, hit, brace, ability"
+    },
+    "independent_phase_audit": {
+      "poses": 234,
+      "body_max": 0,
+      "rear_max": 0,
+      "phases_seconds": [
+        1.5,
+        3,
+        4.5
+      ],
+      "frames": "0 through 12 of six actions",
+      "report": "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-light-phase/production-final/summary.json"
+    },
+    "baseline": {
+      "poses": 68,
+      "body_max": 1077,
+      "rear_max": 778,
+      "report": "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-light/baseline-final-audit.json",
+      "note": "Same deterministic state protocol; baseline uses sparse action coverage, final is dense"
+    },
+    "preservation": {
+      "actual_legs": 6,
+      "restored_original_ankle_faces": 2574,
+      "protected030_cut_faces": 137,
+      "real_knee_spur_original_faces": 47,
+      "cap_flip_removed": [
+        [
+          78528,
+          61803,
+          59623
+        ],
+        [
+          61803,
+          78532,
+          59623
+        ]
+      ],
+      "cap_flip_added": [
+        [
+          78528,
+          61803,
+          78532
+        ],
+        [
+          78528,
+          78532,
+          59623
+        ]
+      ],
+      "body_delta_from_v16": {
+        "removed_faces": 367,
+        "added_faces": 99,
+        "position_rows": 56,
+        "normal_rows": 315,
+        "uv_edits": 0
+      },
+      "bone_rest_and_bind_preserved": true,
+      "skin_difference_from_reviewed_reference": "float roundoff at most 2.98e-8"
+    },
+    "runtime_metadata": {
+      "sfery_rigid_limbs": true,
+      "sfery_turn_stance": true,
+      "sfery_middle_stride": 0.85,
+      "sfery_stride_by_bone": {
+        "thigh.R": 0.6
+      }
+    },
+    "static_contract": "/home/loq/Документы/game/sfery_stikhiy/tests/fixtures/light035_contract.json",
+    "independent_checks": [
+      "static contract PASS",
+      "coincident vertex skin seams PASS",
+      "attachment rest plus eight exact action poses PASS",
+      "GPU shape/attachment review PASS",
+      "137 accepted030 cut triangles exact",
+      "cap flip only two old029 closure faces"
+    ],
+    "area_reports": [
+      "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-review/light-final-exterior-area.json",
+      "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-review/light-final-cap-area.json"
+    ],
+    "area_limits": {
+      "new_cap_min_ratio": 0.438,
+      "new_cap_p01_ratio": 0.6509,
+      "body_min_ratio": 0.0575,
+      "body_p01_ratio": 0.6271,
+      "body_interpretation": "Tiny pre-existing compressed body patch; source analogue min .0424, whole patch compressed area improved; GPU no new inversion or hole"
+    },
+    "previews": [
+      "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-light/final-review/idle120_0.png",
+      "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-light/final-review/attack21_4.png",
+      "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-light/final-review/appear8_4.png"
+    ],
+    "reproduce": [
+      "/home/loq/ai/Hunyuan3D-2/.venv/bin/python",
+      "tools/models/repair_light035.py",
+      "--base",
+      "tools/_tmp/repair035-light/base/rogozhuk_light.glb",
+      "--original",
+      "tools/_tmp/repair029/base/rogozhuk_light.glb",
+      "--out",
+      "tools/_tmp/repair035-light/reproduce-new"
+    ],
+    "reproduction_manifest": "/home/loq/Документы/game/sfery_stikhiy/tools/_tmp/repair035-light/production-final/manifest.json",
+    "required_source_archives": [
+      "tools/_tmp/repair035-light/base/rogozhuk_light.glb",
+      "tools/_tmp/repair029/base/rogozhuk_light.glb",
+      "tools/_tmp/repair030/base/rogozhuk_light.glb",
+      "tools/_tmp/repair035-light/candidate-v16/rogozhuk_light.glb"
+    ],
+    "limits": [
+      "Finite sampled runtime verification, not proof over continuous time",
+      "Cross body/socket overlaps are intentional attachment; tested independently, not required to equal zero",
+      "Do not overwrite frozen production-final candidate when reproducing"
+    ],
+    "installed": true,
+    "preview": "build/light-repair035-preview.jpg"
+  },
+  "installed_assets": {
+    "assets/creatures_hd/levian_fire.glb": "ded936ce93435d9651078a26276a025aff627f150454a08a0d830bd5d2280310",
+    "assets/creatures_hd/levian_gale.glb": "fe5c04377285353b7a95bdb723612464824aaaed05f9b499acb732e858db2ddc",
+    "assets/creatures_hd/levian_light.glb": "8e15e3d6bc72489f271d0d16f1c6270158fd7d2b113ec96a358ba3ebaba2669a",
+    "assets/creatures_hd/levian_shadow.glb": "c8f42fa47c27e6a0d06dfa6fa5d570031601de9e52cb0c7f184979ea78d8a90e",
+    "assets/creatures_hd/levian_stone.glb": "070f9616426759b58ebd39b7d64c312fafb7597ef7e333ad6baef8402e188dcf",
+    "assets/creatures_hd/levian_tide.glb": "7eade977ce428ce052690b7bbf235740a002a91140b0677e92e5b0d7a2bf63d8",
+    "assets/creatures_hd/rogozhuk_light.glb": "8dcffa2a2981714c5255403fb7b9ac337b4c709913384b845874cafc006ce21f",
+    "assets/creatures_hd/rogozhuk_stone.glb": "e5e198539f5d6ed892a9f0b553dc9d46892a66696b5d7b808acfafa2bd6f1a39"
+  }
+}

@@ -27,9 +27,9 @@ def verify(parts,label,hip_points=None):
   assert containment(vertices,faces,sample).mean()>=.4,(label,side,'root has insufficient overlap')
   lv,lf=parts[leg];tip=lv[lv[:,1]<=np.quantile(lv[:,1],.04)].mean(0)
   assert not containment(vertices,faces,[tip])[0],(label,side,'foot fused into body')
- print('Tide attachment:',label,'hips enter torso; feet remain outside')
+ print('Beetle attachment:',label,'hips enter torso; feet remain outside')
 
-args=argparse.ArgumentParser();args.add_argument('--poses',type=Path);args=args.parse_args();d,b=read_glb(root/'assets/creatures_hd/rogozhuk_tide.glb');pr=list(triangles(d,b));g=globals_of(d);names={n.get('name'):i for i,n in enumerate(d['nodes'])};verify([(v,f) for p,v,f in pr],'rest',[g[names['rear_thigh.'+side]][:3,3] for side in ['L','R']])
+args=argparse.ArgumentParser();args.add_argument('--poses',type=Path);args.add_argument('--model',type=Path,default=root/'assets/creatures_hd/rogozhuk_tide.glb');args=args.parse_args();d,b=read_glb(args.model);pr=list(triangles(d,b));g=globals_of(d);names={n.get('name'):i for i,n in enumerate(d['nodes'])};verify([(v,f) for p,v,f in pr],'rest',[g[names['rear_thigh.'+side]][:3,3] for side in ['L','R']])
 if args.poses:
  doc=json.loads((args.poses/'poses.json').read_text());meshes=doc['meshes'];source=[]
  for mesh in meshes:

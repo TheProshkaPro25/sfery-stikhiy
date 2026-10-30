@@ -8,8 +8,9 @@ from pathlib import Path
 import sys,numpy as np
 root=Path(__file__).resolve().parents[1];sys.path.insert(0,str(root/'tools/models'))
 from inspect_geometry import read_glb,accessor
+from upgrade_rigs import globals_of
 
-for path in sorted((root/'assets/creatures_hd').glob('rogozhuk_*.glb')):
+for path in ([Path(p) for p in sys.argv[1:]] or sorted((root/'assets/creatures_hd').glob('rogozhuk_*.glb'))):
  doc,binary=read_glb(path);skin=doc['skins'][0];names=[doc['nodes'][n]['name'] for n in skin['joints']]
  shell=skin['joints'][names.index('shell')];rest=np.asarray(doc['nodes'][shell].get('rotation',[0,0,0,1]))
  for animation in doc['animations']:
@@ -18,10 +19,11 @@ for path in sorted((root/'assets/creatures_hd').glob('rogozhuk_*.glb')):
     q=accessor(doc,binary,animation['samplers'][ch['sampler']]['output']);angle=2*np.arccos(np.clip(np.abs(q@rest),0,1))
     assert angle.max()<.25,(path.name,'shell detached from its bind orientation')
  primitives=doc['meshes'][0]['primitives'];extras=doc['asset'].get('extras',{})
- reconstructed=extras.get('stone_exterior_repair') or extras.get('sfery_water_beetle_anatomy',0)>=11
+ reconstructed=extras.get('stone_exterior_repair') or extras.get('sfery_water_beetle_anatomy',0)>=11 or extras.get('sfery_light_beetle_anatomy',0)>=13
  if reconstructed:
-  assert len(primitives)==(1 if path.stem.endswith('stone') else 6),(path.name,'unexpected proxy surfaces')
-  groups=[primitives] if path.stem.endswith('stone') else [primitives[i:i+2] for i in range(0,6,2)]
+  separate_rear=not path.stem.endswith('stone') or extras.get('sfery_stone_rear_rebuild',0)>=3
+  assert len(primitives)==(6 if separate_rear else 1),(path.name,'unexpected proxy surfaces')
+  groups=[primitives[i:i+2] for i in range(0,6,2)] if separate_rear else [primitives]
  else:
   assert len(primitives)>=3,(path.name,'missing under-armour surfaces');groups=[[p] for p in primitives[1:]]
  for group in groups:
@@ -51,4 +53,15 @@ for path in sorted((root/'assets/creatures_hd').glob('rogozhuk_*.glb')):
   if 'rear_thigh.'+side in names:assert count>100,(path.name,side,'rear leg still glued to torso')
  if path.stem.endswith('stone'):
   assert extras.get('sfery_baked_repair_atlas')==1,'repaired Stone requires a baked UV atlas'
+ if extras.get('light_rear_plates_removed'):
+  gs=globals_of(doc);nodes={n.get('name'):i for i,n in enumerate(doc['nodes'])}
+  center=gs[nodes['chest']][:3,3]
+  forward=gs[nodes['head']][:3,3]-center;forward[1]=0;forward/=np.linalg.norm(forward)
+  # The old paddles hung behind the abdomen. Inspect referenced exterior
+  # vertices, not unused source vertices retained in the accessor.
+  for p in primitives[:2]:
+   used=np.unique(accessor(doc,binary,p['indices']))
+   v=accessor(doc,binary,p['attributes']['POSITION'])[used]
+   behind=(v-center)@forward
+   assert not ((behind<-.315)&(v[:,1]<.06)).any(),(path.name,'false rear plates returned')
  print(path.stem,'exterior topology and rear skinning OK')
