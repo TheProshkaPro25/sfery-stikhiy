@@ -1,32 +1,54 @@
-"""Regression for hollow beetles and rear appendages accidentally weighted to the body."""
+"""Check exterior repairs and independently skinned rear beetle legs.
+
+The reconstructed Stone/Tide meshes must close their actual exterior. Legacy
+variants still have separate under-armour surfaces; do not demand those proxies
+from a reconstructed model or mistake them for a repaired exterior.
+"""
 from pathlib import Path
 import sys,numpy as np
 root=Path(__file__).resolve().parents[1];sys.path.insert(0,str(root/'tools/models'))
 from inspect_geometry import read_glb,accessor
+
 for path in sorted((root/'assets/creatures_hd').glob('rogozhuk_*.glb')):
  doc,binary=read_glb(path);skin=doc['skins'][0];names=[doc['nodes'][n]['name'] for n in skin['joints']]
- shell=skin['joints'][names.index('shell')]
- rest=np.asarray(doc['nodes'][shell].get('rotation',[0,0,0,1]))
+ shell=skin['joints'][names.index('shell')];rest=np.asarray(doc['nodes'][shell].get('rotation',[0,0,0,1]))
  for animation in doc['animations']:
   for ch in animation['channels']:
    if ch['target']['node']==shell and ch['target']['path']=='rotation':
-    q=accessor(doc,binary,animation['samplers'][ch['sampler']]['output'])
-    angle=2*np.arccos(np.clip(np.abs(q@rest),0,1))
+    q=accessor(doc,binary,animation['samplers'][ch['sampler']]['output']);angle=2*np.arccos(np.clip(np.abs(q@rest),0,1))
     assert angle.max()<.25,(path.name,'shell detached from its bind orientation')
- primitives=doc['meshes'][0]['primitives'];assert len(primitives)>=3,(path.name,'no closed body beneath armour')
- for p in primitives[1:]:
-  f=accessor(doc,binary,p['indices']).reshape(-1,3)
-  e=np.sort(np.concatenate([f[:,[0,1]],f[:,[1,2]],f[:,[2,0]]]),axis=1);_,count=np.unique(e,axis=0,return_counts=True)
-  assert (count==2).all(),(path.name,'open inner body')
- p=primitives[0];js=np.concatenate([accessor(doc,binary,p['attributes']['JOINTS_'+str(k)]) for k in [0,1]],axis=1)
- ws=np.concatenate([accessor(doc,binary,p['attributes']['WEIGHTS_'+str(k)]) for k in [0,1]],axis=1)
- vertices=accessor(doc,binary,p['attributes']['POSITION'])
+ primitives=doc['meshes'][0]['primitives'];extras=doc['asset'].get('extras',{})
+ reconstructed=extras.get('stone_exterior_repair') or extras.get('sfery_water_beetle_anatomy',0)>=11
+ if reconstructed:
+  assert len(primitives)==(1 if path.stem.endswith('stone') else 6),(path.name,'unexpected proxy surfaces')
+  groups=[primitives] if path.stem.endswith('stone') else [primitives[i:i+2] for i in range(0,6,2)]
+ else:
+  assert len(primitives)>=3,(path.name,'missing under-armour surfaces');groups=[[p] for p in primitives[1:]]
+ for group in groups:
+  vertices=[];faces=[];offset=0
+  for p in group:
+   v=accessor(doc,binary,p['attributes']['POSITION']);f=accessor(doc,binary,p['indices']).reshape(-1,3);vertices.append(v);faces.append(f+offset);offset+=len(v)
+  v=np.concatenate(vertices);f=np.concatenate(faces);_,uid=np.unique(np.round(v,6),axis=0,return_inverse=True);geometric=uid[f]
+  directed=np.concatenate([geometric[:,[0,1]],geometric[:,[1,2]],geometric[:,[2,0]]]);edges=np.sort(directed,axis=1)
+  unique,inverse,count=np.unique(edges,axis=0,return_inverse=True,return_counts=True)
+  assert (count==2).all(),(path.name,'exterior open or nonmanifold',np.unique(count,return_counts=True))
+  winding=np.bincount(inverse,weights=np.where(directed[:,0]<directed[:,1],1,-1))
+  assert (winding==0).all(),(path.name,'inconsistent exterior winding')
+  tri=v[f];area=np.linalg.norm(np.cross(tri[:,1]-tri[:,0],tri[:,2]-tri[:,0]),axis=1)
+  assert (area>1e-12).all(),(path.name,'collapsed exterior faces')
+ # Check all exterior surfaces: Tide's two new legs are separate primitives.
  leg_slots=[i for i,name in enumerate(names) if name.startswith(('arm.','forearm.','hand.','thigh.','shin.','foot.','rear_'))]
- upper_leg_weights=np.where(np.isin(js,leg_slots),ws,0).sum(1)[vertices[:,1]>.12]
- assert upper_leg_weights.max()<.08,(path.name,'upper armour still pulled by legs',upper_leg_weights.max())
- for side in ['L','R']:
-  if 'rear_thigh.'+side not in names:continue
-  chain=[names.index(prefix+side) for prefix in ['rear_thigh.','rear_shin.','rear_foot.']]
-  strength=np.where(np.isin(js,chain),ws,0).sum(1)
-  assert (strength>.5).sum()>100,(path.name,side,'rear leg still glued to torso')
-print('Beetles: 6 closed inner bodies; existing rear legs have independent skinning')
+ rear_counts={side:0 for side in ['L','R']}
+ for p in (primitives if reconstructed else primitives[:1]):
+  js=np.concatenate([accessor(doc,binary,p['attributes']['JOINTS_'+str(k)]) for k in [0,1]],axis=1)
+  ws=np.concatenate([accessor(doc,binary,p['attributes']['WEIGHTS_'+str(k)]) for k in [0,1]],axis=1);v=accessor(doc,binary,p['attributes']['POSITION'])
+  upper=np.where(np.isin(js,leg_slots),ws,0).sum(1)[v[:,1]>.12]
+  assert len(upper)==0 or upper.max()<.08,(path.name,'upper armour pulled by legs')
+  for side in ['L','R']:
+   chain=[names.index(prefix+side) for prefix in ['rear_thigh.','rear_shin.','rear_foot.'] if prefix+side in names]
+   rear_counts[side]+=int((np.where(np.isin(js,chain),ws,0).sum(1)>.5).sum())
+ for side,count in rear_counts.items():
+  if 'rear_thigh.'+side in names:assert count>100,(path.name,side,'rear leg still glued to torso')
+ if path.stem.endswith('stone'):
+  assert extras.get('sfery_baked_repair_atlas')==1,'repaired Stone requires a baked UV atlas'
+ print(path.stem,'exterior topology and rear skinning OK')

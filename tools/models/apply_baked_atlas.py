@@ -8,6 +8,8 @@ path=Path(sys.argv[1]);prefix=Path(sys.argv[2]);doc,binary=read_glb(path)
 assert len(doc['meshes'])==1 and len(doc['meshes'][0]['primitives'])==1
 p=doc['meshes'][0]['primitives'][0];v=accessor(doc,binary,p['attributes']['POSITION'])
 loops=np.asarray(json.loads(Path(str(prefix)+'-loops.json').read_text()),np.float32)
+# Blender stores UVs from bottom-left; glTF and the saved PNG use top-left.
+loops[:,4]=1-loops[:,4]
 distance,order=cKDTree(v).query(loops[:,:3]);assert distance.max()<1e-5,('coordinate mismatch',distance.max())
 _,geom=np.unique(np.round(v,7),axis=0,return_inverse=True)
 keys=np.column_stack([geom[order],np.round(loops[:,3:],7)])
@@ -19,6 +21,8 @@ for name,index in list(p['attributes'].items()):
  assert len(data)==n
  component=doc['accessors'][index]['componentType'];kind=doc['accessors'][index]['type']
  p['attributes'][name]=writer.add(data[order[first]],kind,component)
+ if name=='POSITION':
+  doc['accessors'][p['attributes'][name]].update(min=data.min(0).tolist(),max=data.max(0).tolist())
 p['attributes']['TEXCOORD_0']=writer.add(loops[first,3:],'VEC2')
 p['indices']=writer.add(indices.astype(np.uint32)[:,None],'SCALAR',5125)
 png=Path(str(prefix)+'.png').read_bytes();writer.binary.extend(b'\0'*((-len(writer.binary))%4));start=len(writer.binary);writer.binary.extend(png)

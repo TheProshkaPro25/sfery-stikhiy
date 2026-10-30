@@ -8,6 +8,7 @@ signal action_finished(action: StringName)
 
 const BodySupport := preload("res://scenes/creature_support.gd")
 var _support
+var _cloth
 
 const FLYERS := ["bird", "flying_eye", "dragon"]
 const TEMPO := [1.04, 1.08, 1.0, 0.92, 0.96, 0.98]
@@ -93,6 +94,8 @@ func set_model(model: Node3D, d: CreatureDef) -> void:
 	if _species != &"likorez":
 		_support = BodySupport.new()
 		_support.configure(self, model)
+	if _species == &"ratnik":
+		_cloth = CreatureCloth.attach(model)
 
 
 func get_height() -> float:
@@ -175,6 +178,7 @@ func _collect(n: Node) -> void:
 func set_base(p: Vector3) -> void:
 	_base = p
 	_apply(_clock)
+	if is_instance_valid(_cloth): _cloth.reset_simulation()
 
 
 func reset() -> void:
@@ -193,8 +197,11 @@ func reset() -> void:
 	_flash_duration = 0.0
 	for mesh in _meshes:
 		mesh.material_overlay = null
+		if mesh.has_meta("cloth_material"):
+			mesh.get_meta("cloth_material").set_shader_parameter("flash_tint", Color(0, 0, 0, 0))
 	_idle_clip(0.0)
 	_apply(_clock)
+	if is_instance_valid(_cloth): _cloth.reset_simulation()
 
 
 func _idle_clip(blend: float = 0.22) -> void:
@@ -254,6 +261,7 @@ func _apply(now: float) -> void:
 	position = _base + fx_pos + Vector3(0, lift, 0)
 	scale = Vector3(1.0 - breath * 0.003 * procedural, 1.0 + breath * 0.006 * procedural, 1.0 - breath * 0.003 * procedural) * fx_scale
 	rotation = Vector3(fx_pitch + sin(t * 0.7) * 0.006 * procedural, fx_yaw, fx_roll + sin(t * 0.8) * 0.006 * procedural)
+	if is_instance_valid(_cloth): CreatureCloth.update_floor(_cloth, self)
 
 
 func _begin(action: StringName, duration: float, clip: StringName, delay: float = 0.0) -> void:
@@ -457,7 +465,10 @@ func flash_color(c: Color, strength: float = 0.22, dur: float = 0.28) -> void:
 	_flash_strength = strength
 	_overlay.albedo_color = Color(c.r, c.g, c.b, strength)
 	for mesh in _meshes:
-		mesh.material_overlay = _overlay
+		if mesh.has_meta("cloth_material"):
+			mesh.get_meta("cloth_material").set_shader_parameter("flash_tint", _overlay.albedo_color)
+		else:
+			mesh.material_overlay = _overlay
 
 
 func _update_flash(delta: float) -> void:
@@ -465,6 +476,9 @@ func _update_flash(delta: float) -> void:
 		return
 	_flash_age += delta
 	_overlay.albedo_color.a = _flash_strength * (1.0 - _ease(_flash_age / _flash_duration))
+	for mesh in _meshes:
+		if mesh.has_meta("cloth_material"):
+			mesh.get_meta("cloth_material").set_shader_parameter("flash_tint", _overlay.albedo_color)
 	if _flash_age >= _flash_duration:
 		_flash_duration = 0.0
 		for mesh in _meshes:

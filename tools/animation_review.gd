@@ -6,6 +6,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var args := OS.get_cmdline_user_args()
+	root.size = Vector2i(960, 960)
 	var ids: PackedStringArray = (args[0] if args.size() > 0 else "creature_kolossar_light").split(",")
 	var out: String = args[1] if args.size() > 1 else "/tmp/animation_review"
 	for id in ids:
@@ -43,7 +44,7 @@ func _record(id: StringName, out: String, idle_review: bool = false, back: bool 
 	world.add_child(cam)
 	cam.current = true
 	var hover := actor.get_hover_height()
-	var distance := maxf(h + hover, actor.get_extent()) * 2.8
+	var distance := maxf(h + hover, actor.get_extent()) * 2.2
 	cam.fov = 36.0
 	var side := -1.0 if back else 1.0
 	cam.look_at_from_position(Vector3(distance * 0.6 * side, h * 0.6 + hover, distance * side), Vector3(0, h * 0.5 + hover, 0))

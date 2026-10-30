@@ -162,3 +162,8 @@ CC0 — авторство не обязательно, указано из ув
 
 ## Шрифты интерфейса
 Fira Sans (Regular, SemiBold), SIL Open Font License 1.1. Текст лицензии: assets/fonts/OFL.txt.
+
+## Физика ткани
+GPU Cloth Sim 3.0.0 — alien-life, MIT: https://github.com/alien-life/gpu-cloth-sim.
+Локальные изменения для интеграции перечислены в addons/godot_gpu_cloth/LOCAL_CHANGES.md.
+Полный текст лицензии: addons/godot_gpu_cloth/LICENSE; в Windows-архиве — GPU_CLOTH_LICENSE.txt.

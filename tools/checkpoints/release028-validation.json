@@ -1,0 +1,1101 @@
+{
+  "version": "0.2.8",
+  "date": "2026-10-30",
+  "engine": "Godot 4.7.2; Linux Vulkan; RTX 4070 Laptop",
+  "tests": {
+    "run_tests": [
+      "Проверок: 1180, ошибок: 0"
+    ],
+    "animation_tests": [
+      "Анимации: моделей 48, проверок 435, ошибок 0"
+    ],
+    "support_tests": [
+      "Полнотелая опора: 48 моделей, проверок 1893, ошибок 0"
+    ],
+    "idle_loop_tests": [
+      "Idle runtime: 374 checks, 0 failures"
+    ],
+    "flight_pose_tests": [
+      "Flight foot orientation: 22680 checks, 0 failures"
+    ],
+    "likorez_tests": [
+      "Ликорез: 67 проверок, 0 ошибок"
+    ],
+    "encounter_flight_tests": [
+      "Встречи/полёт: 9869 проверок, 0 ошибок, редких 403/4000"
+    ],
+    "ai_tactics_tests": [
+      "AI tactics: 0 failures"
+    ],
+    "rig-tests": [
+      "Скелеты: 48 моделей, 1197 костей. Поза покоя, веса, кватернионы и исходная геометрия: OK"
+    ],
+    "personality-tests": [
+      "Индивидуальность: 48 моделей, 120 проверок характерных частей: OK"
+    ],
+    "idle-source-tests": [
+      "Idle loops: 1164 channels OK; preserved mesh/UV/rest/action references: 48"
+    ],
+    "beetle-tests": [
+      "rogozhuk_fire exterior topology and rear skinning OK",
+      "rogozhuk_gale exterior topology and rear skinning OK",
+      "rogozhuk_light exterior topology and rear skinning OK",
+      "rogozhuk_shadow exterior topology and rear skinning OK",
+      "rogozhuk_stone exterior topology and rear skinning OK",
+      "rogozhuk_tide exterior topology and rear skinning OK"
+    ],
+    "tunnel-tests": [
+      "Stone: 9 former clear passages now hit the reconstructed exterior"
+    ],
+    "cloth-source-tests": [
+      "ratnik_fire body/cape, pinned seam, original surface and clips OK",
+      "ratnik_gale body/cape, pinned seam, original surface and clips OK",
+      "ratnik_light body/cape, pinned seam, original surface and clips OK",
+      "ratnik_shadow body/cape, pinned seam, original surface and clips OK",
+      "ratnik_stone body/cape, pinned seam, original surface and clips OK",
+      "ratnik_tide body/cape, pinned seam, original surface and clips OK"
+    ],
+    "kolossar_source_preservation": "Kolossars: 6 references: geometry, UVs, weights, rest and unrelated channels preserved; right-arm extremes reduced",
+    "tide_attachment": [
+      "Tide attachment: rest hips enter torso; feet remain outside",
+      "Tide attachment: idle 90 hips enter torso; feet remain outside",
+      "Tide attachment: appear 32 hips enter torso; feet remain outside",
+      "Tide attachment: attack 18 hips enter torso; feet remain outside",
+      "Tide attachment: attack 36 hips enter torso; feet remain outside",
+      "Tide attachment: hit 18 hips enter torso; feet remain outside"
+    ]
+  },
+  "cloth_gpu": {
+    "checks": 893493,
+    "failures": 0,
+    "models": [
+      {
+        "collider_triangles": 683,
+        "id": "creature_ratnik_fire",
+        "max_displacement": 0.100000038743019,
+        "minimum_world_y": -4.76837158203125e-06,
+        "minimum_y": -0.430790841579437,
+        "particles": 11945,
+        "pinned_error": 0.0,
+        "samples": [
+          {
+            "displacement": 0.100000023841858,
+            "frame": 30,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000023841858,
+            "frame": 60,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000016391277,
+            "frame": 100,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000023841858,
+            "frame": 140,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000038743019,
+            "frame": 175,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.00803592801094055,
+            "frame": 188,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.00283326744101942,
+            "frame": 212,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.0125125404447317,
+            "frame": 242,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.0758647099137306,
+            "frame": 290,
+            "pinned_error": 0.0
+          }
+        ],
+        "triangles": 23625,
+        "wall_seconds": 4.751
+      },
+      {
+        "collider_triangles": 564,
+        "id": "creature_ratnik_gale",
+        "max_displacement": 0.100000038743019,
+        "minimum_world_y": 1.9073486328125e-06,
+        "minimum_y": -0.426631063222885,
+        "particles": 19074,
+        "pinned_error": 0.0,
+        "samples": [
+          {
+            "displacement": 0.100000023841858,
+            "frame": 30,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000023841858,
+            "frame": 60,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000016391277,
+            "frame": 100,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000023841858,
+            "frame": 140,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000038743019,
+            "frame": 175,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.00550490384921432,
+            "frame": 188,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.00547878071665764,
+            "frame": 212,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.0128505155444145,
+            "frame": 242,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.0585639998316765,
+            "frame": 290,
+            "pinned_error": 0.0
+          }
+        ],
+        "triangles": 38054,
+        "wall_seconds": 6.16
+      },
+      {
+        "collider_triangles": 549,
+        "id": "creature_ratnik_light",
+        "max_displacement": 0.100000038743019,
+        "minimum_world_y": -4.76837158203125e-07,
+        "minimum_y": -0.429042220115662,
+        "particles": 17458,
+        "pinned_error": 0.0,
+        "samples": [
+          {
+            "displacement": 0.100000023841858,
+            "frame": 30,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000023841858,
+            "frame": 60,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000016391277,
+            "frame": 100,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000023841858,
+            "frame": 140,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000038743019,
+            "frame": 175,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.00552658922970295,
+            "frame": 188,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.0114289969205856,
+            "frame": 212,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.0152708934620023,
+            "frame": 242,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.0611373372375965,
+            "frame": 290,
+            "pinned_error": 0.0
+          }
+        ],
+        "triangles": 34599,
+        "wall_seconds": 6.123
+      },
+      {
+        "collider_triangles": 600,
+        "id": "creature_ratnik_stone",
+        "max_displacement": 0.100000038743019,
+        "minimum_world_y": -1.43051147460938e-06,
+        "minimum_y": -0.429111212491989,
+        "particles": 20877,
+        "pinned_error": 0.0,
+        "samples": [
+          {
+            "displacement": 0.100000023841858,
+            "frame": 30,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000023841858,
+            "frame": 60,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000016391277,
+            "frame": 100,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000023841858,
+            "frame": 140,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000038743019,
+            "frame": 175,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.00534649705514312,
+            "frame": 188,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.00693751452490687,
+            "frame": 212,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.0108251087367535,
+            "frame": 242,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.0482360571622849,
+            "frame": 290,
+            "pinned_error": 0.0
+          }
+        ],
+        "triangles": 41646,
+        "wall_seconds": 6.242
+      },
+      {
+        "collider_triangles": 586,
+        "id": "creature_ratnik_shadow",
+        "max_displacement": 0.100000038743019,
+        "minimum_world_y": -3.33786010742188e-06,
+        "minimum_y": -0.429114013910294,
+        "particles": 16501,
+        "pinned_error": 0.0,
+        "samples": [
+          {
+            "displacement": 0.100000023841858,
+            "frame": 30,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000023841858,
+            "frame": 60,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000016391277,
+            "frame": 100,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000023841858,
+            "frame": 140,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000038743019,
+            "frame": 175,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.005082743242383,
+            "frame": 188,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.0020549965556711,
+            "frame": 212,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.0133299771696329,
+            "frame": 242,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.075732134282589,
+            "frame": 290,
+            "pinned_error": 0.0
+          }
+        ],
+        "triangles": 32706,
+        "wall_seconds": 6.069
+      },
+      {
+        "collider_triangles": 643,
+        "id": "creature_ratnik_tide",
+        "max_displacement": 0.100000038743019,
+        "minimum_world_y": -2.62260437011719e-06,
+        "minimum_y": -0.418427675962448,
+        "particles": 13418,
+        "pinned_error": 0.0,
+        "samples": [
+          {
+            "displacement": 0.100000031292439,
+            "frame": 30,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000023841858,
+            "frame": 60,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.0992739051580429,
+            "frame": 100,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000023841858,
+            "frame": 140,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.100000038743019,
+            "frame": 175,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.00541971903294325,
+            "frame": 188,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.00637447228655219,
+            "frame": 212,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.011579817160964,
+            "frame": 242,
+            "pinned_error": 0.0
+          },
+          {
+            "displacement": 0.061472225934267,
+            "frame": 290,
+            "pinned_error": 0.0
+          }
+        ],
+        "triangles": 26572,
+        "wall_seconds": 6.331
+      }
+    ]
+  },
+  "stone_tunnel_probes": [
+    {
+      "origin": [
+        0.9775077717774108,
+        0.24777777777777776,
+        -0.2572133379089029
+      ],
+      "direction": [
+        -0.9007889439580863,
+        -0.0,
+        0.43425715704277784
+      ],
+      "source_hits": 0,
+      "repaired_hits": 2,
+      "thickness": 0.14346241477121657
+    },
+    {
+      "origin": [
+        0.9191076713475199,
+        0.3159259259259259,
+        -0.37835392002740414
+      ],
+      "direction": [
+        -0.9007889439580863,
+        -0.0,
+        0.43425715704277784
+      ],
+      "source_hits": 0,
+      "repaired_hits": 2,
+      "thickness": 0.2579788470602188
+    },
+    {
+      "origin": [
+        0.9191076713475199,
+        0.3244444444444444,
+        -0.37835392002740414
+      ],
+      "direction": [
+        -0.9007889439580863,
+        -0.0,
+        0.43425715704277784
+      ],
+      "source_hits": 0,
+      "repaired_hits": 2,
+      "thickness": 0.23742171440054638
+    },
+    {
+      "origin": [
+        0.9191076713475199,
+        0.3329629629629629,
+        -0.37835392002740414
+      ],
+      "direction": [
+        -0.9007889439580863,
+        -0.0,
+        0.43425715704277784
+      ],
+      "source_hits": 0,
+      "repaired_hits": 2,
+      "thickness": 0.21859737346244124
+    },
+    {
+      "origin": [
+        0.9191076713475199,
+        0.34148148148148144,
+        -0.37835392002740414
+      ],
+      "direction": [
+        -0.9007889439580863,
+        -0.0,
+        0.43425715704277784
+      ],
+      "source_hits": 0,
+      "repaired_hits": 2,
+      "thickness": 0.19540186368491774
+    },
+    {
+      "origin": [
+        0.924947681390509,
+        0.34148148148148144,
+        -0.366239861815554
+      ],
+      "direction": [
+        -0.9007889439580863,
+        -0.0,
+        0.43425715704277784
+      ],
+      "source_hits": 0,
+      "repaired_hits": 2,
+      "thickness": 0.16817862264173233
+    },
+    {
+      "origin": [
+        0.9483077215624653,
+        0.34148148148148144,
+        -0.31778362896815354
+      ],
+      "direction": [
+        -0.9007889439580863,
+        -0.0,
+        0.43425715704277784
+      ],
+      "source_hits": 0,
+      "repaired_hits": 2,
+      "thickness": 0.0527973101657645
+    },
+    {
+      "origin": [
+        0.9191076713475199,
+        0.35,
+        -0.37835392002740414
+      ],
+      "direction": [
+        -0.9007889439580863,
+        -0.0,
+        0.43425715704277784
+      ],
+      "source_hits": 0,
+      "repaired_hits": 2,
+      "thickness": 0.14868367861181975
+    },
+    {
+      "origin": [
+        0.924947681390509,
+        0.35,
+        -0.366239861815554
+      ],
+      "direction": [
+        -0.9007889439580863,
+        -0.0,
+        0.43425715704277784
+      ],
+      "source_hits": 0,
+      "repaired_hits": 2,
+      "thickness": 0.12259112280113682
+    }
+  ],
+  "final_stone_deformation": [
+    {
+      "id": "creature_rogozhuk_stone",
+      "worst": [
+        {
+          "action": "appear",
+          "frame": 32,
+          "max": 13.67,
+          "p999": 3.45,
+          "extension_height": 0.0463,
+          "over2": 2210,
+          "over3": 479,
+          "bones": {
+            "thigh.R": 0.42,
+            "chest": 0.23,
+            "thigh.L": 0.1,
+            "arm.R": 0.2
+          },
+          "rest_mid": [
+            0.06580837070941925,
+            -0.16516390442848206,
+            -0.014378504827618599
+          ]
+        },
+        {
+          "action": "appear",
+          "frame": 40,
+          "max": 12.6,
+          "p999": 3.32,
+          "extension_height": 0.0425,
+          "over2": 2063,
+          "over3": 412,
+          "bones": {
+            "thigh.R": 0.42,
+            "chest": 0.23,
+            "thigh.L": 0.1,
+            "arm.R": 0.2
+          },
+          "rest_mid": [
+            0.06580837070941925,
+            -0.16516390442848206,
+            -0.014378504827618599
+          ]
+        },
+        {
+          "action": "appear",
+          "frame": 24,
+          "max": 12.53,
+          "p999": 3.36,
+          "extension_height": 0.0418,
+          "over2": 2083,
+          "over3": 439,
+          "bones": {
+            "thigh.R": 0.42,
+            "chest": 0.23,
+            "thigh.L": 0.1,
+            "arm.R": 0.2
+          },
+          "rest_mid": [
+            0.06580837070941925,
+            -0.16516390442848206,
+            -0.014378504827618599
+          ]
+        },
+        {
+          "action": "ability",
+          "frame": 24,
+          "max": 12.06,
+          "p999": 3.2,
+          "extension_height": 0.0403,
+          "over2": 1695,
+          "over3": 385,
+          "bones": {
+            "thigh.R": 0.42,
+            "chest": 0.23,
+            "thigh.L": 0.1,
+            "arm.R": 0.2
+          },
+          "rest_mid": [
+            0.06580837070941925,
+            -0.16516390442848206,
+            -0.014378504827618599
+          ]
+        },
+        {
+          "action": "roar",
+          "frame": 28,
+          "max": 12.05,
+          "p999": 3.2,
+          "extension_height": 0.0403,
+          "over2": 1703,
+          "over3": 385,
+          "bones": {
+            "thigh.R": 0.42,
+            "chest": 0.23,
+            "thigh.L": 0.1,
+            "arm.R": 0.2
+          },
+          "rest_mid": [
+            0.06580837070941925,
+            -0.16516390442848206,
+            -0.014378504827618599
+          ]
+        },
+        {
+          "action": "roar",
+          "frame": 35,
+          "max": 11.73,
+          "p999": 3.22,
+          "extension_height": 0.039,
+          "over2": 1765,
+          "over3": 380,
+          "bones": {
+            "thigh.R": 0.42,
+            "chest": 0.23,
+            "thigh.L": 0.1,
+            "arm.R": 0.2
+          },
+          "rest_mid": [
+            0.06580837070941925,
+            -0.16516390442848206,
+            -0.014378504827618599
+          ]
+        },
+        {
+          "action": "ability",
+          "frame": 30,
+          "max": 11.58,
+          "p999": 3.19,
+          "extension_height": 0.0385,
+          "over2": 1701,
+          "over3": 368,
+          "bones": {
+            "thigh.R": 0.42,
+            "chest": 0.23,
+            "thigh.L": 0.1,
+            "arm.R": 0.2
+          },
+          "rest_mid": [
+            0.06580837070941925,
+            -0.16516390442848206,
+            -0.014378504827618599
+          ]
+        },
+        {
+          "action": "ability",
+          "frame": 18,
+          "max": 11.37,
+          "p999": 3.15,
+          "extension_height": 0.0377,
+          "over2": 1636,
+          "over3": 354,
+          "bones": {
+            "thigh.R": 0.42,
+            "chest": 0.23,
+            "thigh.L": 0.1,
+            "arm.R": 0.2
+          },
+          "rest_mid": [
+            0.06580837070941925,
+            -0.16516390442848206,
+            -0.014378504827618599
+          ]
+        }
+      ]
+    }
+  ],
+  "final_tide_deformation": [
+    {
+      "id": "creature_rogozhuk_tide",
+      "worst": [
+        {
+          "action": "attack",
+          "frame": 36,
+          "max": 3.15,
+          "p999": 2.53,
+          "extension_height": 0.0673,
+          "over2": 9,
+          "over3": 1,
+          "bones": {
+            "chest": 0.53,
+            "shell": 0.29,
+            "thigh.R": 0.12,
+            "hips": 0.06
+          },
+          "rest_mid": [
+            0.14144209027290344,
+            0.03468170762062073,
+            -0.18438944220542908
+          ]
+        },
+        {
+          "action": "attack",
+          "frame": 27,
+          "max": 3.11,
+          "p999": 2.5,
+          "extension_height": 0.0503,
+          "over2": 7,
+          "over3": 1,
+          "bones": {
+            "chest": 0.53,
+            "shell": 0.29,
+            "thigh.R": 0.12,
+            "hips": 0.06
+          },
+          "rest_mid": [
+            0.14144209027290344,
+            0.03468170762062073,
+            -0.18438944220542908
+          ]
+        },
+        {
+          "action": "attack",
+          "frame": 18,
+          "max": 3.08,
+          "p999": 2.34,
+          "extension_height": 0.0298,
+          "over2": 5,
+          "over3": 1,
+          "bones": {
+            "chest": 0.53,
+            "shell": 0.29,
+            "thigh.R": 0.12,
+            "hips": 0.06
+          },
+          "rest_mid": [
+            0.14144209027290344,
+            0.03468170762062073,
+            -0.18438944220542908
+          ]
+        },
+        {
+          "action": "hit",
+          "frame": 30,
+          "max": 2.88,
+          "p999": 2.3,
+          "extension_height": 0.043,
+          "over2": 5,
+          "over3": 0,
+          "bones": {
+            "chest": 0.53,
+            "shell": 0.29,
+            "thigh.R": 0.12,
+            "hips": 0.06
+          },
+          "rest_mid": [
+            0.14144209027290344,
+            0.03468170762062073,
+            -0.18438944220542908
+          ]
+        },
+        {
+          "action": "hit",
+          "frame": 24,
+          "max": 2.84,
+          "p999": 2.26,
+          "extension_height": 0.0446,
+          "over2": 5,
+          "over3": 0,
+          "bones": {
+            "chest": 0.53,
+            "shell": 0.29,
+            "thigh.R": 0.12,
+            "hips": 0.06
+          },
+          "rest_mid": [
+            0.14144209027290344,
+            0.03468170762062073,
+            -0.18438944220542908
+          ]
+        },
+        {
+          "action": "hit",
+          "frame": 36,
+          "max": 2.79,
+          "p999": 2.26,
+          "extension_height": 0.0403,
+          "over2": 4,
+          "over3": 0,
+          "bones": {
+            "chest": 0.53,
+            "shell": 0.29,
+            "thigh.R": 0.12,
+            "hips": 0.06
+          },
+          "rest_mid": [
+            0.14144209027290344,
+            0.03468170762062073,
+            -0.18438944220542908
+          ]
+        },
+        {
+          "action": "attack",
+          "frame": 18,
+          "max": 2.76,
+          "p999": 2.24,
+          "extension_height": 0.0217,
+          "over2": 600,
+          "over3": 0,
+          "bones": {
+            "shell": 0.63,
+            "horn": 0.36
+          },
+          "rest_mid": [
+            0.12395337969064713,
+            0.2660598158836365,
+            0.20372599363327026
+          ]
+        },
+        {
+          "action": "attack",
+          "frame": 9,
+          "max": 2.74,
+          "p999": 2.22,
+          "extension_height": 0.035,
+          "over2": 4,
+          "over3": 0,
+          "bones": {
+            "chest": 0.53,
+            "shell": 0.29,
+            "thigh.R": 0.12,
+            "hips": 0.06
+          },
+          "rest_mid": [
+            0.14144209027290344,
+            0.03468170762062073,
+            -0.18438944220542908
+          ]
+        }
+      ]
+    }
+  ],
+  "matches": {
+    "source_before_attachment_fix": {
+      "turns": [
+        13,
+        11
+      ],
+      "battles": 9
+    },
+    "final_exported_pack": {
+      "turns": [
+        17,
+        20
+      ],
+      "battles": 13,
+      "exit_code": 0,
+      "engine_errors": []
+    }
+  },
+  "assets": {
+    "rogozhuk_stone.glb": {
+      "bytes": 18751008,
+      "sha256": "627b885fb389b04e97adcf8a49a5aacc450d915efcd3715aeba5b80a95e0eef3",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_skin_repair": 5,
+        "sfery_beetle_body": 7,
+        "stone_exterior_repair": "0.2.8-manifold-wrap",
+        "sfery_baked_repair_atlas": 1,
+        "stone_exterior_weight_smoothing": 2
+      }
+    },
+    "rogozhuk_tide.glb": {
+      "bytes": 26385532,
+      "sha256": "4ff3f18af1934d271c019e2301f8b914f33d14746da550eb9ddb885094eba2a9",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_skin_repair": 5,
+        "sfery_beetle_body": 7,
+        "sfery_water_beetle_anatomy": 13
+      }
+    },
+    "ratnik_fire.glb": {
+      "bytes": 23843136,
+      "sha256": "7824f01282e239912f40c3eafbf26dfa2ffd0c8b551c325ac75f3725242a81dd",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_rigid_blade": 1,
+        "sfery_skin_repair": 5,
+        "sfery_cape_repair": 2,
+        "sfery_gpu_cape": 1
+      }
+    },
+    "ratnik_gale.glb": {
+      "bytes": 23799160,
+      "sha256": "6e40647983c1e9fb8c0c5f79513a6e5e97fe496f2ac5562f34999cf5769a1103",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_rigid_blade": 1,
+        "sfery_skin_repair": 5,
+        "sfery_cape_repair": 2,
+        "sfery_gpu_cape": 1
+      }
+    },
+    "ratnik_light.glb": {
+      "bytes": 23453996,
+      "sha256": "454e8442b83fe7fd618d0bc0338dfc8b51b1daabaa49b4a5237dcb669598f727",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_rigid_blade": 1,
+        "sfery_skin_repair": 5,
+        "sfery_cape_repair": 2,
+        "sfery_gpu_cape": 1
+      }
+    },
+    "ratnik_shadow.glb": {
+      "bytes": 24043060,
+      "sha256": "5be558ea4208a92f4b1b2684847935fa5b0ad9ebc2cb4b1f35a8329f19f5789b",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_rigid_blade": 1,
+        "sfery_skin_repair": 5,
+        "sfery_cape_repair": 2,
+        "sfery_gpu_cape": 1
+      }
+    },
+    "ratnik_stone.glb": {
+      "bytes": 23692708,
+      "sha256": "0c7909c072cca08b68536d94df80915358b3052e8979eff39614a94cee753db6",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_rigid_blade": 1,
+        "sfery_skin_repair": 5,
+        "sfery_cape_repair": 2,
+        "sfery_gpu_cape": 1
+      }
+    },
+    "ratnik_tide.glb": {
+      "bytes": 24268668,
+      "sha256": "1092ec4c85963fe869274d5555a881921e46b51327809cbaee385c70f38e37ce",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_rigid_blade": 1,
+        "sfery_skin_repair": 5,
+        "sfery_cape_repair": 2,
+        "sfery_gpu_cape": 1
+      }
+    },
+    "kolossar_fire.glb": {
+      "bytes": 30475100,
+      "sha256": "30cae0eb02ec6073300d1e2ed34aa65a3f8d6e64941612f8fd1555294ba60657",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_skin_repair": 5
+      }
+    },
+    "kolossar_gale.glb": {
+      "bytes": 30800416,
+      "sha256": "dbbabf794f6a5acf4d64463d80a253757d51ce24990814759ec6bc587f7f54fd",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_skin_repair": 5
+      }
+    },
+    "kolossar_light.glb": {
+      "bytes": 32909708,
+      "sha256": "e103137b0e52c6ba2a9673dda69e519c0034ac8eccba4b5e32194d1b1c93ef71",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_skin_repair": 5
+      }
+    },
+    "kolossar_shadow.glb": {
+      "bytes": 31594792,
+      "sha256": "6ea6f89a1f2632961e66821d504c57a219952f27e8f0974b4ebc07503ab1462c",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_skin_repair": 5
+      }
+    },
+    "kolossar_stone.glb": {
+      "bytes": 29970328,
+      "sha256": "efbfa17fa96fbc5cbdf6acb36666f6595c4cfb9b5551f23ffea8f1d9576d5070",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_skin_repair": 5
+      }
+    },
+    "kolossar_tide.glb": {
+      "bytes": 28804044,
+      "sha256": "c212690db15deaf3e63e4aa44f312c657ebb2c2b8441650094ba837d38e1de56",
+      "extras": {
+        "sfery_rig_version": 2,
+        "sfery_personality_version": 1,
+        "sfery_idle_loop_version": 2,
+        "sfery_skin_repair": 5
+      }
+    },
+    "likorez_shadow.glb": {
+      "bytes": 28609916,
+      "sha256": "5874835226b02bce3dba194313d07ed1631f7b0fabf5b6d65ef38dc1b97d7b09",
+      "extras": {
+        "sfery_skin_repair": 5,
+        "likorez_motion_version": "0.2.8"
+      }
+    }
+  },
+  "windows_archive": {
+    "file": "build/Sfery_Stikhiy_v0.2.8_win64.zip",
+    "bytes": 840299211,
+    "sha256": "c477c0a08666cb89e7ea6b0165314f165dfcbcb783b6fb2c0e0660460179c9ac",
+    "crc_verified": true,
+    "native_windows_run": false,
+    "pack_smoke": "Final Windows PCK loaded by Linux/Vulkan Godot: two complete matches (17/20 turns,13 battles), exit 0, no engine errors in final packed autoplay log."
+  },
+  "visual_evidence": {
+    "before_after": "build/review028_before_after.jpg",
+    "raw_proof_frames": "tools/_tmp/review028/proof-*",
+    "cloth_actual_gpu_frames": "tools/_tmp/review028/cloth-final-qa",
+    "beetle_final_movements": "tools/_tmp/review028/beetle-final-*; tools/_tmp/review028/stone-contact-motion"
+  },
+  "known_diagnostics": [
+    "Tide cape has one pre-existing nonmanifold edge skipped for bending; source surface preserved byte-for-byte at every triangle corner.",
+    "Autoplay and packed-scene smoke exit 0, but report cached resources at process shutdown; no invalid-RID errors after solver cleanup fix."
+  ]
+}

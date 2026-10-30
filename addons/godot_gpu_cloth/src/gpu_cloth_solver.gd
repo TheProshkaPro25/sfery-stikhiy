@@ -586,11 +586,26 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint() or not _gpu_init_done:
 		return
+	if not _mesh_instance_node.is_visible_in_tree():
+		_needs_warm_start = true
+		return
 	if _needs_warm_start:
-		RenderingServer.call_on_render_thread(_gpu_do_warm_start)
+		# Reset against the current pose, including after a hidden sphere,
+		# teleport or explicit actor reset. The initial GPU buffers may be old.
+		var bones := _pack_bone_matrices()
+		var colliders := _pack_colliders() if _collider_count > 0 else PackedByteArray()
+		var triangles := _pack_collider_tris() if not _collider_tris.is_empty() else PackedByteArray()
+		_prev_skel_world_pos = _ref_node.global_position
+		_prev_skel_world_basis = _ref_node.global_transform.basis
+		RenderingServer.call_on_render_thread(func():
+			if not bones.is_empty(): _rd.buffer_update(_bone_transforms_buffer, 0, bones.size(), bones)
+			if not colliders.is_empty(): _rd.buffer_update(_colliders_buffer, 0, colliders.size(), colliders)
+			if not triangles.is_empty(): _rd.buffer_update(_collider_tri_buffer, 0, triangles.size(), triangles)
+			_gpu_do_warm_start()
+		)
 		_needs_warm_start = false
 		return
-	_simulate(delta)
+	_simulate(minf(delta, 1.0 / 30.0))
 	if debug_show_particles or debug_show_colliders or debug_show_peer_proxy:
 		_ensure_debug_setup()
 		# Skeleton-local positions are drawn at world via the skeleton's
@@ -608,42 +623,23 @@ func _process(delta: float) -> void:
 		_debug_im.clear_surfaces()
 
 
+func reset_simulation() -> void:
+	_needs_warm_start = true
+
+
 func _exit_tree() -> void:
 	if not _gpu_init_done:
 		return
 	_gpu_init_done = false
 	# Capture every RID into a list so the lambda stays safe after this node is freed.
 	# Hazard 8 — every free_rid must run on the render thread that owns the main RD.
+	# Free descriptor sets before the resources they reference: freeing a
+	# storage buffer auto-invalidates its sets on Godot 4.7.
 	var rids: Array = [
-		_positions_buffer, _predicted_buffer, _velocities_buffer,
-		_constraints_buffer, _colliders_buffer,
-		_rest_positions_buffer, _bone_indices_buffer, _bone_weights_skin_buffer,
-		_bone_transforms_buffer, _skinned_targets_buffer, _cloth_weights_buffer,
-		_face_normals_buffer, _indices_gpu_buffer,
-		_peer_proxy_indices_buffer,
-		_vert_tri_counts_buffer, _vert_tri_offsets_buffer, _vert_tri_list_buffer,
-		_bindings_buffer, _pin_overrides_buffer, _welded_index_lookup_rid,
-		_lambda_buffer,
-		_positions_img_rid, _normals_img_rid,
-		_collider_tri_buffer,
-		_skin_uniform_set, _predict_uniform_set, _solve_uniform_set,
-		_update_uniform_set, _collide_uniform_set, _warm_start_uniform_set,
-		_normals_uniform_set, _output_uniform_set,
-		_fishing_uniform_set, _pin_override_uniform_set,
-		_skin_collide_uniform_set, _collide_tris_uniform_set, _skin_collide_tris_uniform_set,
-		_self_collide_uniform_set,
-		_skin_pipeline, _predict_pipeline, _solve_pipeline,
-		_update_pipeline, _collide_pipeline, _warm_start_pipeline,
-		_normals_pipeline, _output_pipeline,
-		_fishing_pipeline, _pin_override_pipeline,
-		_skin_collide_pipeline, _collide_tris_pipeline, _skin_collide_tris_pipeline,
-		_peer_collide_pipeline, _peer_skin_collide_pipeline,
-		_skin_shader, _predict_shader, _solve_shader,
-		_update_shader, _collide_shader, _warm_start_shader,
-		_normals_shader, _output_shader,
-		_fishing_shader, _pin_override_shader,
-		_skin_collide_shader, _collide_tris_shader, _skin_collide_tris_shader,
-		_peer_collide_shader, _peer_skin_collide_shader,
+		_skin_uniform_set, _predict_uniform_set, _solve_uniform_set, _update_uniform_set, _collide_uniform_set, _warm_start_uniform_set, _normals_uniform_set, _output_uniform_set, _fishing_uniform_set, _pin_override_uniform_set, _skin_collide_uniform_set, _collide_tris_uniform_set, _skin_collide_tris_uniform_set, _self_collide_uniform_set,
+		_skin_pipeline, _predict_pipeline, _solve_pipeline, _update_pipeline, _collide_pipeline, _warm_start_pipeline, _normals_pipeline, _output_pipeline, _fishing_pipeline, _pin_override_pipeline, _skin_collide_pipeline, _collide_tris_pipeline, _skin_collide_tris_pipeline, _peer_collide_pipeline, _peer_skin_collide_pipeline,
+		_skin_shader, _predict_shader, _solve_shader, _update_shader, _collide_shader, _warm_start_shader, _normals_shader, _output_shader, _fishing_shader, _pin_override_shader, _skin_collide_shader, _collide_tris_shader, _skin_collide_tris_shader, _peer_collide_shader, _peer_skin_collide_shader,
+		_positions_buffer, _predicted_buffer, _velocities_buffer, _constraints_buffer, _colliders_buffer, _rest_positions_buffer, _bone_indices_buffer, _bone_weights_skin_buffer, _bone_transforms_buffer, _skinned_targets_buffer, _cloth_weights_buffer, _face_normals_buffer, _indices_gpu_buffer, _peer_proxy_indices_buffer, _vert_tri_counts_buffer, _vert_tri_offsets_buffer, _vert_tri_list_buffer, _bindings_buffer, _pin_overrides_buffer, _welded_index_lookup_rid, _lambda_buffer, _positions_img_rid, _normals_img_rid, _collider_tri_buffer,
 	]
 	# Per-peer uniform sets reference RIDs we don't own (the peer's
 	# positions/indices buffers). When the peer's _exit_tree runs first, the
@@ -663,6 +659,14 @@ func _exit_tree() -> void:
 			rids.append(p.uniform_set)
 		if p.has("sanitize_uniform_set") and p.sanitize_uniform_set.is_valid():
 			rids.append(p.sanitize_uniform_set)
+	if _surf_mat:
+		_surf_mat.set_shader_parameter("gpu_driven", false)
+		for parameter in ["positions_tex", "normals_tex", "welded_index_tex"]:
+			_surf_mat.set_shader_parameter(parameter, null)
+	# Texture2DRD render wrappers must stop advertising the RD images before
+	# their storage is freed, even while the model awaits end-of-frame deletion.
+	for texture in [_positions_tex, _normals_tex, _welded_index_tex]:
+		if texture: texture.texture_rd_rid = RID()
 	RenderingServer.call_on_render_thread(func() -> void:
 		var rd := RenderingServer.get_rendering_device()
 		if not rd:
@@ -1269,7 +1273,7 @@ func _initialize() -> void:
 
 	if cloth_material is ShaderMaterial:
 		var cand := cloth_material as ShaderMaterial
-		if cand.shader and cand.shader.resource_path in v3_paths:
+		if _has_substrate_contract(cand.shader):
 			base_mat = cand
 		else:
 			push_warning("[GPUCloth] cloth_material's shader is not v3-compatible; force-replacing with cloth_surface_textured. Use cloth_surface.gdshader or cloth_surface_textured.gdshader to keep your shader_parameter assignments. (Auto-port skipped because cloth_material was explicitly assigned.)")
@@ -1277,7 +1281,7 @@ func _initialize() -> void:
 		var existing := _mesh_instance_node.get_active_material(0)
 		if existing is ShaderMaterial:
 			var ex_sh := existing as ShaderMaterial
-			if ex_sh.shader and ex_sh.shader.resource_path in v3_paths:
+			if _has_substrate_contract(ex_sh.shader):
 				base_mat = ex_sh
 		elif existing is StandardMaterial3D:
 			port_source = existing as StandardMaterial3D
@@ -2031,6 +2035,18 @@ func _dispatch_output_passes(cl: int, groups: int, nflip: float) -> void:
 #  Mesh ingestion (port from v2.x:_extract_mesh_data)
 # ---------------------------------------------------------------------------
 
+static func _has_substrate_contract(shader: Shader) -> bool:
+	if shader == null:
+		return false
+	var names := {}
+	for uniform in shader.get_shader_uniform_list():
+		names[uniform.name] = true
+	for required in ["gpu_driven", "positions_tex", "normals_tex", "welded_index_tex", "tex_width", "render_tex_width", "skel_to_mesh_transform"]:
+		if not names.has(required):
+			return false
+	return true
+
+
 static func extract_mesh_data(mesh: Mesh) -> Dictionary:
 	var vertices  := PackedVector3Array()
 	var uvs       := PackedVector2Array()
@@ -2128,6 +2144,32 @@ static func extract_mesh_data(mesh: Mesh) -> Dictionary:
 					has_any_bones = true
 				bones.append_array(bones_raw)
 				weights.append_array(weights_raw)
+			elif per_vert == 8 and weights_raw.size() == verts.size() * 8:
+				# Collider ingestion only: the native body still renders with its
+				# original eight influences. Cloth is authored separately with four.
+				has_surface_bones = true
+				if not has_any_bones:
+					bones.resize(base_index * 4)
+					weights.resize(base_index * 4)
+					has_any_bones = true
+				var best_bones := PackedInt32Array([0, 0, 0, 0])
+				var best_weights := PackedFloat32Array([0, 0, 0, 0])
+				for vertex in verts.size():
+					best_weights.fill(0.0)
+					for influence in 8:
+						var weight: float = weights_raw[vertex * 8 + influence]
+						for rank in 4:
+							if weight <= best_weights[rank]: continue
+							for shift in range(3, rank, -1):
+								best_weights[shift] = best_weights[shift - 1]
+								best_bones[shift] = best_bones[shift - 1]
+							best_weights[rank] = weight
+							best_bones[rank] = bones_raw[vertex * 8 + influence]
+							break
+					var total: float = maxf(best_weights[0] + best_weights[1] + best_weights[2] + best_weights[3], 0.000001)
+					for rank in 4:
+						bones.append(best_bones[rank])
+						weights.append(best_weights[rank] / total)
 		if not has_surface_bones and has_any_bones:
 			var zero_bones := PackedInt32Array(); zero_bones.resize(verts.size() * 4)
 			bones.append_array(zero_bones)

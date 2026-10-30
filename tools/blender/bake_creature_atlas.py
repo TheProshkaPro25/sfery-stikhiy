@@ -7,14 +7,18 @@ from mathutils import Matrix
 args=sys.argv[sys.argv.index('--')+1:];source,target,prefix=map(lambda s:Path(s).resolve(),args[:3]);resolution=int(args[3]) if len(args)>3 else 4096
 bpy.ops.wm.read_factory_settings(use_empty=True)
 def load(path):
- before=set(bpy.data.objects);bpy.ops.import_scene.gltf(filepath=str(path));objects=list(set(bpy.data.objects)-before)
+ # Blender RNA wrapper hashes can change when another import renames IDs.
+ before={o.as_pointer() for o in bpy.data.objects};bpy.ops.import_scene.gltf(filepath=str(path));objects=[o for o in bpy.data.objects if o.as_pointer() not in before]
+ print('IMPORTED',path,[(o.name,o.type) for o in objects],flush=True)
  for obj in objects:
   obj.animation_data_clear()
   if obj.type=='ARMATURE':
    for bone in obj.pose.bones:bone.matrix_basis=Matrix.Identity(4)
  return objects
 src=load(source);dst=load(target)
-source_meshes=[o for o in src if o.type=='MESH'];target_meshes=[o for o in dst if o.type=='MESH']
+# glTF's armature importer also creates an Icosphere bone-display mesh.
+def skinned(objects):return [o for o in objects if o.type=='MESH' and any(m.type=='ARMATURE' for m in o.modifiers)]
+source_meshes=skinned(src);target_meshes=skinned(dst)
 assert len(target_meshes)==1,'Only one repaired mesh supported'
 obj=target_meshes[0]
 # Original primitive0 is the exterior; later primitives were the rejected inner covers.
