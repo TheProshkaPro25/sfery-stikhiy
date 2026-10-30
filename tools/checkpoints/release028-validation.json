@@ -1097,5 +1097,16 @@
   "known_diagnostics": [
     "Tide cape has one pre-existing nonmanifold edge skipped for bending; source surface preserved byte-for-byte at every triangle corner.",
     "Autoplay and packed-scene smoke exit 0, but report cached resources at process shutdown; no invalid-RID errors after solver cleanup fix."
-  ]
+  ],
+  "publication": {
+    "release_id": 429219129,
+    "url": "https://github.com/TheProshkaPro25/sfery-stikhiy/releases/tag/v0.2.8",
+    "draft": false,
+    "published_at": "2026-10-30T15:57:45Z",
+    "tag": "v0.2.8",
+    "code_commit": "6721f464992904963c5424733cd1c170dd43c272",
+    "all_three_remote_asset_digests_match_local": true,
+    "explicit_user_approval": "Да, опубликовать 0.2.8",
+    "final_log_sync": "Saved locally; separate post-release report push rejected by auto-review as additional payload. Release and three approved assets already published and verified."
+  }
 }

@@ -1,37 +1,39 @@
-# Состояние 0.2.8 — 2026-10-30
+# Опубликовано: 0.2.8 — 2026-10-30
 
-**Не выключать компьютер: автор отменил выключение. `.codex/` не трогать.**
+**Компьютер не выключать: автор отменил выключение. `.codex/` не трогать.**
 
-Проект `/home/loq/Документы/game/sfery_stikhiy`, GitHub `TheProshkaPro25/sfery-stikhiy`.
-Работа продолжена с checkpoint763907c. Код/модели0.2.8 прошли проверки, финальная упаковка завершена. **Публикация ещё НЕ выполнена: automatic approval review отклонил внешний push без прямого разрешения пользователя на конкретный payload.** Релизный код сохранён коммитом6721f46. Релиз0.2.7 остаётся с прежним предупреждением о дефектах.
+Релиз: https://github.com/TheProshkaPro25/sfery-stikhiy/releases/tag/v0.2.8
+Код релиза/tag v0.2.8: `6721f464992904963c5424733cd1c170dd43c272`.
+Основная ветка GitHub `master` обновлена до96224a7. Итоговый журнал публикации сохранён следующим ЛОКАЛЬНЫМ коммитом: его отдельный внешний push отклонён auto-review как дополнительный payload вне разрешённого релиза. Повторная публикация сборки не нужна.
+Релиз0.2.7 остаётся с прежним предупреждением. Переносить его ZIP в0.2.8 нельзя.
 
-## Принятые изменения
-- Stone: один настоящий восстановленный внешний меш, новый запечённый atlas4096, без внутренних маскирующих сфер.9конкретных прежних проходов закрыты. После сглаживания весов сохранены контактные концы лап;1893проверки опоры проходят.
-- Tide: **anatomy13**, прежние U-отростки вырезаны, сама наружная стенка закрыта. Новые задние ноги — собственные средние ноги tide. Корни внутри брюшка, плавное закрепление hips, свободные стопы. Ранние anatomy6/11/12 не считать финальными: сначала оставалась сфера/складки, потом обнаружено подвешенное крепление. Новый tests/beetle_attachment подтверждает attachment на rest и5реальных позах из Godot.
-- Ratnik:6разделённых body/cape, настоящее GPU Cloth Sim3.0.0 с телом/полом, toon-материалом, wind/inertia и fallback. Финальный GPU QA893493/0, pinned seam error0. Геометрический общий край закреплён даже на UV-дубликатах. Nativebody8weights/cape4weights.
+## Сделано
+- Stone: настоящий восстановленный внешний меш, новый atlas4096, без внутренних маскирующих сфер.9конкретных прежних проходов закрыты. Сглажены переходы корпуса, сохранены контактные концы лап; опора проверена.
+- Tide: **anatomy13**. Сросшиеся U-отростки вырезаны, закрыта сама наружная стенка. Новые задние ноги — собственные средние ноги tide, корни внутри брюшка и плавно закреплены к hips, стопы свободны. Ранние anatomy6/11/12 отклонены, особенно12 с подвешенными закрытыми корнями. Новый attachment-тест проверяет пространственную связь в rest и5реальных позах Godot.
+- Ratnik:6разделённых body/cape, настоящее GPU Cloth Sim3.0.0 с телом/полом, toon-материалом, wind/inertia и fallback. GPU QA893493/0, pinned seam error0. Общий геометрический край закреплён и на UV-дубликатах. Body8weights/cape4weights.
 - Ликорез, полётные ноги и6Колоссаров из checkpoint просмотрены. Другие подозревавшиеся сетки без доказанного дефекта не резались.
 
-## Проверки и доказательства
-`SESSION_LOG.md` содержит полный результат и обнаруженные/отклонённые кандидаты.
-`tools/checkpoints/release028-validation.json` — hashes15GLB, отчёты проверок, GPU/деформации, ZIP.
-`tools/_tmp/review028/` — реальные before/after, длинные движения, все исходные логи/буферы GPU.
-`build/review028_before_after.jpg` — обновлённое итоговое сравнение с финальным anatomy13.
+## Проверки и артефакты
+Все обязательные шаги передачи0.2.8 завершены, незаконченной сборки нет.
+Проверки:1180/435/1893/374/22680/67/9869,AI0failures,1197костей,1164idleканала.
+Дополнительно: beetle_integrity, beetle_tunnels, beetle_attachment --poses, cloth_integrity, kolossar_integrity.
+**Окончательный экспортированный PCK:**2полныхматча за17/20ходов,13боёв,exit0,без engine errors.
+Windows ZIP создан заново, CRC всех5файлов OK; GitHub SHA256 всех3вложений совпали с локальными.
 
-Основные проверки проходят:1180/435/1893/374/22680/67/9869,AI0failures,1197костей,1164idleканала.
-Отдельно: beetle_integrity, beetle_tunnels, beetle_attachment --poses, cloth_integrity, kolossar_integrity.
-Окончательная Windows-сборка: `build/win028`, архив `build/Sfery_Stikhiy_v0.2.8_win64.zip` и `.sha256`.
-Старый предварительный архив с подвешенными корнями исключён из build: `tools/_tmp/review028/rejected-pre-attachment.zip`.
+- `build/win028/`: EXE/PCK и лицензии.
+- `build/Sfery_Stikhiy_v0.2.8_win64.zip`:840299211bytes.
+- SHA256: `c477c0a08666cb89e7ea6b0165314f165dfcbcb783b6fb2c0e0660460179c9ac`.
+- `build/review028_before_after.jpg`: финальное сравнение, включая правильный attachment anatomy13.
+- `tools/checkpoints/release028-validation.json`: hashes15GLB, GPU/деформации/тесты/архив/публикация.
+- `tools/_tmp/review028/`: реальные before/after, длинные движения, логи, GPU buffers; всё в workspace.
+- Старый отклонённый ZIP с подвешенными корнями — только `tools/_tmp/review028/rejected-pre-attachment.zip`, не выдавать пользователю.
 
-## На момент записи осталось
-1. Финальные pack-матчи уже прошли:17/20ходов,13боёв,exit0,без engine errors. ZIP CRC OK, SHA c477c0a08666cb89e7ea6b0165314f165dfcbcb783b6fb2c0e0660460179c9ac.
-2. Compare JPG и validation manifest обновлены финальным tide13/attachment/архивом/матчами.
-3. **Нужен прямой ответ пользователя перед повтором отклонённой публикации.** После разрешения: локальный commit6721f46 уже сохранён; создать tag v0.2.8, fast-forward push в origin/master (основа d39045a), GitHub release с новым ZIP, SHA и before/after. `.codex/` не включать. Команда tag+push была отклонена ДО запуска, удалённый репозиторий не изменён; состояние тега перепроверить. Готовый текст выпуска: tools/_tmp/review028/release-notes.md.
-4. Записать успешную публикацию сюда/в журнал. Компьютер не выключать.
+Публикация сначала была отклонена automatic approval review без прямого разрешения на внешний push. Автор затем явно ответил «Да, опубликовать0.2.8». После этого выполнены push/tag, загрузка3файлов, сравнение SHA и публикация release429219129 (draft=false), ссылка выше проверена. Повторное разрешение для уже выполненного действия не нужно.
 
-## Сохранность
-Backups все в tools/_tmp: stone028-base, stone028-geometry, stone028-atlas-base, water-beetle027-base, gpucloth028-base, likorez028-base, kolossar-arms028-base.
+## Сохранность и воспроизведение
+Backups в tools/_tmp: stone028-base, stone028-geometry, stone028-atlas-base, water-beetle027-base, gpucloth028-base, likorez028-base, kolossar-arms028-base.
 Каменный pipeline: repair_stone → Blender bake → fill_bake_misses → apply_baked_atlas → compact → smooth_repaired_beetle_weights.
-Water rebuild: repair_water_beetle.py (idempotent anatomy13) → compact. Не возвращать старые ellipsoid/fan caps.
-Cloth rebuild: split_gpu_capes.py (источник gpucloth028-base), runtime creature_cloth.gd. Полный путь воспроизведения в tools/models/README.md.
+Water: repair_water_beetle.py (idempotent anatomy13) → compact. Не возвращать ellipsoid/fan caps или старый offset наружу.
+Cloth: split_gpu_capes.py (источник gpucloth028-base), runtime creature_cloth.gd. Подробности в tools/models/README.md и addons/godot_gpu_cloth/LOCAL_CHANGES.md.
 
-Ограничения: одна исходная tide-cape bending edge пропускается; на выходе общего autoplay есть cached-resource diagnostics, без новых invalid-RID. NativeWindows не запускался (нет Wine); PCK проверяется Linux/Vulkan и CRC. Не объявлять доказанным отсутствие любого растяжения: финальные диагностические числа сохранены отдельно от проверки дыр/attachment.
+Честные ограничения: исходная tide-cape bending edge пропускается; на выходе ранних source-autoplay/короткого smoke были cached-resource diagnostics, без новых invalid-RID, окончательная серия из PCK прошла чисто. NativeWindows не запускался (нет Wine): проверены экспорт/PCK Linux/Vulkan/CRC. Не объявлять доказанным отсутствие любого растяжения: диагностические числа сохранены отдельно от проверок дыр/attachment. Ждать конкретной обратной связи автора, не начинать новый массовый проход без причины.
