@@ -27,6 +27,8 @@ func configure(owner: Node3D, model: Node3D) -> void:
 	var families: Array = [["thigh.", "shin.", "foot.", false]]
 	if actor._species in [&"klykar", &"rogozhuk"]:
 		families.append(["arm.", "forearm.", "hand.", true])
+	if actor._species == &"rogozhuk":
+		families.append(["rear_thigh.", "rear_shin.", "rear_foot.", false])
 	for family in families:
 		for side in ["L", "R"]:
 			var a := skeleton.find_bone(family[0] + side)
@@ -38,7 +40,7 @@ func configure(owner: Node3D, model: Node3D) -> void:
 			var end := to_actor * skeleton.get_bone_global_rest(c).origin
 			var pole := mid - start.lerp(end, start.distance_to(mid) / maxf(start.distance_to(mid) + mid.distance_to(end), 0.001))
 			if pole.length() < 0.001: pole = Vector3(0, 0, -1 if family[3] else 1)
-			limbs.append({"a":a,"b":b,"c":c,"anchor":end,"pole":mid+pole.normalized()*actor.get_height()*0.3,"side":side,"front":family[3],"basis":(to_actor.basis*skeleton.get_bone_global_rest(c).basis).orthonormalized()})
+			limbs.append({"a":a,"b":b,"c":c,"anchor":end,"pole":mid+pole.normalized()*actor.get_height()*0.3,"side":side,"front":family[3],"rear":family[0] == "rear_thigh.","basis":(to_actor.basis*skeleton.get_bone_global_rest(c).basis).orthonormalized()})
 	last_parent = _parent_transform().origin
 	if not actor._flyer and not limbs.is_empty(): _collect_soles(model)
 
@@ -87,15 +89,22 @@ func apply(delta: float) -> void:
 		skeleton.set_bone_pose_position(hip,skeleton.get_bone_pose_position(hip)+basis.inverse()*world_offset)
 	last_ground_errors.clear()
 	for limb in limbs:
+		if actor._flyer:
+			# Fold anatomically from the authored pose; a positional IK target can
+			# push short bird legs across the knee pole and flip the claws backwards.
+			var foot_basis := skeleton.get_bone_global_pose(limb.c).basis.orthonormalized()
+			var upper_basis := skeleton.get_bone_global_pose(limb.a).basis.orthonormalized()
+			var lower_basis := skeleton.get_bone_global_pose(limb.b).basis.orthonormalized()
+			var reach := sin(phase * PI) if action == &"attack" else 0.0
+			var fold := (0.24 + 0.025 * sin(actor._clock * 1.7 + (PI if limb.side == "R" else 0.0))) * (1.0 - reach * 0.8)
+			var axis: Vector3 = (skeleton.global_basis.inverse() * actor.global_basis.x).normalized()
+			_set_global_rotation(limb.a, Basis(axis, -fold * 0.5) * upper_basis)
+			_set_global_rotation(limb.b, Basis(axis, fold) * lower_basis)
+			_set_global_rotation(limb.c, foot_basis)
+			continue
 		var offset := Vector3.ZERO
 		var anchor: Vector3 = limb.anchor
-		var airborne: bool = actor._flyer
-		if airborne:
-			# Лапы убраны в полёте и выносятся к цели при ударе.
-			var reach := sin(phase*PI) if action == &"attack" else 0.0
-			offset.y = h*(0.10-0.075*reach)
-			offset.z = h*(-0.065+0.17*reach)
-		elif action == &"attack":
+		if action == &"attack":
 			var distance: float = actor._distance
 			if actor._species == &"klykar":
 				var launch := _ease((phase-0.1)/0.25)
@@ -115,40 +124,36 @@ func apply(delta: float) -> void:
 				var swing := clampf((phase-0.12)/0.21,0,1)
 				offset.y = h*(0.065 if lead else 0.018)*sin(swing*PI)
 				offset.y += h*(0.045 if lead else 0.01)*sin(back*PI)
-		var target: Vector3
-		if airborne:
-			target = actor.global_transform*(anchor+offset)
-		else:
-			target = parent*(actor._base+anchor+offset)
-			if travel_speed > 0.01 and action != &"attack":
-				var gait := fposmod(travel_phase+(0.5 if limb.side == "R" else 0.0)+(0.5 if limb.front else 0.0),1.0)
-				var stride: float = h*0.2
-				var forward: float = stride*(0.5-gait/0.6) if gait < 0.6 else stride*(-0.5+_ease((gait-0.6)/0.4))
-				target += parent_velocity.normalized()*forward
-				if gait >= 0.6: target.y += h*0.035*sin((gait-0.6)/0.4*PI)
+		var target: Vector3 = parent*(actor._base+anchor+offset)
+		if travel_speed > 0.01 and action != &"attack":
+			var gait := fposmod(travel_phase+(0.5 if limb.side == "R" else 0.0)+(0.5 if limb.front or limb.rear else 0.0),1.0)
+			var stride: float = h*0.2
+			var forward: float = stride*(0.5-gait/0.6) if gait < 0.6 else stride*(-0.5+_ease((gait-0.6)/0.4))
+			target += parent_velocity.normalized()*forward
+			if gait >= 0.6: target.y += h*0.035*sin((gait-0.6)/0.4*PI)
 		var pole: Vector3 = parent*(actor._base+limb.pole)
 		_solve(limb,target,pole)
 		# Опорная стопа сохраняет ориентацию относительно пола, а не наклоняется с туловищем.
-		if not airborne:
-			var desired: Basis = skeleton.global_basis.inverse()*parent.basis*limb.basis
-			_set_global_rotation(limb.c,desired.orthonormalized())
-			if limb.has("sole") and not limb.sole.is_empty():
-				var floor_y: float = (parent*actor._base).y + offset.y
-				# Исправляем опору по поверхности подошвы, а не по центру кости голеностопа.
-				var ground_error := _sole_height(limb)-floor_y
-				for iteration in range(4):
-					if absf(ground_error) < h*0.001: break
-					target.y -= clampf(ground_error,-h*0.06,h*0.06)*0.85
-					_solve(limb,target,pole)
-					_set_global_rotation(limb.c,desired.orthonormalized())
-					ground_error = _sole_height(limb)-floor_y
-				last_ground_errors.append(ground_error)
+		var desired: Basis = skeleton.global_basis.inverse()*parent.basis*limb.basis
+		_set_global_rotation(limb.c,desired.orthonormalized())
+		if limb.has("sole") and not limb.sole.is_empty():
+			var floor_y: float = (parent*actor._base).y + offset.y
+			# Исправляем опору по поверхности подошвы, а не по центру кости голеностопа.
+			var ground_error := _sole_height(limb)-floor_y
+			for iteration in range(4):
+				if absf(ground_error) < h*0.001: break
+				target.y -= clampf(ground_error,-h*0.06,h*0.06)*0.85
+				_solve(limb,target,pole)
+				_set_global_rotation(limb.c,desired.orthonormalized())
+				ground_error = _sole_height(limb)-floor_y
+			last_ground_errors.append(ground_error)
 
 	# Варианты одного вида имеют разные пропорции. Короткая нога требует немного
 	# более низкой стойки; дополнительная посадка калибруется по подошвам без растяжения костей.
 	if not airborne_species() and action == &"" and not last_ground_errors.is_empty():
 		var gap: float = maxf(0.0,last_ground_errors.max()-h*0.001)
-		stance_extra = minf(h*0.035,stance_extra+gap*(1.0-exp(-20.0*delta)))
+		var max_stance := 0.055 if actor._species == &"rogozhuk" else 0.035
+		stance_extra = minf(h*max_stance,stance_extra+gap*(1.0-exp(-20.0*delta)))
 
 func airborne_species() -> bool:
 	return actor._flyer or actor._species == &"levian"
@@ -219,8 +224,8 @@ func _collect_soles(model: Node) -> void:
 			var stride := weights.size()/vertices.size()
 			for v in range(vertices.size()):
 				var point: Vector3 = transform*vertices[v]
-				if point.y > actor.get_height()*0.18: continue
 				for l in range(limbs.size()):
+					if point.y > actor.get_height()*(0.4 if limbs[l].rear else 0.18): continue
 					var influence := 0.0
 					for k in range(stride):
 						var slot := binds[v*stride+k]

@@ -9,11 +9,11 @@ func _run() -> void:
 	var ids: PackedStringArray = (args[0] if args.size() > 0 else "creature_kolossar_light").split(",")
 	var out: String = args[1] if args.size() > 1 else "/tmp/animation_review"
 	for id in ids:
-		await _record(StringName(id), out if ids.size() == 1 else out + "/" + id, args.size() > 2 and args[2] == "idle")
+		await _record(StringName(id), out if ids.size() == 1 else out + "/" + id, args.has("idle"), args.has("back"))
 	quit()
 
 
-func _record(id: StringName, out: String, idle_review: bool = false) -> void:
+func _record(id: StringName, out: String, idle_review: bool = false, back: bool = false) -> void:
 	DirAccess.make_dir_recursive_absolute(out)
 	CardDB.load_all()
 	var world := Node3D.new()
@@ -45,7 +45,8 @@ func _record(id: StringName, out: String, idle_review: bool = false) -> void:
 	var hover := actor.get_hover_height()
 	var distance := maxf(h + hover, actor.get_extent()) * 2.8
 	cam.fov = 36.0
-	cam.look_at_from_position(Vector3(distance * 0.6, h * 0.6 + hover, distance), Vector3(0, h * 0.5 + hover, 0))
+	var side := -1.0 if back else 1.0
+	cam.look_at_from_position(Vector3(distance * 0.6 * side, h * 0.6 + hover, distance * side), Vector3(0, h * 0.5 + hover, 0))
 	var floor_node := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(h * 8.0, h * 8.0)

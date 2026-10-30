@@ -12,3 +12,5 @@ __pycache__/
 *.exe
 *.pck
 build/
+tools/_tmp/*
+!tools/_tmp/.gdignore

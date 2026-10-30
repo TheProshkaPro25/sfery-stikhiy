@@ -6,6 +6,8 @@ from upgrade_rigs import Writer,globals_of
 
 def fix(path,backup):
  current,_=read_glb(path)
+ if current.get('asset',{}).get('extras',{}).get('sfery_skin_repair',0):
+  raise ValueError('Do not harden repaired skins: sword/body transitions must remain continuous')
  if current.get('asset',{}).get('extras',{}).get('sfery_rigid_blade')==1:return 0
  backup.mkdir(parents=True,exist_ok=True);source=backup/path.name
  if not source.exists():shutil.copy2(path,source)

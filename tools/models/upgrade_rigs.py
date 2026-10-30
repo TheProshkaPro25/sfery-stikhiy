@@ -123,22 +123,14 @@ def upgrade(path,backup_dir):
     new_global=globals_of(doc)
     rest_error=max(float(np.abs(new_global[i]-m).max()) for i,m in enumerate(old_global))
     if rest_error>2e-5:raise ValueError(f'Поза покоя сместилась: {path.name} {rest_error}')
-    parents={c:i for i,n in enumerate(doc['nodes']) for c in n.get('children',[])}
-    allowed=np.eye(len(old_joints),dtype=bool)
-    # Веса разрешены только между костями одной локальной цепочки. Убирает перенос крыла на руку.
-    for a,node in enumerate(old_joints):
-        for b,other in enumerate(old_joints):
-            ancestors={node};p=node
-            for _ in range(2):p=parents.get(p,-1);ancestors.add(p)
-            reverse={other};p=other
-            for _ in range(2):p=parents.get(p,-1);reverse.add(p)
-            allowed[a,b]=other in ancestors or node in reverse
     seam_groups=0;max_weight_error=0.0
     for prim,v,f in primitives:
         js=accessor(original,binary,prim['attributes']['JOINTS_0']).astype(int);ws=accessor(original,binary,prim['attributes']['WEIGHTS_0']).astype(float)
         w=np.zeros((len(v),len(skin['joints'])),dtype=float)
         np.add.at(w,(np.arange(len(v))[:,None],js),ws)
-        dominant=w[:,:len(old_joints)].argmax(1);w[:,:len(old_joints)]*=allowed[dominant]
+        # Do not hard-mask sibling branches: adjacent .49/.51 influences would
+        # become 0/1 on opposite bones and tear the shoulder/wing surface apart.
+        dominant=w[:,:len(old_joints)].argmax(1)
         for kind,node,donor,length in new_specs:
             slot=joint_slot[node];old_slot=old_joints.index(donor);inv=np.linalg.inv(old_global[donor]);y=(v@inv[:3,:3].T+inv[:3,3])[:,1]
             if kind=='clavicle':

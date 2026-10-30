@@ -25,7 +25,13 @@ for path in sorted((root/'assets/creatures_hd').glob('*.glb')):
   if a['name']!='idle':
    if old is not None:
     oa=next(x for x in old['animations'] if x['name']==a['name'])
-    assert a==oa,(path.name,'action changed',a['name'])
+    for original_channel in oa['channels']:
+     ch=next(c for c in a['channels'] if c['target']==original_channel['target'])
+     before=oa['samplers'][original_channel['sampler']];after=a['samplers'][ch['sampler']]
+     assert np.array_equal(accessor(old,oldbin,before['input']),accessor(doc,binary,after['input'])),(path.name,'action timing',a['name'])
+     intentional_shell=doc['asset']['extras'].get('sfery_beetle_body') and doc['nodes'][ch['target']['node']].get('name')=='shell' and ch['target']['path']=='rotation'
+     if not intentional_shell:
+      assert np.array_equal(accessor(old,oldbin,before['output']),accessor(doc,binary,after['output'])),(path.name,'action channel changed',a['name'],ch['target'])
   else:
    length=max(float(accessor(doc,binary,s['input'])[-1,0]) for s in a['samplers'])
    assert abs(length*30-round(length*30))<1e-4,(path.name,'import frame grid')

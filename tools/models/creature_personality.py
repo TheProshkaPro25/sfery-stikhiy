@@ -106,7 +106,7 @@ def bind_soles(doc,writer,globals_,species):
      if p==root:chain.append(slot)
     influence=w[:,chain].sum(1);region=influence>.65
     if region.sum()<20:continue
-    sole=float(np.quantile(v[region,1],.005));amount=(1-smooth((v[:,1]-(sole+height*.045))/(height*.035)))*region
+    sole=float(np.quantile(v[region,1],.005));amount=(1-smooth((v[:,1]-(sole+height*.045))/(height*.035)))*smooth((influence-.35)/.5)
     w*=1-amount[:,None];w[:,skin['joints'].index(tip)]+=amount
   _,uid=np.unique(np.round(v,6),axis=0,return_inverse=True);uid=uid.reshape(-1);sums=np.zeros((uid.max()+1,w.shape[1]));np.add.at(sums,uid,w);w=(sums/np.bincount(uid)[:,None])[uid]
   top=np.argsort(-w,axis=1)[:,:4];weights=np.take_along_axis(w,top,axis=1);weights/=weights.sum(1,keepdims=True)

@@ -25,7 +25,14 @@ func run() -> void:
  actor.set_model(CreatureModels.build(CardDB.creature(id)), CardDB.creature(id))
  actor.set_process(false)
  actor.idle_on = true
- if args.size() < 3 or args[2] != "rest":
+ if args.size() > 2 and args[2] in ["attack", "appear", "roar", "hit"]:
+  match args[2]:
+   "attack": actor.lunge(actor.get_height()*.22)
+   "appear": actor.appear()
+   "roar": actor.roar()
+   "hit": actor.hit(Color.WHITE, actor.get_height()*.075)
+  for f in range(int(args[3]) if args.size()>3 else 24): actor._process(1.0/60)
+ elif args.size() < 3 or args[2] != "rest":
   for f in range(90): actor._process(1.0/60)
  var h := actor.get_height()
  var camera := Camera3D.new()

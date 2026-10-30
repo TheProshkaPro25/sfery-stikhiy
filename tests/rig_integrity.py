@@ -17,6 +17,9 @@ for path in sorted((root/'assets/creatures_hd').glob('*.glb')):
   assert np.abs(gs[node]@inverse[slot]-np.eye(4)).max()<2e-5,(path.name,'bind',slot)
  for prim,v,f in triangles(doc,binary):
   js=accessor(doc,binary,prim['attributes']['JOINTS_0']);ws=accessor(doc,binary,prim['attributes']['WEIGHTS_0'])
+  if 'JOINTS_1' in prim['attributes']:
+   js=np.concatenate([js,accessor(doc,binary,prim['attributes']['JOINTS_1'])],axis=1)
+   ws=np.concatenate([ws,accessor(doc,binary,prim['attributes']['WEIGHTS_1'])],axis=1)
   assert np.isfinite(ws).all() and np.isfinite(v).all(),path.name
   assert js.max()<joint_count and (ws>=0).all(),path.name
   assert np.abs(ws.sum(1)-1).max()<2e-6,(path.name,'normalization')
