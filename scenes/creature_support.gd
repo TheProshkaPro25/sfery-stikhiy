@@ -95,10 +95,21 @@ func apply(delta: float) -> void:
 			var foot_basis := skeleton.get_bone_global_pose(limb.c).basis.orthonormalized()
 			var upper_basis := skeleton.get_bone_global_pose(limb.a).basis.orthonormalized()
 			var lower_basis := skeleton.get_bone_global_pose(limb.b).basis.orthonormalized()
+			# A relaxed, bent leg hangs under the body, with a small independent
+			# drift on each side and a shared counter-motion to the hover cycle.
+			var side_phase := 1.4 if limb.side == "R" else 0.0
+			var drift := sin(actor._clock * 0.85 + side_phase)
+			var flap := sin(actor._clock * 1.3)
 			var reach := sin(phase * PI) if action == &"attack" else 0.0
-			var fold := (0.24 + 0.025 * sin(actor._clock * 1.7 + (PI if limb.side == "R" else 0.0))) * (1.0 - reach * 0.8)
+			var reaction := 0.0
+			if action in [&"hit", &"appear", &"roar"]:
+				var t := clampf((actor._elapsed-actor._delay)/maxf(actor._duration,0.001),0.0,1.0)
+				var strength := 0.18 if action == &"hit" else (0.13 if action == &"appear" else 0.09)
+				reaction = strength * sin(t * PI)
+			var fold := 0.68 + 0.10 * drift + 0.045 * flap + reaction - 0.46 * reach
+			var upper := -0.42 - 0.07 * drift - 0.025 * flap - reaction * 0.45 + 0.37 * reach
 			var axis: Vector3 = (skeleton.global_basis.inverse() * actor.global_basis.x).normalized()
-			_set_global_rotation(limb.a, Basis(axis, -fold * 0.5) * upper_basis)
+			_set_global_rotation(limb.a, Basis(axis, upper) * upper_basis)
 			_set_global_rotation(limb.b, Basis(axis, fold) * lower_basis)
 			_set_global_rotation(limb.c, foot_basis)
 			continue

@@ -1,0 +1,112 @@
+[
+  {
+    "path": "assets/creatures_hd/kolossar_fire.glb",
+    "bytes": 30475100,
+    "sha256": "30cae0eb02ec6073300d1e2ed34aa65a3f8d6e64941612f8fd1555294ba60657",
+    "extras": {
+      "sfery_rig_version": 2,
+      "sfery_personality_version": 1,
+      "sfery_idle_loop_version": 2,
+      "sfery_skin_repair": 5
+    },
+    "primitives": 1
+  },
+  {
+    "path": "assets/creatures_hd/kolossar_gale.glb",
+    "bytes": 30800416,
+    "sha256": "dbbabf794f6a5acf4d64463d80a253757d51ce24990814759ec6bc587f7f54fd",
+    "extras": {
+      "sfery_rig_version": 2,
+      "sfery_personality_version": 1,
+      "sfery_idle_loop_version": 2,
+      "sfery_skin_repair": 5
+    },
+    "primitives": 1
+  },
+  {
+    "path": "assets/creatures_hd/kolossar_light.glb",
+    "bytes": 32909708,
+    "sha256": "e103137b0e52c6ba2a9673dda69e519c0034ac8eccba4b5e32194d1b1c93ef71",
+    "extras": {
+      "sfery_rig_version": 2,
+      "sfery_personality_version": 1,
+      "sfery_idle_loop_version": 2,
+      "sfery_skin_repair": 5
+    },
+    "primitives": 1
+  },
+  {
+    "path": "assets/creatures_hd/kolossar_shadow.glb",
+    "bytes": 31594792,
+    "sha256": "6ea6f89a1f2632961e66821d504c57a219952f27e8f0974b4ebc07503ab1462c",
+    "extras": {
+      "sfery_rig_version": 2,
+      "sfery_personality_version": 1,
+      "sfery_idle_loop_version": 2,
+      "sfery_skin_repair": 5
+    },
+    "primitives": 1
+  },
+  {
+    "path": "assets/creatures_hd/kolossar_stone.glb",
+    "bytes": 29970328,
+    "sha256": "efbfa17fa96fbc5cbdf6acb36666f6595c4cfb9b5551f23ffea8f1d9576d5070",
+    "extras": {
+      "sfery_rig_version": 2,
+      "sfery_personality_version": 1,
+      "sfery_idle_loop_version": 2,
+      "sfery_skin_repair": 5
+    },
+    "primitives": 1
+  },
+  {
+    "path": "assets/creatures_hd/kolossar_tide.glb",
+    "bytes": 28804044,
+    "sha256": "c212690db15deaf3e63e4aa44f312c657ebb2c2b8441650094ba837d38e1de56",
+    "extras": {
+      "sfery_rig_version": 2,
+      "sfery_personality_version": 1,
+      "sfery_idle_loop_version": 2,
+      "sfery_skin_repair": 5
+    },
+    "primitives": 1
+  },
+  {
+    "path": "assets/creatures_hd/likorez_shadow.glb",
+    "bytes": 28609916,
+    "sha256": "5874835226b02bce3dba194313d07ed1631f7b0fabf5b6d65ef38dc1b97d7b09",
+    "extras": {
+      "sfery_skin_repair": 5,
+      "likorez_motion_version": "0.2.8"
+    },
+    "primitives": 1
+  },
+  {
+    "path": "assets/creatures_hd/rogozhuk_stone.glb",
+    "bytes": 89700772,
+    "sha256": "030d7c77899e627c0743e36ac9b9c676a929eb6edb9c923a116e34c06bdcc15f",
+    "extras": {
+      "sfery_rig_version": 2,
+      "sfery_personality_version": 1,
+      "sfery_idle_loop_version": 2,
+      "sfery_skin_repair": 5,
+      "sfery_beetle_body": 7,
+      "stone_exterior_repair": "0.2.8-manifold-wrap"
+    },
+    "primitives": 1
+  },
+  {
+    "path": "assets/creatures_hd/rogozhuk_tide.glb",
+    "bytes": 45283872,
+    "sha256": "7510f16cc4acfa5a05dbf58b459ab8c692bb0d102c91e0a24a3f8bb0a967fd32",
+    "extras": {
+      "sfery_rig_version": 2,
+      "sfery_personality_version": 1,
+      "sfery_idle_loop_version": 2,
+      "sfery_skin_repair": 5,
+      "sfery_beetle_body": 7,
+      "sfery_water_beetle_anatomy": 6
+    },
+    "primitives": 8
+  }
+]
